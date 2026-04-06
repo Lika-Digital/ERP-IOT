@@ -48,9 +48,16 @@ else
     echo -e "${YELLOW}[!] Virtual environment not found — using system Python${NC}"
 fi
 
+# After activating the venv, 'python' is on PATH — use it directly.
+# Only fall back to explicit path if 'python' is not found.
 PYTHON_BIN="python"
-[ -n "$VENV_BIN" ] && [ -f "${VENV_BIN}/python" ] && PYTHON_BIN="${VENV_BIN}/python"
-[ -n "$VENV_BIN" ] && [ -f "${VENV_BIN}/python.exe" ] && PYTHON_BIN="${VENV_BIN}/python.exe"
+if ! command -v python &>/dev/null; then
+    if [ -n "$VENV_BIN" ]; then
+        # Windows: try .exe extension
+        [ -f "${VENV_BIN}/python.exe" ] && PYTHON_BIN="${VENV_BIN}/python.exe"
+        [ -f "${VENV_BIN}/python"     ] && PYTHON_BIN="${VENV_BIN}/python"
+    fi
+fi
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # STAGE 1 — pytest
