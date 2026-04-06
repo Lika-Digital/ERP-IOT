@@ -1,0 +1,20 @@
+fastapi[standard]
+uvicorn[standard]
+sqlalchemy
+psycopg2-binary
+alembic
+pydantic[email]
+pydantic-settings
+python-jose[cryptography]
+passlib[bcrypt]
+bcrypt==4.0.1
+httpx
+python-multipart
+starlette
+
+# Testing
+pytest
+pytest-asyncio
+
+# Security scanning (optional but checked in run_tests.sh)
+bandit
