@@ -91,6 +91,9 @@ async def receive_webhook(
     if "session" in event_type.lower():
         _write_session_log(db, marina_id, pedestal_id, payload, now)
 
+    if event_type == "temperature_reading":
+        _update_temperature(db, marina_id, pedestal_id, payload, now)
+
     # ── 3. Broadcast via WebSocket ────────────────────────────────────────────
     ws_message = {
         "event": "webhook_event",
@@ -139,6 +142,45 @@ def _update_cache(
         db.commit()
     except Exception as exc:
         log.warning(f"[WEBHOOK] Cache update failed: {exc}")
+        db.rollback()
+
+
+def _update_temperature(
+    db: Session, marina_id: int, pedestal_id: int, payload: dict, now: datetime
+) -> None:
+    """Store the latest temperature reading on the pedestal cache row."""
+    # Payload may be {"event":"temperature_reading","data":{...}} or flat
+    data = payload.get("data", payload)
+    try:
+        value = float(data.get("value", data.get("temperature", 0)))
+        alarm = bool(data.get("alarm", False))
+    except (TypeError, ValueError):
+        return
+    # Use pedestal_id=0 as marina-level sensor if no specific pedestal
+    pid = pedestal_id if pedestal_id else 0
+    try:
+        entry = (
+            db.query(PedestalCache)
+            .filter(PedestalCache.marina_id == marina_id, PedestalCache.pedestal_id == pid)
+            .first()
+        )
+        if entry:
+            entry.last_temperature = value
+            entry.last_temperature_alarm = alarm
+            entry.last_temperature_at = now
+        else:
+            entry = PedestalCache(
+                marina_id=marina_id,
+                pedestal_id=pid,
+                last_temperature=value,
+                last_temperature_alarm=alarm,
+                last_temperature_at=now,
+                is_stale=False,
+            )
+            db.add(entry)
+        db.commit()
+    except Exception as exc:
+        log.warning(f"[WEBHOOK] temperature cache update failed: {exc}")
         db.rollback()
 
 

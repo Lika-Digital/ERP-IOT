@@ -1,6 +1,6 @@
 """Cache and log models for pedestal data, alarms, sessions, and sync operations."""
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text, JSON
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text, JSON, Float
 from ..database import Base
 
 
@@ -14,6 +14,10 @@ class PedestalCache(Base):
     last_seen_data = Column(JSON, nullable=True)  # Full API response payload
     last_synced_at = Column(DateTime, nullable=True)
     is_stale = Column(Boolean, nullable=False, default=False)
+    # Latest temperature reading from webhook
+    last_temperature = Column(Float, nullable=True)
+    last_temperature_alarm = Column(Boolean, nullable=True)
+    last_temperature_at = Column(DateTime, nullable=True)
 
 
 class AlarmLog(Base):

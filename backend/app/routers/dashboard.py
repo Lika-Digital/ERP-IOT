@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models.marina import Marina
 from ..models.user import User
+from ..models.cache import PedestalCache
 from ..services.pedestal_api_factory import PedestalAPIClientFactory, get_pedestal_factory
 from .auth import get_current_user, require_marina_access
 
@@ -38,6 +39,22 @@ async def get_dashboard(
 
     is_stale = any([stale1, stale2, stale3, stale4])
 
+    # Build temperature map from pedestal cache (updated by webhooks)
+    cache_rows = (
+        db.query(PedestalCache)
+        .filter(PedestalCache.marina_id == marina_id)
+        .all()
+    )
+    temperature_map = {
+        row.pedestal_id: {
+            "value": row.last_temperature,
+            "alarm": row.last_temperature_alarm,
+            "at": row.last_temperature_at.isoformat() if row.last_temperature_at else None,
+        }
+        for row in cache_rows
+        if row.last_temperature is not None
+    }
+
     return {
         "marina_id": marina_id,
         "marina_name": marina.name,
@@ -46,6 +63,7 @@ async def get_dashboard(
         "health": health_data,
         "active_sessions": active_data,
         "pending_sessions": pending_data,
+        "temperature_map": temperature_map,
     }
 
 

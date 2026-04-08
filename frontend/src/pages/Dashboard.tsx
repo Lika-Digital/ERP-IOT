@@ -1,6 +1,13 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
-import { getDashboard, type DashboardResponse } from '../api/dashboard'
+import {
+  getDashboard,
+  type DashboardResponse,
+  type PedestalInfo,
+  type PedestalHealth,
+  type TemperatureReading,
+  type SessionInfo,
+} from '../api/dashboard'
 import StaleDataBanner from '../components/ui/StaleDataBanner'
 import { useWebSocket } from '../hooks/useWebSocket'
 
@@ -25,15 +32,9 @@ export default function Dashboard() {
     }
   }, [id])
 
-  useEffect(() => {
-    fetchData()
-  }, [fetchData])
+  useEffect(() => { fetchData() }, [fetchData])
 
-  // Re-fetch on WebSocket events
-  useWebSocket({
-    marinaId: id,
-    onMessage: () => fetchData(),
-  })
+  useWebSocket({ marinaId: id, onMessage: () => fetchData() })
 
   if (loading && !data) {
     return (
@@ -54,12 +55,18 @@ export default function Dashboard() {
     )
   }
 
-  const pendingSessions = (data?.pending_sessions as unknown[]) ?? []
-  const activeSessions = (data?.active_sessions as unknown[]) ?? []
-  const pedestals = (data?.pedestals as unknown[]) ?? []
+  const pedestals: PedestalInfo[]   = Array.isArray(data?.pedestals) ? data.pedestals : []
+  const activeSessions: SessionInfo[] = Array.isArray(data?.active_sessions) ? data.active_sessions : []
+  const pendingSessions: SessionInfo[] = Array.isArray(data?.pending_sessions) ? data.pending_sessions : []
+  const health: Record<string, PedestalHealth> = (data?.health as Record<string, PedestalHealth>) ?? {}
+  const tempMap: Record<string, TemperatureReading> = data?.temperature_map ?? {}
+
+  // marina-level temperature (pedestal_id = 0)
+  const marinaTemp = tempMap['0'] ?? null
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
+      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">{data?.marina_name || 'Dashboard'}</h1>
@@ -74,102 +81,204 @@ export default function Dashboard() {
 
       {/* Stats row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard
-          label="Pedestals"
-          value={Array.isArray(pedestals) ? pedestals.length : '—'}
-          icon="⚡"
-          color="blue"
-        />
-        <StatCard
-          label="Active Sessions"
-          value={Array.isArray(activeSessions) ? activeSessions.length : '—'}
-          icon="🔌"
-          color="green"
-        />
+        <StatCard label="Pedestals" value={pedestals.length} icon="⚡" color="blue" />
+        <StatCard label="Active Sessions" value={activeSessions.length} icon="🔌" color="green" />
         <StatCard
           label="Pending Approvals"
-          value={Array.isArray(pendingSessions) ? pendingSessions.length : '—'}
+          value={pendingSessions.length}
           icon="⏳"
-          color={Array.isArray(pendingSessions) && pendingSessions.length > 0 ? 'yellow' : 'gray'}
+          color={pendingSessions.length > 0 ? 'yellow' : 'gray'}
         />
-        <StatCard
-          label="Status"
-          value={data?.is_stale ? 'Cached' : 'Live'}
-          icon="📡"
-          color={data?.is_stale ? 'yellow' : 'green'}
-        />
+        {marinaTemp ? (
+          <StatCard
+            label="Temperature"
+            value={`${marinaTemp.value}°C`}
+            icon={marinaTemp.alarm ? '🌡️' : '🌡️'}
+            color={marinaTemp.alarm ? 'red' : 'green'}
+          />
+        ) : (
+          <StatCard label="Status" value={data?.is_stale ? 'Cached' : 'Live'} icon="📡" color={data?.is_stale ? 'yellow' : 'green'} />
+        )}
       </div>
 
+      {/* Pedestal Cards */}
+      {pedestals.length > 0 && (
+        <div className="mb-6">
+          <h2 className="text-lg font-semibold text-gray-800 mb-3">Pedestals</h2>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {pedestals.map((p) => {
+              const h = health[String(p.id)]
+              const temp = tempMap[String(p.id)]
+              const activeSession = activeSessions.find((s) => s.pedestal_id === p.id)
+              const pendingSession = pendingSessions.find((s) => s.pedestal_id === p.id)
+              return (
+                <PedestalCard
+                  key={p.id}
+                  pedestal={p}
+                  health={h}
+                  temperature={temp}
+                  activeSession={activeSession}
+                  pendingSession={pendingSession}
+                />
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Pending sessions */}
-      {Array.isArray(pendingSessions) && pendingSessions.length > 0 && (
+      {pendingSessions.length > 0 && (
         <div className="card mb-6">
           <h2 className="text-lg font-semibold mb-4 text-yellow-700">
             Pending Approvals ({pendingSessions.length})
           </h2>
           <div className="space-y-2">
-            {pendingSessions.map((s: unknown, i) => {
-              const session = s as Record<string, unknown>
-              return (
-                <div
-                  key={i}
-                  className="flex items-center justify-between px-4 py-3 bg-yellow-50 rounded-lg border border-yellow-200"
-                >
-                  <div>
-                    <p className="text-sm font-medium">
-                      Session #{String(session.id ?? '?')} — Pedestal {String(session.pedestal_id ?? '?')}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      Type: {String(session.type ?? 'unknown')} · Socket: {String(session.socket_id ?? '?')}
-                    </p>
-                  </div>
-                  <span className="badge-yellow">pending</span>
+            {pendingSessions.map((s, i) => (
+              <div key={i} className="flex items-center justify-between px-4 py-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                <div>
+                  <p className="text-sm font-medium">
+                    Session #{s.id} — Pedestal {s.pedestal_id}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    Type: {s.type} · Socket: {s.socket_id ?? '—'}
+                  </p>
                 </div>
-              )
-            })}
+                <span className="badge-yellow">pending</span>
+              </div>
+            ))}
           </div>
         </div>
       )}
 
       {/* Active sessions */}
-      {Array.isArray(activeSessions) && activeSessions.length > 0 && (
-        <div className="card">
+      {activeSessions.length > 0 && (
+        <div className="card mb-6">
           <h2 className="text-lg font-semibold mb-4">Active Sessions ({activeSessions.length})</h2>
           <div className="space-y-2">
-            {activeSessions.map((s: unknown, i) => {
-              const session = s as Record<string, unknown>
-              return (
-                <div
-                  key={i}
-                  className="flex items-center justify-between px-4 py-3 bg-green-50 rounded-lg border border-green-200"
-                >
-                  <div>
-                    <p className="text-sm font-medium">
-                      Session #{String(session.id ?? '?')} — Pedestal {String(session.pedestal_id ?? '?')}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      Type: {String(session.type ?? 'unknown')} · Started:{' '}
-                      {session.started_at
-                        ? new Date(String(session.started_at)).toLocaleTimeString()
-                        : '—'}
-                    </p>
-                  </div>
-                  <span className="badge-green">active</span>
+            {activeSessions.map((s, i) => (
+              <div key={i} className="flex items-center justify-between px-4 py-3 bg-green-50 rounded-lg border border-green-200">
+                <div>
+                  <p className="text-sm font-medium">
+                    Session #{s.id} — Pedestal {s.pedestal_id}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    Type: {s.type} · Started:{' '}
+                    {s.started_at ? new Date(s.started_at).toLocaleTimeString() : '—'}
+                  </p>
                 </div>
-              )
-            })}
+                <span className="badge-green">active</span>
+              </div>
+            ))}
           </div>
         </div>
       )}
 
-      {!loading && Array.isArray(activeSessions) && activeSessions.length === 0 &&
-        Array.isArray(pendingSessions) && pendingSessions.length === 0 && (
-          <div className="card text-center py-10">
-            <p className="text-gray-400">No active or pending sessions.</p>
-          </div>
-        )}
+      {!loading && activeSessions.length === 0 && pendingSessions.length === 0 && pedestals.length === 0 && (
+        <div className="card text-center py-10">
+          <p className="text-gray-400">No data available.</p>
+        </div>
+      )}
     </div>
   )
 }
+
+// ── Pedestal Card ─────────────────────────────────────────────────────────────
+
+function PedestalCard({
+  pedestal,
+  health,
+  temperature,
+  activeSession,
+  pendingSession,
+}: {
+  pedestal: PedestalInfo
+  health?: PedestalHealth
+  temperature?: TemperatureReading
+  activeSession?: SessionInfo
+  pendingSession?: SessionInfo
+}) {
+  const isOnline = health?.opta_connected ?? false
+  const hasAlarm = temperature?.alarm ?? false
+
+  return (
+    <div className={`card flex flex-col gap-3 ${hasAlarm ? 'border-red-300 bg-red-50' : ''}`}>
+      {/* Header */}
+      <div className="flex items-start justify-between">
+        <div>
+          <h3 className="font-semibold text-gray-900">{pedestal.name}</h3>
+          {pedestal.location && <p className="text-xs text-gray-400">{pedestal.location}</p>}
+        </div>
+        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+          isOnline ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+        }`}>
+          {isOnline ? 'Online' : 'Offline'}
+        </span>
+      </div>
+
+      {/* Readings grid */}
+      <div className="grid grid-cols-2 gap-2">
+        {/* Temperature */}
+        <div className={`rounded-lg p-3 ${hasAlarm ? 'bg-red-100' : 'bg-gray-50'}`}>
+          <p className="text-xs text-gray-500 mb-1">Temperature</p>
+          {temperature ? (
+            <p className={`text-lg font-bold ${hasAlarm ? 'text-red-600' : 'text-gray-800'}`}>
+              {temperature.value}°C
+              {hasAlarm && <span className="ml-1 text-xs">⚠️</span>}
+            </p>
+          ) : (
+            <p className="text-sm text-gray-400">—</p>
+          )}
+          {temperature?.at && (
+            <p className="text-xs text-gray-400 mt-0.5">
+              {new Date(temperature.at).toLocaleTimeString()}
+            </p>
+          )}
+        </div>
+
+        {/* Session status */}
+        <div className="rounded-lg p-3 bg-gray-50">
+          <p className="text-xs text-gray-500 mb-1">Session</p>
+          {activeSession ? (
+            <p className="text-sm font-medium text-green-700">
+              Active #{activeSession.id}
+              <span className="block text-xs font-normal text-gray-500">{activeSession.type}</span>
+            </p>
+          ) : pendingSession ? (
+            <p className="text-sm font-medium text-yellow-700">
+              Pending #{pendingSession.id}
+            </p>
+          ) : (
+            <p className="text-sm text-gray-400">No session</p>
+          )}
+        </div>
+      </div>
+
+      {/* Health indicators */}
+      {health && (
+        <div className="flex gap-3 text-xs text-gray-500 pt-1 border-t border-gray-100">
+          <HealthDot ok={health.camera_reachable} label="Camera" />
+          <HealthDot ok={health.temp_sensor_reachable} label="Temp Sensor" />
+          {health.last_heartbeat && (
+            <span className="ml-auto text-gray-400">
+              ♥ {new Date(health.last_heartbeat).toLocaleTimeString()}
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function HealthDot({ ok, label }: { ok: boolean; label: string }) {
+  return (
+    <span className="flex items-center gap-1">
+      <span className={`w-1.5 h-1.5 rounded-full ${ok ? 'bg-green-500' : 'bg-red-400'}`} />
+      {label}
+    </span>
+  )
+}
+
+// ── Stat Card ─────────────────────────────────────────────────────────────────
 
 function StatCard({
   label,
@@ -180,15 +289,15 @@ function StatCard({
   label: string
   value: number | string
   icon: string
-  color: 'blue' | 'green' | 'yellow' | 'gray'
+  color: 'blue' | 'green' | 'yellow' | 'gray' | 'red'
 }) {
   const colorMap = {
-    blue: 'bg-blue-50 text-blue-700',
-    green: 'bg-green-50 text-green-700',
+    blue:   'bg-blue-50 text-blue-700',
+    green:  'bg-green-50 text-green-700',
     yellow: 'bg-yellow-50 text-yellow-700',
-    gray: 'bg-gray-50 text-gray-600',
+    gray:   'bg-gray-50 text-gray-600',
+    red:    'bg-red-50 text-red-700',
   }
-
   return (
     <div className={`rounded-xl p-4 ${colorMap[color]}`}>
       <div className="text-2xl mb-1">{icon}</div>
