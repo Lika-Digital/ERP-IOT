@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models.marina import Marina
 from ..models.user import User
-from ..services.pedestal_api import PedestalAPIService
+from ..services.pedestal_api_factory import PedestalAPIClientFactory, get_pedestal_factory
 from .auth import get_current_user, require_marina_access
 
 log = logging.getLogger(__name__)
@@ -22,6 +22,7 @@ async def get_daily_analytics(
     date_to: Optional[str] = Query(default=None, description="ISO date YYYY-MM-DD"),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    factory: PedestalAPIClientFactory = Depends(get_pedestal_factory),
 ):
     """Daily energy consumption analytics from Pedestal SW."""
     marina = db.get(Marina, marina_id)
@@ -29,8 +30,8 @@ async def get_daily_analytics(
         raise HTTPException(status_code=404, detail="Marina not found")
     require_marina_access(marina_id, user, db)
 
-    svc = PedestalAPIService(marina.pedestal_api_base_url, marina.pedestal_api_key)
-    data, is_stale = await svc.get_daily_analytics(marina_id, db, date_from, date_to)
+    client = factory.get_client(marina_id, db)
+    data, is_stale = await client.get_daily_analytics(marina_id, db, date_from, date_to)
     return {"marina_id": marina_id, "is_stale": is_stale, "data": data}
 
 
@@ -39,6 +40,7 @@ async def get_session_summary(
     marina_id: int,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    factory: PedestalAPIClientFactory = Depends(get_pedestal_factory),
 ):
     """Session summary statistics (total sessions, energy, water) from Pedestal SW."""
     marina = db.get(Marina, marina_id)
@@ -46,8 +48,8 @@ async def get_session_summary(
         raise HTTPException(status_code=404, detail="Marina not found")
     require_marina_access(marina_id, user, db)
 
-    svc = PedestalAPIService(marina.pedestal_api_base_url, marina.pedestal_api_key)
-    data, is_stale = await svc.get_session_summary(marina_id, db)
+    client = factory.get_client(marina_id, db)
+    data, is_stale = await client.get_session_summary(marina_id, db)
     return {"marina_id": marina_id, "is_stale": is_stale, "data": data}
 
 
@@ -56,6 +58,7 @@ async def get_active_sessions(
     marina_id: int,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    factory: PedestalAPIClientFactory = Depends(get_pedestal_factory),
 ):
     """Currently active sessions from Pedestal SW."""
     marina = db.get(Marina, marina_id)
@@ -63,8 +66,8 @@ async def get_active_sessions(
         raise HTTPException(status_code=404, detail="Marina not found")
     require_marina_access(marina_id, user, db)
 
-    svc = PedestalAPIService(marina.pedestal_api_base_url, marina.pedestal_api_key)
-    data, is_stale = await svc.get_active_sessions(marina_id, db)
+    client = factory.get_client(marina_id, db)
+    data, is_stale = await client.get_active_sessions(marina_id, db)
     return {"marina_id": marina_id, "is_stale": is_stale, "sessions": data}
 
 
@@ -73,6 +76,7 @@ async def get_pending_sessions(
     marina_id: int,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    factory: PedestalAPIClientFactory = Depends(get_pedestal_factory),
 ):
     """Pending sessions awaiting approval from Pedestal SW."""
     marina = db.get(Marina, marina_id)
@@ -80,6 +84,6 @@ async def get_pending_sessions(
         raise HTTPException(status_code=404, detail="Marina not found")
     require_marina_access(marina_id, user, db)
 
-    svc = PedestalAPIService(marina.pedestal_api_base_url, marina.pedestal_api_key)
-    data, is_stale = await svc.get_pending_sessions(marina_id, db)
+    client = factory.get_client(marina_id, db)
+    data, is_stale = await client.get_pending_sessions(marina_id, db)
     return {"marina_id": marina_id, "is_stale": is_stale, "sessions": data}

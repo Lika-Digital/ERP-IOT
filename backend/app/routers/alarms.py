@@ -1,7 +1,7 @@
 """Alarms router — list, acknowledge, and log alarms."""
 import logging
 from datetime import datetime
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -11,7 +11,7 @@ from ..database import get_db
 from ..models.marina import Marina
 from ..models.cache import AlarmLog
 from ..models.user import User
-from ..services.pedestal_api import PedestalAPIService
+from ..services.pedestal_api_factory import PedestalAPIClientFactory, get_pedestal_factory
 from ..services.audit_log import record_action
 from .auth import get_current_user, require_marina_access
 
@@ -29,6 +29,7 @@ async def get_active_alarms(
     marina_id: int,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    factory: PedestalAPIClientFactory = Depends(get_pedestal_factory),
 ):
     """Fetch active (unacknowledged) alarms from Pedestal SW."""
     marina = db.get(Marina, marina_id)
@@ -36,8 +37,8 @@ async def get_active_alarms(
         raise HTTPException(status_code=404, detail="Marina not found")
     require_marina_access(marina_id, user, db)
 
-    svc = PedestalAPIService(marina.pedestal_api_base_url, marina.pedestal_api_key)
-    data, is_stale = await svc.get_active_alarms(marina_id, db)
+    client = factory.get_client(marina_id, db)
+    data, is_stale = await client.get_active_alarms(marina_id, db)
     return {"marina_id": marina_id, "is_stale": is_stale, "alarms": data}
 
 
@@ -87,6 +88,7 @@ async def acknowledge_alarm(
     pedestal_id: Optional[int] = Query(default=None),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    factory: PedestalAPIClientFactory = Depends(get_pedestal_factory),
 ):
     """
     Acknowledge an alarm:
@@ -99,15 +101,13 @@ async def acknowledge_alarm(
         raise HTTPException(status_code=404, detail="Marina not found")
     require_marina_access(marina_id, user, db)
 
-    # Forward to Pedestal SW
-    svc = PedestalAPIService(marina.pedestal_api_base_url, marina.pedestal_api_key)
+    client = factory.get_client(marina_id, db)
     try:
-        result = await svc.acknowledge_alarm(alarm_id)
+        result = await client.acknowledge_alarm(alarm_id)
     except Exception as exc:
         log.warning(f"[ALARMS] Pedestal SW acknowledge failed: {exc} — updating local log only")
         result = {"warning": "Pedestal SW unreachable; local log updated"}
 
-    # Update local alarm_log if exists
     local_entry = (
         db.query(AlarmLog)
         .filter(AlarmLog.marina_id == marina_id)

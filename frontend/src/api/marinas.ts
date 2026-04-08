@@ -7,6 +7,7 @@ export interface Marina {
   timezone: string
   logo_url: string | null
   pedestal_api_base_url: string
+  pedestal_service_email: string | null
   status: string
   created_at: string
   updated_at: string
@@ -17,7 +18,8 @@ export interface MarinaCreate {
   location?: string
   timezone?: string
   pedestal_api_base_url: string
-  pedestal_api_key: string
+  pedestal_service_email: string
+  pedestal_service_password: string
   webhook_secret?: string
   status?: string
 }
@@ -28,9 +30,16 @@ export interface MarinaUpdate {
   timezone?: string
   logo_url?: string
   pedestal_api_base_url?: string
-  pedestal_api_key?: string
+  pedestal_service_email?: string
+  /** Supply only when changing the password; omit to keep existing */
+  pedestal_service_password?: string
   webhook_secret?: string
   status?: string
+}
+
+export interface TestConnectionResult {
+  success: boolean
+  detail: string
 }
 
 export const listMarinas = () =>
@@ -47,6 +56,9 @@ export const updateMarina = (id: number, data: MarinaUpdate) =>
 
 export const deleteMarina = (id: number) =>
   api.delete(`/marinas/${id}`)
+
+export const testConnection = (id: number) =>
+  api.post<TestConnectionResult>(`/marinas/${id}/test-connection`).then((r) => r.data)
 
 export const grantAccess = (marinaId: number, userId: number) =>
   api.post(`/marinas/${marinaId}/access`, { user_id: userId, marina_id: marinaId })

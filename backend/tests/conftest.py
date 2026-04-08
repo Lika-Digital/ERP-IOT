@@ -15,6 +15,8 @@ os.environ["DATABASE_URL"] = "sqlite:///./tests/test_erp.db"
 os.environ["JWT_SECRET"] = "test-secret-for-erp-iot-ci"
 os.environ["DEFAULT_ADMIN_EMAIL"] = "admin@test.erp"
 os.environ["DEFAULT_ADMIN_PASSWORD"] = "testadmin1234"
+# Test encryption key — valid Fernet key for testing only
+os.environ["ERP_ENCRYPTION_KEY"] = "ZmDfcTF7_60GrrY167zsiPd67pEvs0aGOv2oasOM1Pg="
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -81,14 +83,16 @@ def setup_test_database():
 
         db.flush()  # get IDs
 
-        # Marina
+        # Marina — encrypt test credentials
         from datetime import datetime
+        from app.utils.encryption import encrypt_password
         marina_obj = Marina(
             name="Test Marina",
             location="Test Harbor",
             timezone="UTC",
             pedestal_api_base_url="http://pedestal-sw.test",
-            pedestal_api_key="test-api-key-123",
+            pedestal_service_email="erp@test.service",
+            pedestal_service_password_encrypted=encrypt_password("test-service-pass-123"),
             webhook_secret="test-webhook-secret",
             status="active",
             created_at=datetime.utcnow(),
@@ -103,7 +107,8 @@ def setup_test_database():
             location="Restricted Harbor",
             timezone="UTC",
             pedestal_api_base_url="http://pedestal-sw2.test",
-            pedestal_api_key="test-api-key-456",
+            pedestal_service_email="erp@test2.service",
+            pedestal_service_password_encrypted=encrypt_password("test-service-pass-456"),
             status="active",
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),

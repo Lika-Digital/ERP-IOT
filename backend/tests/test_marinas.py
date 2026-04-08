@@ -6,6 +6,7 @@ Verifies:
 - marina_manager cannot create a marina
 - List returns only authorized marinas for marina_manager
 - super_admin sees all marinas
+- Service account fields are accepted; encrypted password is never returned
 """
 import pytest
 from datetime import datetime
@@ -17,21 +18,27 @@ def test_super_admin_can_create_marina(client, admin_headers):
         "location": "New Harbor",
         "timezone": "Europe/Zagreb",
         "pedestal_api_base_url": "http://new-pedestal.test",
-        "pedestal_api_key": "new-key-789",
+        "pedestal_service_email": "erp@new-marina.service",
+        "pedestal_service_password": "super-secret-pass",
         "status": "active",
     })
     assert r.status_code == 201
     data = r.json()
     assert data["name"] == "New Test Marina"
     assert data["timezone"] == "Europe/Zagreb"
-    assert "pedestal_api_key" not in data  # secret should not be returned
+    # Plaintext password and encrypted blob must never be returned
+    assert "pedestal_service_password" not in data
+    assert "pedestal_service_password_encrypted" not in data
+    # Email is returned (not sensitive)
+    assert data["pedestal_service_email"] == "erp@new-marina.service"
 
 
 def test_marina_manager_cannot_create_marina(client, manager_headers):
     r = client.post("/api/marinas", headers=manager_headers, json={
         "name": "Unauthorized Marina",
         "pedestal_api_base_url": "http://unauth.test",
-        "pedestal_api_key": "unauth-key",
+        "pedestal_service_email": "x@x.test",
+        "pedestal_service_password": "pass",
     })
     assert r.status_code == 403
 
@@ -40,7 +47,8 @@ def test_unauthenticated_cannot_create_marina(client):
     r = client.post("/api/marinas", json={
         "name": "Unauth Marina",
         "pedestal_api_base_url": "http://unauth.test",
-        "pedestal_api_key": "k",
+        "pedestal_service_email": "x@x.test",
+        "pedestal_service_password": "k",
     })
     assert r.status_code == 401
 
@@ -50,7 +58,6 @@ def test_super_admin_sees_all_marinas(client, admin_headers):
     assert r.status_code == 200
     data = r.json()
     assert isinstance(data, list)
-    # Should see at least the seeded marinas
     assert len(data) >= 2
     names = [m["name"] for m in data]
     assert "Test Marina" in names

@@ -223,6 +223,98 @@ All 57 backend tests pass. Phase 1 is COMPLETE.
 
 ---
 
+## 2026-04-07T00:00:00 Authentication Overhaul — Pre-read audit
+Status: COMPLETE
+What: Read all files in both projects. Identified: OTP-based login in cloud_iot needs a direct service-token endpoint; gateway only accepts external_api role; marina model has pedestal_api_key; 4 routers use PedestalAPIService directly.
+Next: cloud_iot/scripts/create_erp_service_account.py
+Decisions: Added POST /api/auth/service-token endpoint (skips OTP) for api_client role. Gateway updated to accept both external_api and api_client roles. api_client JWTs skip the stored-key hmac check.
+
+## 2026-04-07T00:01:00 Step 1a — cloud_iot role migration
+Status: COMPLETE
+What: Added api_client role comment marker to _migrate_user_schema() in user_database.py. No DDL needed — SQLite TEXT column accepts any value.
+Next: cloud_iot/scripts/create_erp_service_account.py
+Decisions: SQLite has no enum constraints; role is stored as a plain string.
+
+## 2026-04-07T00:02:00 Step 1b — cloud_iot/scripts/create_erp_service_account.py
+Status: COMPLETE
+What: Created idempotent CLI script using PBKDF2-HMAC-SHA256 (same as auth system), creates api_client user, exits cleanly if already exists.
+Next: cloud_iot auth.py service-token endpoint
+Decisions: Uses sys.path manipulation to import backend app modules.
+
+## 2026-04-07T00:03:00 Step 1b — cloud_iot auth.py: POST /api/auth/service-token
+Status: COMPLETE
+What: Added new endpoint before /login that validates credentials and returns JWT directly for api_client role accounts, skipping OTP.
+Next: cloud_iot external_api_gateway.py
+Decisions: Only api_client role is accepted — human operator accounts are rejected with 403.
+
+## 2026-04-07T00:04:00 Step 1c — cloud_iot external_api_gateway.py: accept api_client role
+Status: COMPLETE
+What: Updated _decode_external_jwt() to accept both external_api and api_client roles. Updated gateway to skip stored-key hmac check for api_client tokens (they are user JWTs, not static keys).
+Next: alembic migration 002
+Decisions: api_client tokens validated by JWT signature only; external_api tokens still validated against stored key for backwards compatibility.
+
+## 2026-04-07T00:05:00 Step 2 — alembic/versions/002_marina_service_account.py
+Status: COMPLETE
+What: Migration adds pedestal_service_email and pedestal_service_password_encrypted (both nullable), drops pedestal_api_key. Fully reversible.
+Next: app/utils/encryption.py
+Decisions: Columns nullable for migration safety; code enforces non-null via ValueError.
+
+## 2026-04-07T00:06:00 Step 3 — app/utils/encryption.py + config.py + requirements.txt
+Status: COMPLETE
+What: Created Fernet-based encrypt_password/decrypt_password. Added erp_encryption_key to Settings with warning on missing. Added cryptography to requirements.txt.
+Next: app/services/pedestal_api.py replacement
+Decisions: Module-level Fernet instance for efficiency; raises RuntimeError on missing key.
+
+## 2026-04-07T00:07:00 Step 4 — app/services/pedestal_api.py complete replacement
+Status: COMPLETE
+What: Replaced PedestalAPIService with PedestalAPIClient implementing JWT auth flow: POST /api/auth/service-token, 7-hour token cache, Bearer header on all requests, /api/ext/ path prefix, 3-retry backoff, cache fallback, sync_log. PedestalAPIService kept as alias for backwards compat. Added PedestalAuthError and StaleResponse types.
+Next: app/services/pedestal_api_factory.py
+Decisions: Token cached for 7h (JWT valid 8h); 401 response clears token cache for immediate re-auth.
+
+## 2026-04-07T00:08:00 Step 5 — app/services/pedestal_api_factory.py
+Status: COMPLETE
+What: Singleton PedestalAPIClientFactory that loads marina from DB, decrypts password, creates/caches PedestalAPIClient per marina_id. FastAPI dependency get_pedestal_factory(). Cache invalidated when credentials change.
+Next: routers update
+Decisions: Client cache keyed by (base_url + email) to detect credential changes.
+
+## 2026-04-07T00:09:00 Step 6 — Update all 4 routers to use factory
+Status: COMPLETE
+What: Updated dashboard.py, alarms.py, controls.py, energy.py to inject PedestalAPIClientFactory via Depends and call factory.get_client(marina_id, db) instead of instantiating PedestalAPIService directly.
+Next: marina model update
+Decisions: Factory injected as FastAPI Depends for testability.
+
+## 2026-04-07T00:10:00 Step 7 — Marina model + Pydantic schemas
+Status: COMPLETE
+What: Replaced pedestal_api_key with pedestal_service_email + pedestal_service_password_encrypted in Marina SQLAlchemy model. Updated MarinaCreate/MarinaUpdate/MarinaResponse schemas — plaintext password in create/update, encrypted blob never returned.
+Next: marinas router (encrypt on save + test-connection endpoint)
+Decisions: MarinaResponse includes pedestal_service_email but never the encrypted password.
+
+## 2026-04-07T00:11:00 Step 9 — marinas.py: encrypt on save + test-connection endpoint
+Status: COMPLETE
+What: Updated create_marina and update_marina to encrypt pedestal_service_password before storing. Added POST /{marina_id}/test-connection that attempts login to Pedestal SW and returns {success, detail}. Factory cache invalidated on credential update.
+Next: frontend
+Decisions: test-connection requires super_admin role.
+
+## 2026-04-07T00:12:00 Step 8 — Frontend: marina form + API types
+Status: COMPLETE
+What: Updated marinas.ts types (MarinaCreate/MarinaUpdate) to use pedestal_service_email + pedestal_service_password instead of pedestal_api_key. Added testConnection() API call. Updated MarinaSelect.tsx: replaced API Key field with Service Account Email + Password fields, added Test Connection button per marina card with inline green/red result banner.
+Next: .env + .env.example
+Decisions: Password field never shows stored value. Test Connection button only shown to super_admin.
+
+## 2026-04-07T00:13:00 Step 10 — .env + .env.example
+Status: COMPLETE
+What: Added ERP_ENCRYPTION_KEY to .env (generated Fernet key) and .env.example (with generation instructions and security warning).
+Next: tests
+Decisions: Key sfkoAdxNaMndE1YTx-5qFVZT63baOe1ZLrWHoe23nHk= added to .env.
+
+## 2026-04-07T00:14:00 Step 11 — Tests
+Status: COMPLETE
+What: Created tests/test_pedestal_client.py with 18 tests covering encryption inverse, no plaintext storage, token caching, expiry re-auth, PedestalAuthError on 401/network, Bearer header, /api/ext/ prefix, 3x retry, stale fallback, StaleResponse defaults, factory singleton, factory credential-change detection. Updated test_pedestal_api.py and test_marinas.py for new interfaces. Updated conftest.py with ERP_ENCRYPTION_KEY and new marina seed fields.
+Next: DONE
+Decisions: asyncio.sleep patched in retry tests to avoid delays.
+
+---
+
 ## Final Summary
 
 **Phase 1 COMPLETE** — 2026-04-05

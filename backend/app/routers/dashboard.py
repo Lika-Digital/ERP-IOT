@@ -1,20 +1,16 @@
 """Dashboard router — aggregated marina overview data."""
 import logging
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models.marina import Marina
 from ..models.user import User
-from ..services.pedestal_api import PedestalAPIService
+from ..services.pedestal_api_factory import PedestalAPIClientFactory, get_pedestal_factory
 from .auth import get_current_user, require_marina_access
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/marinas", tags=["dashboard"])
-
-
-def _get_api_service(marina: Marina) -> PedestalAPIService:
-    return PedestalAPIService(marina.pedestal_api_base_url, marina.pedestal_api_key)
 
 
 @router.get("/{marina_id}/dashboard")
@@ -22,6 +18,7 @@ async def get_dashboard(
     marina_id: int,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    factory: PedestalAPIClientFactory = Depends(get_pedestal_factory),
 ):
     """
     Aggregated dashboard: pedestals, health, active sessions, pending sessions.
@@ -32,12 +29,12 @@ async def get_dashboard(
         raise HTTPException(status_code=404, detail="Marina not found")
     require_marina_access(marina_id, user, db)
 
-    svc = _get_api_service(marina)
+    client = factory.get_client(marina_id, db)
 
-    pedestals_data, stale1 = await svc.list_pedestals(marina_id, db)
-    health_data, stale2 = await svc.get_health(marina_id, db)
-    active_data, stale3 = await svc.get_active_sessions(marina_id, db)
-    pending_data, stale4 = await svc.get_pending_sessions(marina_id, db)
+    pedestals_data, stale1 = await client.list_pedestals(marina_id, db)
+    health_data, stale2 = await client.get_health(marina_id, db)
+    active_data, stale3 = await client.get_active_sessions(marina_id, db)
+    pending_data, stale4 = await client.get_pending_sessions(marina_id, db)
 
     is_stale = any([stale1, stale2, stale3, stale4])
 
@@ -57,6 +54,7 @@ async def get_health(
     marina_id: int,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    factory: PedestalAPIClientFactory = Depends(get_pedestal_factory),
 ):
     """Health check for a specific marina's Pedestal SW."""
     marina = db.get(Marina, marina_id)
@@ -64,8 +62,8 @@ async def get_health(
         raise HTTPException(status_code=404, detail="Marina not found")
     require_marina_access(marina_id, user, db)
 
-    svc = _get_api_service(marina)
-    data, is_stale = await svc.get_health(marina_id, db)
+    client = factory.get_client(marina_id, db)
+    data, is_stale = await client.get_health(marina_id, db)
     return {"marina_id": marina_id, "is_stale": is_stale, "data": data}
 
 
@@ -74,6 +72,7 @@ async def list_pedestals(
     marina_id: int,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    factory: PedestalAPIClientFactory = Depends(get_pedestal_factory),
 ):
     """List all pedestals for a marina."""
     marina = db.get(Marina, marina_id)
@@ -81,8 +80,8 @@ async def list_pedestals(
         raise HTTPException(status_code=404, detail="Marina not found")
     require_marina_access(marina_id, user, db)
 
-    svc = _get_api_service(marina)
-    data, is_stale = await svc.list_pedestals(marina_id, db)
+    client = factory.get_client(marina_id, db)
+    data, is_stale = await client.list_pedestals(marina_id, db)
     return {"marina_id": marina_id, "is_stale": is_stale, "pedestals": data}
 
 
@@ -91,6 +90,7 @@ async def list_berths(
     marina_id: int,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    factory: PedestalAPIClientFactory = Depends(get_pedestal_factory),
 ):
     """List berth occupancy for a marina."""
     marina = db.get(Marina, marina_id)
@@ -98,6 +98,6 @@ async def list_berths(
         raise HTTPException(status_code=404, detail="Marina not found")
     require_marina_access(marina_id, user, db)
 
-    svc = _get_api_service(marina)
-    data, is_stale = await svc.list_berths(marina_id, db)
+    client = factory.get_client(marina_id, db)
+    data, is_stale = await client.list_berths(marina_id, db)
     return {"marina_id": marina_id, "is_stale": is_stale, "berths": data}

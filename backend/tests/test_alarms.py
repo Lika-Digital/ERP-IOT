@@ -6,13 +6,31 @@ Verifies:
 - alarm_log is filtered by marina_id
 - marina_manager blocked from other marinas
 """
-import pytest
-from unittest.mock import AsyncMock, patch
 from datetime import datetime
+from unittest.mock import AsyncMock, MagicMock
+
+
+def _mock_factory(**methods):
+    mock_client = MagicMock()
+    for name, return_value in methods.items():
+        setattr(mock_client, name, AsyncMock(return_value=return_value))
+    mock_factory = MagicMock()
+    mock_factory.get_client.return_value = mock_client
+    return mock_factory
+
+
+def _override(mock_factory):
+    from app.services.pedestal_api_factory import get_pedestal_factory as real_dep
+    from app.main import app
+    app.dependency_overrides[real_dep] = lambda: mock_factory
+
+
+def _clear():
+    from app.main import app
+    app.dependency_overrides.clear()
 
 
 def _seed_alarm(marina_id: int, pedestal_id: int = 1) -> int:
-    """Insert an alarm_log entry and return its ID."""
     from tests.conftest import TestSession
     from app.models.cache import AlarmLog
 
@@ -44,9 +62,7 @@ def test_alarm_log_returns_entries_for_marina(client, admin_headers, marina_id):
 
 
 def test_alarm_log_filtered_by_marina(client, admin_headers, marina_id, restricted_marina_id):
-    """Alarms for restricted_marina should not appear in marina query."""
     _seed_alarm(restricted_marina_id, pedestal_id=50)
-
     r = client.get(f"/api/marinas/{marina_id}/alarms/log", headers=admin_headers)
     assert r.status_code == 200
     for alarm in r.json()["alarms"]:
@@ -61,23 +77,20 @@ def test_manager_blocked_from_restricted_marina_alarms(
 
 
 def test_acknowledge_alarm_writes_audit_log(client, admin_headers, marina_id, setup_test_database):
-    """Acknowledging an alarm should write an entry in audit_log."""
-    with patch(
-        "app.routers.alarms.PedestalAPIService.acknowledge_alarm",
-        new_callable=AsyncMock,
-        return_value={"acknowledged": True},
-    ):
-        r = client.post(
-            f"/api/marinas/{marina_id}/alarms/100/acknowledge",
-            headers=admin_headers,
-        )
+    factory = _mock_factory(acknowledge_alarm={"acknowledged": True})
+    _override(factory)
+
+    r = client.post(
+        f"/api/marinas/{marina_id}/alarms/100/acknowledge",
+        headers=admin_headers,
+    )
+    _clear()
 
     assert r.status_code == 200
     data = r.json()
     assert data["acknowledged"] is True
     assert data["alarm_id"] == 100
 
-    # Verify audit_log entry
     from tests.conftest import TestSession
     from app.models.cache import AuditLog
     from app.models.user import User
@@ -102,15 +115,12 @@ def test_acknowledge_alarm_writes_audit_log(client, admin_headers, marina_id, se
 
 
 def test_active_alarms_proxied_from_pedestal(client, admin_headers, marina_id):
-    """GET active alarms should call PedestalAPIService.get_active_alarms."""
     mock_alarms = [{"id": 1, "alarm_type": "temperature"}]
+    factory = _mock_factory(get_active_alarms=(mock_alarms, False))
+    _override(factory)
 
-    with patch(
-        "app.routers.alarms.PedestalAPIService.get_active_alarms",
-        new_callable=AsyncMock,
-        return_value=(mock_alarms, False),
-    ):
-        r = client.get(f"/api/marinas/{marina_id}/alarms/active", headers=admin_headers)
+    r = client.get(f"/api/marinas/{marina_id}/alarms/active", headers=admin_headers)
+    _clear()
 
     assert r.status_code == 200
     data = r.json()

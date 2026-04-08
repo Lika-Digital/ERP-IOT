@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models.marina import Marina
 from ..models.user import User
-from ..services.pedestal_api import PedestalAPIService
+from ..services.pedestal_api_factory import PedestalAPIClientFactory, get_pedestal_factory
 from ..services.audit_log import record_action
 from .auth import get_current_user, require_marina_access
 
@@ -38,12 +38,13 @@ async def allow_session(
     pedestal_id: Optional[int] = Query(default=None),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    factory: PedestalAPIClientFactory = Depends(get_pedestal_factory),
 ):
     """Allow a pending session on the Pedestal SW + log to audit trail."""
     marina = _get_marina_and_check_access(marina_id, user, db)
 
-    svc = PedestalAPIService(marina.pedestal_api_base_url, marina.pedestal_api_key)
-    result = await svc.allow_session(session_id)
+    client = factory.get_client(marina_id, db)
+    result = await client.allow_session(session_id)
 
     record_action(
         db,
@@ -66,12 +67,13 @@ async def deny_session(
     pedestal_id: Optional[int] = Query(default=None),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    factory: PedestalAPIClientFactory = Depends(get_pedestal_factory),
 ):
     """Deny a pending session with optional reason + log to audit trail."""
     marina = _get_marina_and_check_access(marina_id, user, db)
 
-    svc = PedestalAPIService(marina.pedestal_api_base_url, marina.pedestal_api_key)
-    result = await svc.deny_session(session_id, body.reason)
+    client = factory.get_client(marina_id, db)
+    result = await client.deny_session(session_id, body.reason)
 
     record_action(
         db,
@@ -93,12 +95,13 @@ async def stop_session(
     pedestal_id: Optional[int] = Query(default=None),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    factory: PedestalAPIClientFactory = Depends(get_pedestal_factory),
 ):
     """Stop an active session + log to audit trail."""
     marina = _get_marina_and_check_access(marina_id, user, db)
 
-    svc = PedestalAPIService(marina.pedestal_api_base_url, marina.pedestal_api_key)
-    result = await svc.stop_session(session_id)
+    client = factory.get_client(marina_id, db)
+    result = await client.stop_session(session_id)
 
     record_action(
         db,
@@ -119,12 +122,13 @@ async def run_diagnostics(
     pedestal_id: int,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    factory: PedestalAPIClientFactory = Depends(get_pedestal_factory),
 ):
     """Run diagnostics on a pedestal."""
     marina = _get_marina_and_check_access(marina_id, user, db)
 
-    svc = PedestalAPIService(marina.pedestal_api_base_url, marina.pedestal_api_key)
-    result = await svc.run_diagnostics(pedestal_id)
+    client = factory.get_client(marina_id, db)
+    result = await client.run_diagnostics(pedestal_id)
 
     record_action(
         db,

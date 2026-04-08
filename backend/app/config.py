@@ -31,6 +31,11 @@ class Settings(BaseSettings):
     pedestal_api_timeout_seconds: int = 10
     pedestal_api_max_retries: int = 3
 
+    # ── Service account password encryption ──────────────────────────────────
+    # Fernet key — generate with:
+    #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    erp_encryption_key: Optional[str] = None
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
@@ -50,4 +55,12 @@ if settings.default_admin_password is None:
     _config_logger.warning(
         "DEFAULT_ADMIN_PASSWORD is not set. Default super_admin will NOT be seeded. "
         "Set DEFAULT_ADMIN_PASSWORD in your .env file."
+    )
+
+# ── Encryption key check ──────────────────────────────────────────────────────
+if settings.erp_encryption_key is None:
+    _config_logger.warning(
+        "ERP_ENCRYPTION_KEY is not set. Service account password encryption will fail. "
+        "Generate with: python -c \"from cryptography.fernet import Fernet; "
+        "print(Fernet.generate_key().decode())\""
     )
