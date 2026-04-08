@@ -54,6 +54,11 @@ async def get_dashboard(
         for row in cache_rows
         if row.last_temperature is not None
     }
+    readings_map = {
+        row.pedestal_id: row.last_readings
+        for row in cache_rows
+        if row.last_readings
+    }
 
     return {
         "marina_id": marina_id,
@@ -64,6 +69,7 @@ async def get_dashboard(
         "active_sessions": active_data,
         "pending_sessions": pending_data,
         "temperature_map": temperature_map,
+        "readings_map": readings_map,
     }
 
 

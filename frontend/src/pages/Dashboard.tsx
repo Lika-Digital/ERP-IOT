@@ -7,6 +7,7 @@ import {
   type PedestalHealth,
   type TemperatureReading,
   type SessionInfo,
+  type SensorReadings,
 } from '../api/dashboard'
 import StaleDataBanner from '../components/ui/StaleDataBanner'
 import { useWebSocket } from '../hooks/useWebSocket'
@@ -60,6 +61,7 @@ export default function Dashboard() {
   const pendingSessions: SessionInfo[] = Array.isArray(data?.pending_sessions) ? data.pending_sessions : []
   const health: Record<string, PedestalHealth> = (data?.health as Record<string, PedestalHealth>) ?? {}
   const tempMap: Record<string, TemperatureReading> = data?.temperature_map ?? {}
+  const readingsMap: Record<string, SensorReadings> = data?.readings_map ?? {}
 
   // marina-level temperature (pedestal_id = 0)
   const marinaTemp = tempMap['0'] ?? null
@@ -109,6 +111,7 @@ export default function Dashboard() {
             {pedestals.map((p) => {
               const h = health[String(p.id)]
               const temp = tempMap[String(p.id)]
+              const readings = readingsMap[String(p.id)]
               const activeSession = activeSessions.find((s) => s.pedestal_id === p.id)
               const pendingSession = pendingSessions.find((s) => s.pedestal_id === p.id)
               return (
@@ -117,6 +120,7 @@ export default function Dashboard() {
                   pedestal={p}
                   health={h}
                   temperature={temp}
+                  readings={readings}
                   activeSession={activeSession}
                   pendingSession={pendingSession}
                 />
@@ -188,17 +192,20 @@ function PedestalCard({
   pedestal,
   health,
   temperature,
+  readings,
   activeSession,
   pendingSession,
 }: {
   pedestal: PedestalInfo
   health?: PedestalHealth
   temperature?: TemperatureReading
+  readings?: SensorReadings
   activeSession?: SessionInfo
   pendingSession?: SessionInfo
 }) {
   const isOnline = health?.opta_connected ?? false
-  const hasAlarm = temperature?.alarm ?? false
+  const tempReading = readings?.temperature_reading ?? (temperature ? { value: temperature.value, alarm: temperature.alarm, at: temperature.at ?? null } : null)
+  const hasAlarm = (tempReading?.alarm ?? false) || (readings?.moisture_reading?.alarm ?? false)
 
   return (
     <div className={`card flex flex-col gap-3 ${hasAlarm ? 'border-red-300 bg-red-50' : ''}`}>
@@ -218,39 +225,51 @@ function PedestalCard({
       {/* Readings grid */}
       <div className="grid grid-cols-2 gap-2">
         {/* Temperature */}
-        <div className={`rounded-lg p-3 ${hasAlarm ? 'bg-red-100' : 'bg-gray-50'}`}>
-          <p className="text-xs text-gray-500 mb-1">Temperature</p>
-          {temperature ? (
-            <p className={`text-lg font-bold ${hasAlarm ? 'text-red-600' : 'text-gray-800'}`}>
-              {temperature.value}°C
-              {hasAlarm && <span className="ml-1 text-xs">⚠️</span>}
-            </p>
-          ) : (
-            <p className="text-sm text-gray-400">—</p>
-          )}
-          {temperature?.at && (
-            <p className="text-xs text-gray-400 mt-0.5">
-              {new Date(temperature.at).toLocaleTimeString()}
-            </p>
-          )}
-        </div>
+        <ReadingCell
+          label="Temperature"
+          value={tempReading ? `${tempReading.value}°C` : null}
+          alarm={tempReading?.alarm}
+          at={tempReading?.at ?? null}
+        />
 
-        {/* Session status */}
-        <div className="rounded-lg p-3 bg-gray-50">
-          <p className="text-xs text-gray-500 mb-1">Session</p>
-          {activeSession ? (
-            <p className="text-sm font-medium text-green-700">
-              Active #{activeSession.id}
-              <span className="block text-xs font-normal text-gray-500">{activeSession.type}</span>
-            </p>
-          ) : pendingSession ? (
-            <p className="text-sm font-medium text-yellow-700">
-              Pending #{pendingSession.id}
-            </p>
-          ) : (
-            <p className="text-sm text-gray-400">No session</p>
-          )}
-        </div>
+        {/* Power */}
+        <ReadingCell
+          label="Power"
+          value={readings?.power_reading ? `${readings.power_reading.watts} W` : null}
+          sub={readings?.power_reading ? `${readings.power_reading.kwh_total?.toFixed(2)} kWh total` : undefined}
+          at={readings?.power_reading?.at ?? null}
+        />
+
+        {/* Water */}
+        <ReadingCell
+          label="Water Flow"
+          value={readings?.water_reading ? `${readings.water_reading.lpm} L/min` : null}
+          sub={readings?.water_reading ? `${readings.water_reading.total_liters?.toFixed(0)} L total` : undefined}
+          at={readings?.water_reading?.at ?? null}
+        />
+
+        {/* Moisture */}
+        <ReadingCell
+          label="Moisture"
+          value={readings?.moisture_reading ? `${readings.moisture_reading.value}%` : null}
+          alarm={readings?.moisture_reading?.alarm}
+          at={readings?.moisture_reading?.at ?? null}
+        />
+      </div>
+
+      {/* Session status */}
+      <div className="rounded-lg px-3 py-2 bg-gray-50 text-sm">
+        {activeSession ? (
+          <span className="text-green-700 font-medium">
+            ● Active session #{activeSession.id} · {activeSession.type}
+          </span>
+        ) : pendingSession ? (
+          <span className="text-yellow-700 font-medium">
+            ◌ Pending #{pendingSession.id}
+          </span>
+        ) : (
+          <span className="text-gray-400">No active session</span>
+        )}
       </div>
 
       {/* Health indicators */}
@@ -264,6 +283,37 @@ function PedestalCard({
             </span>
           )}
         </div>
+      )}
+    </div>
+  )
+}
+
+function ReadingCell({
+  label,
+  value,
+  sub,
+  alarm,
+  at,
+}: {
+  label: string
+  value: string | null
+  sub?: string
+  alarm?: boolean
+  at: string | null
+}) {
+  return (
+    <div className={`rounded-lg p-3 ${alarm ? 'bg-red-100' : 'bg-gray-50'}`}>
+      <p className="text-xs text-gray-500 mb-1">{label}</p>
+      {value ? (
+        <>
+          <p className={`text-base font-bold leading-tight ${alarm ? 'text-red-600' : 'text-gray-800'}`}>
+            {value}{alarm && <span className="ml-1 text-xs">⚠️</span>}
+          </p>
+          {sub && <p className="text-xs text-gray-400">{sub}</p>}
+          {at && <p className="text-xs text-gray-400">{new Date(at).toLocaleTimeString()}</p>}
+        </>
+      ) : (
+        <p className="text-sm text-gray-400">—</p>
       )}
     </div>
   )

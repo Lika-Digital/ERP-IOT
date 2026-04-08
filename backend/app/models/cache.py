@@ -18,6 +18,8 @@ class PedestalCache(Base):
     last_temperature = Column(Float, nullable=True)
     last_temperature_alarm = Column(Boolean, nullable=True)
     last_temperature_at = Column(DateTime, nullable=True)
+    # Latest sensor readings by type: {type: {value, unit, at, ...}}
+    last_readings = Column(JSON, nullable=True)
 
 
 class AlarmLog(Base):

@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard'
 import PedestalControl from './pages/PedestalControl'
 import Energy from './pages/Energy'
 import Alarms from './pages/Alarms'
+import Berths from './pages/Berths'
 
 export default function App() {
   return (
@@ -33,6 +34,7 @@ export default function App() {
             <Route path="control" element={<PedestalControl />} />
             <Route path="energy" element={<Energy />} />
             <Route path="alarms" element={<Alarms />} />
+            <Route path="berths" element={<Berths />} />
           </Route>
         </Route>
 

@@ -32,6 +32,14 @@ export interface SessionInfo {
   status: string
 }
 
+export interface SensorReadings {
+  power_reading?: { watts: number; kwh_total: number; socket_id?: number; at: string }
+  water_reading?: { lpm: number; total_liters: number; at: string }
+  moisture_reading?: { value: number; alarm: boolean; at: string }
+  temperature_reading?: { value: number; alarm: boolean; at: string }
+  heartbeat?: { at: string }
+}
+
 export interface DashboardResponse {
   marina_id: number
   marina_name: string
@@ -41,6 +49,7 @@ export interface DashboardResponse {
   active_sessions: SessionInfo[]
   pending_sessions: SessionInfo[]
   temperature_map: Record<string, TemperatureReading>
+  readings_map: Record<string, SensorReadings>
 }
 
 export interface HealthResponse {

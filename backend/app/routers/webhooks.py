@@ -94,6 +94,11 @@ async def receive_webhook(
     if event_type == "temperature_reading":
         _update_temperature(db, marina_id, pedestal_id, payload, now)
 
+    _SENSOR_EVENTS = {"power_reading", "water_reading", "moisture_reading",
+                      "temperature_reading", "heartbeat", "pedestal_health_updated"}
+    if event_type in _SENSOR_EVENTS:
+        _update_readings(db, marina_id, pedestal_id, event_type, payload, now)
+
     # ── 3. Broadcast via WebSocket ────────────────────────────────────────────
     ws_message = {
         "event": "webhook_event",
@@ -181,6 +186,68 @@ def _update_temperature(
         db.commit()
     except Exception as exc:
         log.warning(f"[WEBHOOK] temperature cache update failed: {exc}")
+        db.rollback()
+
+
+def _update_readings(
+    db: Session, marina_id: int, pedestal_id: int, event_type: str, payload: dict, now: datetime
+) -> None:
+    """Store latest sensor reading in the last_readings JSON blob per pedestal."""
+    data = payload.get("data", payload)
+    pid = pedestal_id if pedestal_id else 0
+
+    # Build the reading entry based on event type
+    if event_type == "power_reading":
+        reading = {
+            "watts": data.get("watts"),
+            "kwh_total": data.get("kwh_total"),
+            "socket_id": data.get("socket_id"),
+            "at": now.isoformat(),
+        }
+    elif event_type == "water_reading":
+        reading = {
+            "lpm": data.get("lpm"),
+            "total_liters": data.get("total_liters"),
+            "at": now.isoformat(),
+        }
+    elif event_type == "moisture_reading":
+        reading = {
+            "value": data.get("value"),
+            "alarm": data.get("alarm", False),
+            "at": now.isoformat(),
+        }
+    elif event_type == "temperature_reading":
+        reading = {
+            "value": data.get("value"),
+            "alarm": data.get("alarm", False),
+            "at": now.isoformat(),
+        }
+    elif event_type in ("heartbeat", "pedestal_health_updated"):
+        reading = {"at": now.isoformat(), **{k: v for k, v in data.items() if k != "pedestal_id"}}
+    else:
+        return
+
+    try:
+        entry = (
+            db.query(PedestalCache)
+            .filter(PedestalCache.marina_id == marina_id, PedestalCache.pedestal_id == pid)
+            .first()
+        )
+        if entry:
+            current = dict(entry.last_readings or {})
+            current[event_type] = reading
+            entry.last_readings = current
+        else:
+            entry = PedestalCache(
+                marina_id=marina_id,
+                pedestal_id=pid,
+                last_readings={event_type: reading},
+                is_stale=False,
+            )
+            db.add(entry)
+        db.commit()
+    except Exception as exc:
+        log.warning(f"[WEBHOOK] readings cache update failed: {exc}")
         db.rollback()
 
 
