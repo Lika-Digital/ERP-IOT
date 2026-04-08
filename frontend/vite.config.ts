@@ -5,6 +5,8 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
+    host: true,
+    allowedHosts: ['erp.lika.solutions'],
     proxy: {
       '/api': {
         target: 'http://localhost:8000',
@@ -22,3 +24,4 @@ export default defineConfig({
     sourcemap: false,
   },
 })
+
