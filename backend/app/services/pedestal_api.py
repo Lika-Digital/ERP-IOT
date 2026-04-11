@@ -374,6 +374,97 @@ class PedestalAPIClient:
             resp.raise_for_status()
             return resp.json()
 
+    async def get_berth_occupancy(
+        self, pedestal_id: int, marina_id: int, db: Optional[Session]
+    ) -> Tuple[Any, bool]:
+        """
+        GET /api/ext/pedestals/{pedestal_id}/berths/occupancy.
+        Returns per-pedestal berth occupancy list from the Pedestal SW.
+        Cached per pedestal_id; falls back to stale cache on failure.
+        """
+        return await self._get(
+            f"/api/ext/pedestals/{pedestal_id}/berths/occupancy",
+            marina_id,
+            db,
+            f"berth_occupancy_{pedestal_id}",
+        )
+
+    async def get_camera_frame(
+        self, pedestal_id: int, marina_id: int, db: Optional[Session] = None
+    ) -> bytes:
+        """
+        GET /api/ext/pedestals/{pedestal_id}/camera/frame.
+        Returns raw JPEG bytes.  No stale-cache (bytes cannot be stored in the
+        JSON PedestalCache column).  Retries up to _MAX_RETRIES times and writes
+        to sync_log on success and failure; raises on all retry exhaustion.
+        """
+        url = f"{self.base_url}/api/ext/pedestals/{pedestal_id}/camera/frame"
+        sync_type = f"camera_frame_{pedestal_id}"
+        started_at = datetime.utcnow()
+        last_error: Optional[str] = None
+
+        for attempt in range(_MAX_RETRIES):
+            try:
+                token = await self._get_token()
+                headers = {"Authorization": f"Bearer {token}", "Accept": "image/jpeg,*/*"}
+                async with httpx.AsyncClient(timeout=self.timeout) as http_client:
+                    resp = await http_client.get(url, headers=headers)
+                    resp.raise_for_status()
+                    frame_bytes = resp.content
+
+                completed_at = datetime.utcnow()
+                _write_sync_log(db, marina_id, sync_type, "success", started_at, completed_at)
+                return frame_bytes
+
+            except PedestalAuthError:
+                raise
+
+            except (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError) as exc:
+                last_error = f"{type(exc).__name__}: {exc}"
+                logger.warning(
+                    f"[PedestalAPI] {sync_type} attempt {attempt + 1}/{_MAX_RETRIES}: {last_error}"
+                )
+                if attempt < _MAX_RETRIES - 1:
+                    await asyncio.sleep(_RETRY_DELAYS[attempt])
+
+            except httpx.HTTPStatusError as exc:
+                last_error = f"HTTP {exc.response.status_code}: {exc.response.text[:200]}"
+                logger.error(f"[PedestalAPI] {sync_type} HTTP error: {last_error}")
+                if exc.response.status_code == 401:
+                    self._token_cache = {}
+                if exc.response.status_code < 500:
+                    break
+                if attempt < _MAX_RETRIES - 1:
+                    await asyncio.sleep(_RETRY_DELAYS[attempt])
+
+            except Exception as exc:
+                last_error = str(exc)
+                logger.error(f"[PedestalAPI] {sync_type} unexpected error: {last_error}")
+                break
+
+        completed_at = datetime.utcnow()
+        _write_sync_log(
+            db, marina_id, sync_type, "error", started_at, completed_at, last_error
+        )
+        raise httpx.RequestError(
+            f"Camera frame unavailable for pedestal {pedestal_id}: {last_error or 'Unknown error'}"
+        )
+
+    async def get_camera_stream_url(
+        self, pedestal_id: int, marina_id: int, db: Optional[Session]
+    ) -> Tuple[Any, bool]:
+        """
+        GET /api/ext/pedestals/{pedestal_id}/camera/stream.
+        Returns RTSP stream URL + reachability from the Pedestal SW.
+        Cached per pedestal_id; falls back to stale cache on failure.
+        """
+        return await self._get(
+            f"/api/ext/pedestals/{pedestal_id}/camera/stream",
+            marina_id,
+            db,
+            f"camera_stream_{pedestal_id}",
+        )
+
 
 # ─── Backwards-compat alias ───────────────────────────────────────────────────
 # Routers that still reference PedestalAPIService will continue to work while

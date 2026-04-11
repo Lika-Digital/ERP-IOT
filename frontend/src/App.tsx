@@ -8,6 +8,7 @@ import PedestalControl from './pages/PedestalControl'
 import Energy from './pages/Energy'
 import Alarms from './pages/Alarms'
 import Berths from './pages/Berths'
+import PedestalDetail from './pages/PedestalDetail'
 
 export default function App() {
   return (
@@ -31,6 +32,7 @@ export default function App() {
           <Route path="marinas/:marinaId">
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
+            <Route path="pedestals/:pedestalId" element={<PedestalDetail />} />
             <Route path="control" element={<PedestalControl />} />
             <Route path="energy" element={<Energy />} />
             <Route path="alarms" element={<Alarms />} />
