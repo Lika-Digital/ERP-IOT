@@ -30,6 +30,30 @@ Pedestal SW instances (one per marina)
 - Real-time updates via WebSocket
 - Security middleware (injection detection, security headers)
 
+## Phase 2 Features — Marina Dashboard Restructure + Pedestal Detail
+
+### Marina Dashboard (2 tabs)
+- **Overview tab** — all existing marina content unchanged; pedestal cards are now clickable links to Pedestal Detail
+- **Berths tab** — unified berth view grouped by pedestal:
+  - Per-berth occupancy badge (Occupied / Available / No Analysis)
+  - **Get Frame** button — fetches JPEG from Pedestal SW camera inline
+  - **Refresh All** button + per-pedestal refresh
+  - Data fetched on demand (not polled)
+
+### Pedestal Detail page (`/marinas/:marinaId/pedestals/:pedestalId`)
+- **Real Time tab** — health indicators, active/pending sessions, alarm log — all filtered to this pedestal
+- **Berths tab** — per-berth occupancy + frame grab + RTSP stream URL (copyable, VLC note)
+- **Controls tab** — Allow/Deny/Stop sessions + Acknowledge alarms with confirmation dialogs; mirrors PedestalControl look and feel; every action logged to audit_log
+
+### Camera & Berth Ext API (new backend endpoints)
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/marinas/{marina_id}/pedestals/{pedestal_id}/berths/occupancy` | Berth occupancy from Pedestal SW (cached, stale fallback) |
+| GET | `/api/marinas/{marina_id}/pedestals/{pedestal_id}/camera/frame` | Live JPEG frame from Pedestal SW camera (no cache, `Cache-Control: no-store`) |
+| GET | `/api/marinas/{marina_id}/pedestals/{pedestal_id}/camera/stream` | RTSP stream URL from Pedestal SW (cached, stale fallback) |
+
+All three endpoints require JWT auth + marina access. Camera frame fetches are logged to audit_log as operator-initiated actions.
+
 ## Quick Start
 
 ### Prerequisites
@@ -50,9 +74,13 @@ source .venv/Scripts/activate  # Windows
 # Install dependencies
 pip install -r requirements.txt
 
-# Configure environment
-cp .env.example .env
-# Edit .env — set JWT_SECRET and DEFAULT_ADMIN_PASSWORD
+# Configure environment — create backend/.env with:
+#   DATABASE_URL=postgresql://erp_user:erp_password@localhost:5432/erp_iot
+#   JWT_SECRET=<random hex>
+#   DEFAULT_ADMIN_EMAIL=admin@erp-iot.local
+#   DEFAULT_ADMIN_PASSWORD=<your password>
+#   ALLOWED_ORIGINS=http://localhost:5173
+#   ERP_ENCRYPTION_KEY=<generate: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())">
 
 # Run database migrations
 alembic upgrade head
@@ -93,11 +121,9 @@ cd backend
 python -m pytest tests/ -v
 ```
 
-Or via the full test suite:
+**96 tests** covering auth, marinas, dashboard, controls, energy, alarms, webhooks, pedestal API client (retry/cache/stale), and all Phase 2 pedestal ext endpoints.
 
-```bash
-bash tests/run_tests.sh
-```
+Pre-push hook runs the full suite automatically. Pushes to `main` require `CLOUD_IOT_RELEASE=1` and a merged `dev` branch.
 
 ## System Verification
 
@@ -171,6 +197,13 @@ CLOUD_IOT_RELEASE=1 git push origin main
 | GET | `/api/marinas/{id}/alarms/active` | Active alarms (from Pedestal SW) |
 | GET | `/api/marinas/{id}/alarms/log` | Local alarm log |
 | POST | `/api/marinas/{id}/alarms/{aid}/acknowledge` | Acknowledge alarm |
+
+### Pedestal Ext (Camera & Berths)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/marinas/{marina_id}/pedestals/{pedestal_id}/berths/occupancy` | Berth occupancy (cached, stale fallback) |
+| GET | `/api/marinas/{marina_id}/pedestals/{pedestal_id}/camera/frame` | Live JPEG frame (`image/jpeg`, no cache) |
+| GET | `/api/marinas/{marina_id}/pedestals/{pedestal_id}/camera/stream` | RTSP stream URL (cached, stale fallback) |
 
 ### Webhooks
 | Method | Endpoint | Description |
