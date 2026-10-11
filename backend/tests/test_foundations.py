@@ -420,3 +420,18 @@ def test_tc_erp_cache_01_migration_drops_hash_rows_keeps_readings(tmp_path):
     rows = con.execute("SELECT pedestal_id, cache_key FROM pedestal_cache").fetchall()
     con.close()
     assert rows == [(3, None)]
+
+
+# ─── Uklonjeni poziv koji cilja nepostojecu rutu (spec §4.8) ─────────────────
+
+def test_no_call_to_nonexistent_camera_detections_route():
+    """/api/ext/camera/{id}/detections ne postoji na ormaru i nije u katalogu.
+
+    Metoda koja je zove imala je nula pozivatelja. Ostavljena, prvi bi je
+    netko pozvao i dobio 404 kao "ormar ne radi".
+    """
+    from app.services.pedestal_api import PedestalAPIClient
+
+    assert not hasattr(PedestalAPIClient, "get_camera_detections")
+    src = (_BACKEND / "app" / "services" / "pedestal_api.py").read_text(encoding="utf-8")
+    assert "/detections" not in src

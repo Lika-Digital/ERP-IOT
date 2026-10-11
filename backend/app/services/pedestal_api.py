@@ -365,18 +365,6 @@ class PedestalAPIClient:
             resp.raise_for_status()
             return resp.json()
 
-    async def get_camera_detections(self, pedestal_id: int) -> dict:
-        """Get latest camera detections for a pedestal."""
-        token = await self._get_token()
-        headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            resp = await client.get(
-                f"{self.base_url}/api/ext/camera/{pedestal_id}/detections",
-                headers=headers,
-            )
-            resp.raise_for_status()
-            return resp.json()
-
     async def get_berth_occupancy(
         self, pedestal_id: int, marina_id: int, db: Optional[Session]
     ) -> Tuple[Any, bool]:
