@@ -6,6 +6,7 @@ lagati o sebi: da su ovisnosti pinane, da je gate u repou, da autentifikacija
 vraca 401, i da se tajna ne izmislja u tisini.
 
 TC-ERP-DEP-01   ovisnosti su pinane i instalirano se slaze s pinovima
+TC-ERP-AUTH-02  JWT_SECRET koji fali ili je prazan zaustavlja podizanje
 
 Ostali testovi faze 1 dodaju se u istom commitu kao i ponasanje koje tvrde,
 da nijedan commit ne ostavi suite crvenim.
@@ -14,6 +15,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+import sys
 from importlib import metadata
 from pathlib import Path
 
@@ -122,4 +124,98 @@ def test_tc_erp_dep_01_frontend_lock_is_tracked():
     assert tracked.returncode == 0, (
         "frontend/package-lock.json nije u gitu — npm install tada moze "
         "rijesiti druge verzije od onih koje smo testirali (spec §11 O4)"
+    )
+
+
+# ─── TC-ERP-AUTH-02 ───────────────────────────────────────────────────────────
+
+def _import_config_with(env: dict) -> subprocess.CompletedProcess:
+    """Uvezi app.config u svjezem procesu, IZOLIRANO od backend/.env.
+
+    Proces se vrti iz privremenog direktorija s PYTHONPATH na backend, pa
+    pydantic-settings ne nalazi `.env`. Bez te izolacije test ne bi mjerio
+    fail-fast nego postojanje razvojne datoteke na ovom stroju.
+    """
+    import os
+    import tempfile
+
+    e = dict(os.environ)
+    e["PYTHONPATH"] = str(_BACKEND)
+    e["DATABASE_URL"] = "sqlite:///./_authcheck.db"
+    for k, v in env.items():
+        if v is None:
+            e.pop(k, None)
+        else:
+            e[k] = v
+    with tempfile.TemporaryDirectory() as tmp:
+        return subprocess.run(
+            [sys.executable, "-c", "import app.config"],
+            cwd=tmp, capture_output=True, text=True, env=e,
+        )
+
+def test_tc_erp_auth_02_absent_jwt_secret_refuses_to_boot():
+    """Bez JWT_SECRET aplikacija se NE SMIJE dici.
+
+    Prije faze 1 generirala se slucajna tajna i upisao CRITICAL u log. Posljedica:
+    svaki restart nevaljanim cini sve sesije, a log nitko ne gleda. Tiha
+    degradacija sigurnosti je gora od odbijenog podizanja (spec §7.1).
+    """
+    proc = _import_config_with({"JWT_SECRET": None})
+    assert proc.returncode != 0, (
+        "app.config se uvezao bez JWT_SECRET — fail-fast ne radi. "
+        f"stdout={proc.stdout!r} stderr={proc.stderr!r}"
+    )
+    assert "JWT_SECRET" in proc.stdout + proc.stderr, (
+        "podizanje je palo, ali poruka ne imenuje JWT_SECRET — greska mora reci sto fali"
+    )
+
+
+def test_tc_erp_auth_02_blank_jwt_secret_also_refuses_to_boot():
+    """Prazan string je takoder 'nije postavljeno'.
+
+    `.env.example` nosi `JWT_SECRET=` s praznom vrijednoscu (spec §8.3), pa bi
+    provjera samo na None propustila tocno onaj slucaj zbog kojeg postoji:
+    nekoga ko je kopirao primjer i nije ga popunio.
+    """
+    for blank in ("", "   "):
+        proc = _import_config_with({"JWT_SECRET": blank})
+        assert proc.returncode != 0, f"prazan JWT_SECRET ({blank!r}) je prosao"
+
+
+def test_tc_erp_auth_02_present_jwt_secret_boots():
+    """Pozitivna strana: s tajnom se config uvozi normalno.
+
+    Bez ovoga bi test gore prosao i da config puca uvijek.
+    """
+    proc = _import_config_with({"JWT_SECRET": "x" * 64})
+    assert proc.returncode == 0, f"config ne uvozi ni s tajnom: {proc.stderr!r}"
+
+
+def test_tc_erp_auth_02_env_example_ships_blank_secrets():
+    """Primjeri tajni moraju biti PRAZNI, ne 'change-me'.
+
+    'change-me-in-production' je gore od prazne vrijednosti: s njom se
+    aplikacija digne, pa fail-fast nikad ne okine i tajna iz primjera ode u
+    produkciju.
+    """
+    body = (_BACKEND / ".env.example").read_text(encoding="utf-8")
+    for key in ("JWT_SECRET", "DEFAULT_ADMIN_PASSWORD", "ERP_ENCRYPTION_KEY"):
+        assert re.search(rf"^{key}=\s*$", body, re.M), (
+            f"{key} u .env.example nema praznu vrijednost (spec §8.3)"
+        )
+    assert "change-me" not in body, ".env.example jos nosi 'change-me' vrijednost"
+
+
+def test_tc_erp_auth_02_app_does_not_bind_all_interfaces_by_default():
+    """Spec §8.1: nginx je jedini javni slusatelj.
+
+    B104 je bio jedini medium nalaz bandita u repou.
+    """
+    import os
+    os.environ.setdefault("JWT_SECRET", "test-secret-for-erp-iot-ci")
+    from app.config import Settings
+
+    assert Settings().app_host == "127.0.0.1", (
+        "app_host default je 0.0.0.0 — prvo pogresno pravilo vatrozida izlozilo bi "
+        "backend izravno (spec §8.1)"
     )

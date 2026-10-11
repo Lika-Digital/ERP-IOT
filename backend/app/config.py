@@ -1,6 +1,5 @@
 """Application settings loaded from environment variables / .env file."""
 import logging
-import secrets
 from typing import Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -13,7 +12,9 @@ class Settings(BaseSettings):
     database_url: str = "postgresql://erp_user:erp_password@localhost:5432/erp_iot"
 
     # ── App server ────────────────────────────────────────────────────────────
-    app_host: str = "0.0.0.0"
+    # 127.0.0.1, ne 0.0.0.0: nginx je jedini javni slusatelj (spec §8.1).
+    # 0.0.0.0 je bio jedini medium nalaz bandita u repou (B104).
+    app_host: str = "127.0.0.1"
     app_port: int = 8000
 
     # ── CORS ──────────────────────────────────────────────────────────────────
@@ -39,26 +40,43 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
+class MissingSecretError(RuntimeError):
+    """Podizanje je odbijeno jer obvezna tajna nije postavljena."""
+
+
 settings = Settings()
 
-# ── JWT secret resolution ─────────────────────────────────────────────────────
-if settings.jwt_secret is None:
-    settings.jwt_secret = secrets.token_hex(32)
-    _config_logger.critical(
-        "SECURITY WARNING: JWT_SECRET is not set. A random secret was generated — "
-        "all sessions will be invalidated on every restart. "
-        "Set JWT_SECRET in your .env file."
+def _is_blank(value: str | None) -> bool:
+    """None i prazan string su oboje 'nije postavljeno'.
+
+    `.env.example` nosi `JWT_SECRET=` s praznom vrijednoscu (spec §8.3), pa bi
+    provjera samo na None propustila tocno onaj slucaj zbog kojeg postoji:
+    nekoga ko je kopirao primjer i nije ga popunio.
+    """
+    return value is None or not value.strip()
+
+
+# ── JWT secret: FAIL-FAST ─────────────────────────────────────────────────────
+# Prije faze 1 ovdje se generirala slucajna tajna i upisao CRITICAL u log.
+# Posljedica: svaki restart nevaljanim cini sve sesije, a log nitko ne gleda —
+# tiha degradacija sigurnosti. Spec §7.1: podizanje se odbija.
+if _is_blank(settings.jwt_secret):
+    raise MissingSecretError(
+        "JWT_SECRET nije postavljen. Aplikacija se nece dici.\n"
+        "  Razvoj:     dodaj JWT_SECRET u backend/.env\n"
+        "  Produkcija: systemd LoadCredential (spec 8.3), nikad u datoteku uz aplikaciju\n"
+        "  Generiraj:  python -c \"import secrets; print(secrets.token_hex(32))\""
     )
 
 # ── Admin password check ──────────────────────────────────────────────────────
-if settings.default_admin_password is None:
+if _is_blank(settings.default_admin_password):
     _config_logger.warning(
         "DEFAULT_ADMIN_PASSWORD is not set. Default super_admin will NOT be seeded. "
         "Set DEFAULT_ADMIN_PASSWORD in your .env file."
     )
 
 # ── Encryption key check ──────────────────────────────────────────────────────
-if settings.erp_encryption_key is None:
+if _is_blank(settings.erp_encryption_key):
     _config_logger.warning(
         "ERP_ENCRYPTION_KEY is not set. Service account password encryption will fail. "
         "Generate with: python -c \"from cryptography.fernet import Fernet; "
