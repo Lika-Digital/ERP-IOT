@@ -3,9 +3,9 @@
 Što se gradi, u kojem redoslijedu, i svaka odluka izrečena tako da ispravak
 košta jedan redak, a ne razgovor.
 
-    Verzija 3 — zamjenjuje v2 od 2026-10-11
+    Verzija 4 — zamjenjuje v3 od 2026-10-11
     Datum 2026-10-11
-    Status faza 1 odobrena i u izvedbi; §1 je prazan
+    Status faza 1 ZAVRŠENA, gate zelen (§10.1); faza 2 čeka odobrenje; §1 je prazan
 
 Čita se uz `docs/inputs/odluke.md` **v2.1** (odluke, obvezujuće — v2.1 dodaje **D18**),
 `docs/inputs/ormar_gateway_izvjestaj.md` (ugovor s ormarom, file:line),
@@ -13,6 +13,16 @@ košta jedan redak, a ne razgovor.
 `docs/inputs/ormar_ui_v2_spec.txt` (specifikacija ormara — uzor forme i izvor rječnika stanja).
 
 **Sve u ovom dokumentu je ODLUČENO. §1 je prazan — nema otvorenih blokatora.**
+
+### Što se promijenilo u verziji 4
+
+| | |
+|---|---|
+| **Faza 1 završena** | gate zelen, izvještaj s brojkama u **§10.1**; 8 commitova `faza1(1/9)…(8/9)` + ovaj |
+| **§9 TC-ERP-AUTH-01 ispravljen** | zaštićenih ruta je **27 od 31**, ne 23 od 30 — grep po `Depends(get_current_user)` promašuje rute zaštićene kroz `require_super_admin`/`require_any_operator`. Test uzima popis iz grafa ovisnosti aplikacije |
+| **§11 O14 odlučeno i primijenjeno** | nepoznat e-mail, kriva lozinka i ugašen račun daju **isti 401 s istom porukom**; razlog samo u log |
+| **§4 migracije** | faza 1 je potrošila `005` (`pedestal_cache.cache_key`); **faza 3 počinje od `006`** |
+| **§11 novo** | O15 (vremenska enumeracija pri prijavi), O16 (lozinka u `alembic.ini`), O17 (modeli i migracije se razilaze u 9 indeksa), O18 (šira ruff pravila), O19 (`npm run lint` zove eslint koji nije instaliran), O20 (keš ignorira parametre upita) |
 
 ### Što se promijenilo u verziji 3
 
@@ -597,8 +607,8 @@ Veza ormar↔ERP, zasebno od veza-stanja: `online | stale | offline | auth_faile
 
 ## §4 Model podataka
 
-PostgreSQL, Alembic. Postojeće migracije idu do `004`
-(`backend/alembic/versions/004_pedestal_cache_readings.py`); nove počinju od `005`.
+PostgreSQL, Alembic. Postojeće migracije idu do `005`
+(`backend/alembic/versions/005_pedestal_cache_key.py`, faza 1, §4.8); nove počinju od `006`.
 Postojećih tablica je osam (mjereno: `grep -c "__tablename__" backend/app/models/*.py` → 8):
 `users`, `user_marina_access`, `marinas`, `pedestal_cache`, `alarm_log`, `session_log`,
 `sync_log`, `audit_log`.
@@ -1725,7 +1735,7 @@ završava zelenim gateom i ažuriranom ovom specifikacijom (verzija +1, što se 
 |---|---|---|
 | **1** | **Temelji koji ne lažu** — `.githooks` + `core.hooksPath`, CI, linter, **lock datoteka**, dva tolerantna assertiona pritegnuta na 401 (§0.1), **test podizanja koji ne može proći prazno**, `JWT_SECRET` fail-fast, `pedestal_cache` stupac umjesto hasha, brisanje `camera/detections` | gate koji **ne može proći ako se aplikacija ne diže**; TC-ERP-BOOT-01/02, GATE-01, DEP-01, AUTH-01/02, CACHE-01 zeleni |
 | **2** | **Ugovor s ormarom + simulator** — tablica ključ→putanja, rukovanje 401/403/409/422/503/5xx po §2.5, Smart Mode iz `health`, PK vs `display_id`, `device_connected`, `berths.list`, `is_stale` do boje, kanal B s `X-API-Key`; simulator (puni, retrofit, trofazna Q1, dijeljeni ventil, tihi ormar, Smart Mode OFF) | TC-ERP-SIM-00..16 zeleni; **Berths/409/`is_stale` ispravljeni** |
-| **3** | **Model podataka** — §4 u cijelosti, mapiranje **po D18** (obje strane + usporedba), NFC tagovi s dva zapisa + **CSV uvoz za Krk**, tip uređaja i mogućnosti, korisnici, ugovori, `billing_mode` default `prepaid`, knjiga kredita, `consumption_source` | migracije `005+`; **uvoz Krk CSV-a pogađa točan priključak** (ne samo „prepoznato") |
+| **3** | **Model podataka** — §4 u cijelosti, mapiranje **po D18** (obje strane + usporedba), NFC tagovi s dva zapisa + **CSV uvoz za Krk**, tip uređaja i mogućnosti, korisnici, ugovori, `billing_mode` default `prepaid`, knjiga kredita, `consumption_source` | migracije `006+`; **uvoz Krk CSV-a pogađa točan priključak** (ne samo „prepoznato") |
 | **4** | **Prikupljanje + retencija u istom commitu** — poller po §5.2, pull-usklađivanje `by-user`, prijemnik webhooka (danas `X-API-Key`, spreman za HMAC), `command_audit` | podaci teku; **rast baze izmjeren i ograničen** — brojka prije i poslije 7 dana |
 | **5** | **VPS** — systemd (§8), 2 GB / 20 GB, Postgres, nginx, `cloudflared` samo za UI, Tailscale prema ormarima, **slojevi 0 i 1 PRIJE javnog izlaganja**, backup + probna obnova, runbook; `docker-compose.yml` obrisan | ERP javno dostupan iza Cloudflare Accessa; **runbook proveden na čistom VPS-u** |
 | **6** | **Zauzeće vezova + 2D SVG** — četiri signala iz §3.1, tablica stanja §3.2, statični SVG s `svg_id` po vezu | **Krk na karti, četiri signala, sivo za tiho** |
@@ -1739,6 +1749,41 @@ ugovorom pokrivenim simulatorom, L1 je posao iscrtavanja nad fiksnim oblikom.
 **Faza 7 je jedna** (v3): BLOK-3 je zatvoren, ormar vraća stanje brojila po ugovoru i ne
 računa cijenu, pa naplata ne čeka ništa osim faza prije sebe. Pri prvom spajanju ormara vrti
 se **TC-ERP-LIVE-01** (§9.1b), koji provjerava živi odgovor.
+
+### §10.1 · Faza 1 — izvještaj (2026-10-11)
+
+**Gate zelen.** `bash scripts/gate.sh` → `GATE (full): 5/5 stages passed`, 83 s na ovom stroju
+(`--fast`, pre-commit: 3/3, ~40 s).
+
+| Mjera | Prije faze 1 | Poslije | Kako izmjereno |
+|---|---|---|---|
+| Backend testova | 96 | **126**, 0 preskočenih | `PYTEST: collected=126 passed=126 skipped=0` iz `scripts/pytest_counts.py` |
+| Tolerantnih `in (401, 403)` | 2 | **0** | `grep -rn "in (401, 403)" backend/tests` |
+| Zaštićenih ruta pod strogim 401 | 0 sustavno | **27/27**, bez tokena i s lošim tokenom | TC-ERP-AUTH-01, popis iz grafa ovisnosti |
+| Pinane izravne ovisnosti | 1 (`bcrypt`) | **sve**; lock tranzitivan; `package-lock.json` praćen | TC-ERP-DEP-01 |
+| Boot provjera | nije postojala | **8/8**: migracija 001→005 na praznoj bazi, pravi uvicorn, health, prijava, `/me`, `/marinas`, 401 bez tokena, **odbijanje bez `JWT_SECRET`** | `scripts/boot_check.py` |
+| ruff (E9 + F) | 21 nalaz | **0** | `ruff check --config backend/ruff.toml` |
+| bandit high / medium / low | 0 / 1 / — | **0 / 0 / 2** (medium sada blokira) | gate, stage bandit |
+| Bundle | 646,34 kB JS / 23,27 kB CSS | 646,47 kB / 23,27 kB (bez promjene, O3) | `vite build` u gateu |
+| Načina da gate prođe prazno | 5 (sistemski Python, `pip install` bez pina, bandit „skipping", feature grane bez gatea, hook samo u `.git/hooks`) | **0** | TC-ERP-BOOT-02, TC-ERP-GATE-01 |
+
+Testovi faze 1 iz §9: **BOOT-01a, BOOT-02, GATE-01, DEP-01, AUTH-01, AUTH-02, CACHE-01 — svi
+zeleni.** Svaki koji tvrdi zaštitu provjeren je **mutacijom** — kvar je vraćen i test je pao:
+
+| Mutacija | Rezultat |
+|---|---|
+| HTTPBearer vraćen na 403 | 9 testova pada, među njima AUTH-01 i oba pritegnuta |
+| `pedestal_cache` vraćen na `hash()` ključ | CACHE-01 restart test pada (dva procesa, različit `PYTHONHASHSEED`) |
+| test s `pytest.skip` + nekorišten import | gate `--fast` CRVEN, preskočeni test imenovan |
+| nedostižna baza za boot | `BOOT: 0/8`, izlaz ≠ 0 |
+
+**Što faza 1 nije mogla provjeriti:** CI workflow (`.github/workflows/gate.yml`) napisan je i
+testom tvrđen da zove isti skript, ali **nije pokrenut na GitHubu** — grana nije pushana. Prvi push
+je prva stvarna provjera; boot tamo ide protiv pravog Postgresa 16, lokalno protiv SQLite-a.
+
+**Usput uočeno, nije mijenjano:** stari `.git/hooks/pre-commit` i `pre-push` i dalje postoje
+lokalno, ali ih `core.hooksPath=.githooks` zaobilazi; zovu obrisani `tests/run_tests.sh`, pa bi
+bez `hooksPath` pali, a ne prošli.
 
 ---
 
@@ -1757,6 +1802,11 @@ Nađeno usput. Nije u izvedbi gore; tvoje je da odlučiš prioritet.
 | O14 | ~~Prijava ugašenog računa s točnom lozinkom vraćala je 403 `Account is disabled`, a kriva lozinka 401 — razlika je otkrivala da račun postoji i da je lozinka točna~~ — **odlučeno i primijenjeno u fazi 1:** nepoznat e-mail, kriva lozinka i ugašen račun daju **isti 401 s istom porukom**; razlog ide samo u log (`backend/app/routers/auth.py`, test `test_inactive_user_login_is_indistinguishable_from_wrong_password`) | zatvoreno |
 | O15 | Nepoznat e-mail preskače `bcrypt.verify`, pa odgovara **brže** od krive lozinke — odgovor je isti, vrijeme nije (enumeracija po vremenu). Popravak je jedan redak: provjera protiv lažnog hasha kad korisnik ne postoji | nađeno pri O14; nije traženo, a mjerenje vremena u testu je krhko — tvoje je da odlučiš |
 | O12 | **`GET /api/nfc/sessions/by-user` na `develop` piše u bazu** (`erp_reconciliation.py:112-124`) | §7.2 R2 — zahtjev je podnesen; ERP se dotad samoograničava |
+| O16 | **`backend/alembic.ini:5` nosi lozinku baze** (`postgresql://erp_user:Admin1234!@…`) — protivno §8.3 „nikad u repou". `alembic/env.py` je ionako prepisuje iz `DATABASE_URL` | prijedlog: `sqlalchemy.url` prazan, `env.py` uzima `DATABASE_URL` ili `settings.database_url` (fail-fast kao `JWT_SECRET`). Lozinka je u povijesti gita — ako se igdje koristi, rotirati. Nije u popisu faze 1 pa nije dirano |
+| O17 | **Modeli i migracije se razilaze u 9 indeksa** (`alembic check` nakon `upgrade head`): `index=True` na `id` u 7 tablica (suvišno uz PK) i na `pedestal_id` u `alarm_log`, `session_log`. Stupci i ograničenja se slažu. Uz to `init_db()` vrti `create_all` pri svakom startu, pa svježa baza bez migracija dobije indekse, a migrirana ne | prijedlog za fazu 3: migracija `006` dodaje dva korisna indeksa, modeli gube `index=True` na PK-u, `alembic check` ulazi u gate |
+| O18 | ruff s defaultima verzije 0.17 prijavljuje **327** nalaza (DTZ003 `utcnow` ×36, BLE001 ×18, UP… ×~150); gate bira samo E9 + F | šira pravila su odluka o stilu, ne o ispravnosti; `utcnow` je stvaran (deprecated u 3.12) i vrijedi ga riješiti s fazom 4 |
+| O19 | `frontend/package.json` ima `lint: eslint …`, a **eslint nije instaliran** ni konfiguriran — `npm run lint` pada | gate za frontend koristi `tsc --noEmit`; eslint dodati ili skriptu obrisati |
+| O20 | API keš je ključan samo po `sync_type`, pa `get_daily_analytics` s različitim `date_from`/`date_to` dijeli jedan redak — stale fallback može vratiti **drugi raspon datuma** | faza 2 (ugovor + rukovanje odgovorima); ključ treba uključiti parametre |
 | O6 | 11 događaja se emitira na ormaru a nije u `EVENT_CATALOG`, među njima **`meter_telemetry_received`** (telemetrija brojila) i **`direct_cmd_sent`** (jedina push-potvrda da je naredba otišla) — NALAZ 6.3 | ERP ih **ne može pretplatiti**; pull ih pokriva. Zahtjev prema ormaru ako ikad zatrebaju |
 | O7 | `usage.*`, `mobile.*`, `qr.*` rute: usmjeravanje je isto na `773bca6` i `main`, ali `usage_history.py` (+30/−7), `mobile.py` (+168/−28) i `qr.py` (+7/−2) su mijenjani — **oblik odgovora se može razlikovati** | izvještaj ormara to nije provjeravao polje po polje; ERP koristi samo `usage.history`, i to za usklađivanje |
 | O8 | Postoji li brojilo na glavnom priključku marine (za vršnu snagu, D14) | energetski agent, faza 9 |
@@ -1801,10 +1851,10 @@ Nađeno usput. Nije u izvedbi gore; tvoje je da odlučiš prioritet.
 
 ---
 
-`docs/erp_spec.md` · verzija 3 · 2026-10-11 · zamjenjuje v2 istog dana
+`docs/erp_spec.md` · verzija 4 · 2026-10-11 · zamjenjuje v3 istog dana
 
 **§1 je prazan — nema otvorenih blokatora.** Šest odluka iz v1 i v2 je odlučeno i primijenjeno
 (§1.0). Referenca za ormar je **ugovor**, a provjerava se **živim odgovorom pri spajanju**
 (TC-ERP-LIVE-01), ne commitom.
 
-**Faza 1 je odobrena i u izvedbi.** Na kraju faze: gate zelen, izvještaj s brojkama, stop.
+**Faza 1 je završena** — gate zelen, izvještaj u §10.1. **Faza 2 ne počinje bez odobrenja.**

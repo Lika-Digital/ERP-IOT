@@ -116,14 +116,26 @@ After seeding (set `DEFAULT_ADMIN_PASSWORD` in `.env`):
 
 ## Running Tests
 
+One-time setup after cloning — enables the versioned hooks:
+
 ```bash
-cd backend
-python -m pytest tests/ -v
+git config core.hooksPath .githooks
 ```
 
-**96 tests** covering auth, marinas, dashboard, controls, energy, alarms, webhooks, pedestal API client (retry/cache/stale), and all Phase 2 pedestal ext endpoints.
+The gate is one script, used by the hooks and by CI (`.github/workflows/gate.yml`):
 
-Pre-push hook runs the full suite automatically. Pushes to `main` require `CLOUD_IOT_RELEASE=1` and a merged `dev` branch.
+```bash
+bash scripts/gate.sh          # full: ruff, pytest, bandit, tsc + vite build, real boot
+bash scripts/gate.sh --fast   # pre-commit: ruff, pytest, bandit
+```
+
+It needs `backend/.venv` installed from `backend/requirements.lock` and `frontend/node_modules`
+from `npm ci`. A missing tool, a skipped test, or a server that does not come up fails the gate —
+nothing is skipped.
+
+**126 tests**, plus `scripts/boot_check.py` (real migration, real uvicorn, login, authenticated
+route). Pre-commit runs `--fast`; pre-push runs the full gate on every branch. Pushes to `main`
+also require typing `release` or `CLOUD_IOT_RELEASE=1`.
 
 ## System Verification
 
