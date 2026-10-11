@@ -118,16 +118,23 @@ def require_marina_access(marina_id: int, user: User, db: Session) -> None:
 
 @router.post("/login", response_model=TokenResponse)
 def login(body: LoginRequest, db: Session = Depends(get_db)):
+    # Every refusal is the same 401 with the same message, so the response never
+    # reveals whether the account exists or the password was right (spec §11 O14).
+    # The real reason goes only to the log.
     user = db.query(User).filter(User.email == body.email).first()
-    if not user or not _pwd_ctx.verify(body.password, user.password_hash):
+    if not user:
+        reason = "unknown email"
+    elif not _pwd_ctx.verify(body.password, user.password_hash):
+        reason = "wrong password"
+    elif not user.is_active:
+        reason = "account disabled"
+    else:
+        reason = None
+    if reason:
+        log.warning("[AUTH] Login refused: %s (%s)", body.email, reason)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
-        )
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Account is disabled",
         )
 
     # Update last_login

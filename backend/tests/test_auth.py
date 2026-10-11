@@ -91,24 +91,42 @@ def test_unknown_email_returns_401(client):
     assert r.status_code == 401
 
 
-def test_inactive_user_login_returns_403_account_disabled(client):
-    """Neaktivan racun s TOCNOM lozinkom dobiva 403, ne 401.
+def test_inactive_user_login_is_indistinguishable_from_wrong_password(client, caplog):
+    """Ugasen racun s TOCNOM lozinkom i kriva lozinka daju ISTI odgovor.
 
-    Pritegnuto u fazi 1: bilo je `in (401, 403)`, sto je izgledalo kao
-    tolerancija na HTTPBearer bug iz spec §0.1 — nije. Ovo je vlastiti odgovor
-    login endpointa (auth.py:127-131), i 403 je ispravan: identitet je
-    provjeren, pristup nije dopusten. 401 bi znacio "ne znamo ko si".
-
-    Nuansa enumeracije racuna zapisana je kao odgodena, ne tiho promijenjena
-    (spec §11 O14) — mijenjanje odgovora autentifikacije je odluka, ne
-    nusproizvod pritezanja testa.
+    Do faze 1 ugasen racun je dobivao 403 "Account is disabled", sto je
+    otkrivalo da racun postoji i da je lozinka tocna (enumeracija, spec §11
+    O14). Odluceno: oba slucaja su isti 401 s istom porukom; razlog ide
+    samo u log.
     """
-    r = client.post("/api/auth/login", json={
+    import logging
+
+    disabled = client.post("/api/auth/login", json={
         "email": "inactive@test.erp",
         "password": "inactive1234",
     })
-    assert r.status_code == 403
-    assert r.json()["detail"] == "Account is disabled"
+    wrong_pw = client.post("/api/auth/login", json={
+        "email": "superadmin@test.erp",
+        "password": "wrongpassword",
+    })
+    unknown = client.post("/api/auth/login", json={
+        "email": "nobody@test.erp",
+        "password": "whatever1234",
+    })
+    assert disabled.status_code == wrong_pw.status_code == unknown.status_code == 401
+    assert disabled.json() == wrong_pw.json() == unknown.json() == {
+        "detail": "Invalid email or password"
+    }
+
+    with caplog.at_level(logging.WARNING, logger="app.routers.auth"):
+        client.post("/api/auth/login", json={
+            "email": "inactive@test.erp",
+            "password": "inactive1234",
+        })
+    assert any("account disabled" in r.getMessage() for r in caplog.records), (
+        "razlog odbijanja mora ostati u logu, inace operater ne zna zasto se "
+        "korisnik ne moze prijaviti"
+    )
 
 
 def test_unauthenticated_me_returns_401(client):
