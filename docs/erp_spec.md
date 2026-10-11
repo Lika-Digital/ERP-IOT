@@ -122,6 +122,9 @@ pretpostavlja da BLOK-1 završi kao (b) ili (c). Pod (a) je stupac mrtav teret.
 | Linter konfiguracija | **nema** | nema ruff/eslint konfiguracije; `run_tests.sh` ne zove ni jedan |
 | Git gate | lokalni, neverzioniran | `.git/hooks/pre-push` postoji; `.githooks/` ne; `core.hooksPath` nije postavljen |
 | Instalirani fastapi / sqlalchemy / pydantic | 0.135.3 / 2.0.49 / 2.12.5 | `pip list` u `backend/.venv` |
+| Bandit: high / medium / low | **0 / 1 / 2** na 2 270 redaka | `tests/run_tests.sh` stage 2, pri commitu ove specifikacije; medium je B104 `config.py:16` → §8.1 |
+| Zaštićene rute / ukupno ruta | 23 / 30 | `grep -rho "Depends(get_current_user)" backend/app/routers/*.py \| wc -l` |
+| `try` blokova u `routers/controls.py` | **0** | `grep -c "try:"` — zato §2.5 |
 
 ---
 
@@ -1320,6 +1323,19 @@ Ubuntu 24.04 LTS · Python 3.11+ · PostgreSQL 16+ · nginx · `cloudflared` (**
 Tailscale (**prema ormarima**, D12) · Node 18+ **samo za build**, ne za izvođenje.
 **Ništa se ne kompajlira**: `psycopg2-binary`, `bcrypt` i `cryptography` dolaze kao wheel-ovi
 (mjereno: instalirani u `backend/.venv` bez prevodioca).
+
+> **Odlučeno** · uvicorn sluša na **`127.0.0.1`**, ne na `0.0.0.0`. Nginx je jedini javni
+> slušatelj.
+>
+> **Zašto** · Danas je default `app_host = "0.0.0.0"` (`backend/app/config.py:16`), i to je
+> **jedini medium nalaz bandita** u repou — B104, izmjeren pri commitu ove specifikacije
+> (`tests/logs/bandit_last.log`: 0 high, 1 medium, 2 low na 2 270 redaka). Na 2 GB VPS-u s
+> `nftables` default-deny to ne bi bilo iskorišteno, ali ovisiti o vatrozidu za nešto što je
+> jedan redak konfiguracije znači da prvo pogrešno pravilo vatrozida izlaže aplikaciju
+> izravno. Dva sloja koja kažu isto jeftinija su od jednog.
+>
+> **Ako griješim** · Jedan redak u `.env`; `docker-compose` varijanta (ako §8 ikad padne na
+> Docker) traži `0.0.0.0` i tad se mijenja natrag.
 
 ### §8.2 · Veličina
 
