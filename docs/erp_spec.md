@@ -3,16 +3,26 @@
 Što se gradi, u kojem redoslijedu, i svaka odluka izrečena tako da ispravak
 košta jedan redak, a ne razgovor.
 
-    Verzija 2 — zamjenjuje v1 od 2026-10-11
+    Verzija 3 — zamjenjuje v2 od 2026-10-11
     Datum 2026-10-11
-    Status nijedna linija aplikacijskog koda nije napisana
+    Status faza 1 odobrena i u izvedbi; §1 je prazan
 
 Čita se uz `docs/inputs/odluke.md` **v2.1** (odluke, obvezujuće — v2.1 dodaje **D18**),
 `docs/inputs/ormar_gateway_izvjestaj.md` (ugovor s ormarom, file:line),
 `docs/inputs/erp_inventar.md` (stanje repoa 2026-10-10) i
 `docs/inputs/ormar_ui_v2_spec.txt` (specifikacija ormara — uzor forme i izvor rječnika stanja).
 
-**Sve u ovom dokumentu je ODLUČENO osim onoga u §1.**
+**Sve u ovom dokumentu je ODLUČENO. §1 je prazan — nema otvorenih blokatora.**
+
+### Što se promijenilo u verziji 3
+
+| | |
+|---|---|
+| **BLOK-3 zatvoren** | Ormar je popravljen prema svojoj specifikaciji: **ne naplaćuje i ne računa cijenu**, vraća stanje brojila za struju i vodu po ugovoru. Sva poslovna logika — potrošnja, cijena, kredit, naplata — je u ERP-u. **§1 je prazan** |
+| **Faza 7 je jedna** | podjela na 7a/7b iz v2 je ukinuta (§10) |
+| **Krk `773bca6` nije referenca** | §0.5 i §0.6 prepisani: ugovor je ugovor, ne commit. **Kad ERP prvi put stvarno spoji Krk, ugovorni test provjerava živi odgovor** (TC-ERP-LIVE-01), ne commit |
+| **Cijena s ormara se ignorira** | pravilo ostaje i kad polja nema: ako u bilo kojem odgovoru ormara postoji polje s cijenom, ERP ga odbacuje pri parsiranju (§2.4, §12) |
+| **TC-ERP-BOOT-01 podijeljen** | 01a backend+build+prijava u fazi 1; 01b iscrtavanje redova vezova u fazi 2, jer prije simulatora nema ormara koji bi odgovorio (§9) |
 
 ### Što se promijenilo u verziji 2
 
@@ -38,9 +48,9 @@ Svaka tvrdnja o kodu niže nosi `file:line`, provjerenu u repou **danas, 2026-10
 Putanje bez prefiksa su u `Lika-Digital/ERP-IOT`; putanje ormara nose prefiks `Cloud_IOT/`.
 Repo ormara je **samo čitan** — nijedna izmjena, sve što ERP od njega traži je u §7 kao zahtjev.
 
-**Svaki nalaz iz koda ormara nosi commit na kojem je utvrđen i oznaku vrijedi li za Krk.**
-Čitao sam `a709cf8` (grana `develop`, 2026-10-11). Krk vrti `773bca6`. Gdje se razlikuju,
-navedene su obje linije. Puna tablica po datoteci je §0.5, a najvažnija posljedica §0.6.
+**Svaki nalaz iz koda ormara nosi commit na kojem je utvrđen** — `a709cf8`, grana `develop`,
+2026-10-11. Puna tablica po datoteci je §0.5. **Ali referenca za ponašanje ormara je ugovor,
+ne commit**, i provjerava se živim odgovorom pri prvom spajanju (TC-ERP-LIVE-01, §9.1b).
 
 Brojke su mjerene, ne procijenjene. Metoda je uz svaku brojku. Gdje je inventar od
 2026-10-10 pogrešan, ispravak je u §0 i označen je kao ispravak, ne tiho primijenjen.
@@ -50,7 +60,8 @@ Brojke su mjerene, ne procijenjene. Metoda je uz svaku brojku. Gdje je inventar 
 ## §0 Ispravci ulaznih dokumenata
 
 Pet tvrdnji iz ulaza ne drže se uz kod ili uz mjerenje. Navodim ih, ne primjenjujem tiho.
-Dvije najteže (§0.5, §0.6) su nove u v2 i jedna od njih otvara BLOK-3.
+§0.5 i §0.6 su u v3 prepisani: od analize koda ormara ostala su **tri pravila**, a commit više
+nije referenca.
 
 ### §0.1 · ISPRAVAK — nema 7 testova koji padaju. Padaju nula.
 
@@ -147,132 +158,95 @@ ni u jednom smjeru i da je bez endpointa za čitanje usporedba **„nije moguće
 
 ---
 
-### §0.5 · NOVO — na kojem commitu su nalazi utvrđeni
+### §0.5 · Podrijetlo nalaza, i zašto commit nije referenca
 
-Svi nalazi iz koda ormara u v1 čitani su na **`a709cf8`**, grana `develop`, zadnji commit
-2026-10-11 („fix(breakers): refuse a remote reset the hardware cannot perform").
-**Krk vrti `773bca6`**, koji je predak `a709cf8` (`git merge-base --is-ancestor` → istina).
-To nisam naveo u v1 i navodim sad, jer ERP razgovara s Krkom, ne s `develop`.
+Nalazi iz koda ormara u §2 i §7 čitani su na **`a709cf8`** (grana `develop`, 2026-10-11).
+U v1 to nisam naveo i navodim od v2, jer tvrdnja o tuđem kodu bez commita nije provjerljiva.
 
-Mjereno: `git diff --numstat 773bca6 a709cf8 --` po svakoj citiranoj datoteci.
+Mjereno: `git diff --numstat 773bca6 a709cf8 --` po svakoj citiranoj datoteci. Deset od
+osamnaest je identično između Krka i `develop`, osam se razlikuje — tablica je ostala u v2 i
+tamo je i dalje točna.
 
-| Datoteka ormara | 773bca6 → a709cf8 | Vrijedi za Krk? |
-|---|---|---|
-| `services/api_catalog.py` | identično | **DA** — svih 55 unosa, obje obitelji, §2.1–§2.3 |
-| `routers/ext_pedestal_endpoints.py` | identično | **DA** — tri oblika occupancy, `_resolve_pedestal`, `_check_ext_auth` |
-| `routers/ext_breaker_endpoints.py` | identično | **DA** — NALAZ 2.3 (mod se ne provjerava) |
-| `routers/ext_meter_load_endpoints.py` | identično | **DA** — NALAZ 2.3, nema Smart Mode gatea |
-| `routers/berths.py` | identično | **DA** — `BerthOut` nosi `state_code`, nema `occupied` |
-| `auth/berth_models.py` | identično | **DA** — `occupied_bit` je ML izlaz, `BerthReservation` |
-| `models/pedestal_config.py` | identično | **DA** — NALAZ 5.1, `last_heartbeat` = `last_seen` |
-| `auth/erp_api_key.py` | identično | **DA** — `X-API-Key`, 401/503 |
-| `services/webhook_service.py` | identično | **DA** — NALAZ 6.1 (nema potpisa), 6.2 (nema retryja) |
-| `routers/external_api_admin.py` | identično | **DA** — NALAZ 3.1, 3.2 (verifikacija je savjetodavna) |
-| `routers/external_api_gateway.py` | +15 / −0 | **DA**, druge linije — Krk: pravilo putanje `:273`, ruta `:197`, role `:48`, read-only 403 `:307`, Smart Mode 409 `:330` |
-| `auth/dependencies.py` | +20 / −3 | **DA** — `require_any_role` je `:54` u oboje |
-| `routers/pedestal_config.py` | +9 / −1 | **DA**, druge linije — Krk: `/api/pedestals/health` `:389`, `smart_mode` `:408` |
-| `main.py` | +51 / −0 | **DA**, druge linije — Krk: ext routeri `:853-855`, catch-all `:856` |
-| `routers/controls.py` | +111 / −26 | **DJELOMIČNO** — 409 „no plug" **DA** (Krk `:618`), Smart Mode gate **DA** (`:604`, `:684`), `maintenance` laž u docstringu **DA** (`:677` protiv regexa `:577`); **NFC cross-check 400 NE POSTOJI** |
-| `config.py` | +89 / −0 | **NE** — `nfc_cross_check_required` **ne postoji na Krku** (`git show 773bca6:…/config.py \| grep nfc_cross_check` → prazno) |
-| `routers/nfc.py` | +573 / −46 | **DJELOMIČNO** — četiri rute koje ERP treba postoje (Krk: `/scan` `:211`, `/session/{id}` `:253`, `/sessions/by-user` `:264`, `/stop` `:294`); **`/reconciliation` i `/reconciliation/divergence` ne postoje**; **`mark_reconciled` ne postoji** |
-| `docs/erp_session_payload_contract.md` | **nov** | **NE** — `git cat-file -e 773bca6:…` → datoteka ne postoji na Krku |
+**U v3 ta tablica više nije referenca ni za što.** Ormar je popravljen prema svojoj
+specifikaciji i ugovor je ono što vrijedi: ormar **ne naplaćuje i ne računa cijenu**, vraća
+stanje brojila za struju i vodu, a potrošnja, cijena, kredit i naplata su u ERP-u (D0, D4).
 
-> **Odlučeno** · Specifikacija opisuje **ugovor s Krkom** kao ono što ERP mora podnijeti danas,
-> a ugovor s `develop` kao ono čemu se prilagođava kad Krk bude nadograđen. Nikad samo jedno.
+> **Odlučeno** · Referenca je **ugovor**, ne commit. Kad ERP prvi put stvarno spoji ormar,
+> **ugovorni test provjerava živi odgovor** (TC-ERP-LIVE-01, §9.1), ne verziju koda.
 >
-> **Zašto** · Pisati prema `develop` znači graditi klijent za ormar koji na molu ne postoji.
-> Pisati samo prema Krku znači prepisati klijent nakon nadogradnje. Oba oblika su poznata danas,
-> pa su oba u ugovoru i oba u simulatoru (§9.1).
+> **Zašto** · Tvoja odluka, i točna je: commit koji smo čitali u listopadu bit će star na dan
+> prvog spajanja, a ERP se ne spaja na commit nego na uređaj. Test koji čita živi odgovor
+> hvata i konfiguraciju i verziju i stvarno stanje brojila — commit ne hvata ni jedno.
+> Provjera koja se odnosi na nešto što ne možemo vidjeti u trenutku spajanja nije provjera.
 >
-> **Ako griješim** · Ako se Krk nadogradi prije faze 2, test oblika Krka ostaje kao regresija i
-> ništa se ne briše.
+> **Ako griješim** · Nijedan test se ne briše: simulator (§9.1) pokriva oblik, a
+> TC-ERP-LIVE-01 pokriva stvarnost. Ako ikad zatreba verzija ormara, to je zahtjev prema
+> njemu, ne izmjena ERP-a (§11 O11).
 
-### §0.6 · NOVO — što Krk danas stvarno vraća, i zašto to blokira naplatu
+### §0.6 · Tri pravila koja je analiza payloada ostavila
 
-Ovo je najteži nalaz u v2 i jedini koji otvara blokator.
+Analiza ugovora sesije (v2 §0.6) dala je tri pravila koja vrijede neovisno o verziji ormara i
+koja su jedino što je od nje preživjelo u v3. Svako je sada odluka, ne nalaz.
 
-`build_session_payload` na Krku (`773bca6:backend/app/services/nfc_service.py:182-236`) vraća
-**deset ključeva**, ne šesnaest:
+> **Odlučeno** · **`null` nije `0`.** Brojka koja nije izmjerena prikazuje se kao **—**, ide u
+> `manual_review`, i **nikad se ne naplaćuje**. `0` je izmjereno i naplaćuje se kao nula.
+>
+> **Zašto** · D10 i ormarov §4.2/§4.3. „Nismo izmjerili" i „potrošio je nula" izgledaju isto
+> ako ih se jednako obradi, a razlika **uvijek ide na štetu jedne od strana**. Ovo je pravilo
+> koje je i natjeralo ormar da razdvoji `consumption_source`.
+>
+> **Ako griješim** · Nema verzije ovoga koju bih izveo drukčije.
 
-```
-session_id · cabinet_id · socket_id · customer_id · status
-activated_at · duration_minutes · energy_kwh · power_kw_current · estimated_cost
-```
+> **Odlučeno** · ERP **preračunava** svaku brojku iz dvaju graničnih očitanja brojila i
+> **neslaganje prijavljuje kao nalaz**, ne prihvaća tiho.
+>
+> **Zašto** · Ormar to izrijekom traži („Recompute our figures — please"). Dva neovisna zapisa
+> iste činjenice vrijede daleko više od jednog, a zapis koji drži samo jedna strana nije
+> provjera ničega. Isto pravilo je i kontrola iz D10: zbroj obračunatih sesija po priključku
+> mora odgovarati razlici kumulativnog stanja brojila.
+>
+> **Ako griješim** · Preračun je jedna funkcija i jedan test; ako se pokaže nepotrebnim,
+> ostaje kao jeftina provjera.
 
-Šest posljedica, sve izmjerene na `773bca6`:
-
-| # | Nalaz na Krku | Dokaz | Posljedica za ERP |
-|---|---|---|---|
-| 1 | **`socket_id` je uvijek `"Qn"`** — `f"Q{session.socket_id}"` | return dict, `nfc_service.py` | **Vodna sesija na V1 javlja `"Q1"`.** ERP ne može razlikovati vodu od struje po priključku. Potrošnja vode bi se pripisala električnoj utičnici |
-| 2 | **nema `session_type`** | `grep session_type` → prazno | D10 („ERP se oslanja na `session_type`") **nije izvedivo na Krku** |
-| 3 | **nema `water_liters`** | isto | **Potrošnja vode nije u payloadu uopće** |
-| 4 | **`energy_kwh` pada na životni zbroj** — `if energy_kwh is None and sc is not None: energy_kwh = sc.meter_energy_kwh` | `nfc_service.py:206-209` | Sesija bez izvedive brojke nosi **kumulativno stanje brojila** kao svoju potrošnju. To je točno defekt od 481,76 kWh koji `develop` ugovor opisuje kao ispravljen — **na Krku nije** |
-| 5 | **`estimated_cost` postoji** — iz `BillingConfig.kwh_price_eur` | `nfc_service.py:216-222` | **Ormar cijeni**, protivno D0 i D4. ERP ga mora ignorirati, ne samo ne koristiti |
-| 6 | **`power_kw_current` nikad nije `null`** — `(… ) or 0.0` | `nfc_service.py:211` | „odbijeno mjerenje" i „nula potrošnje" su na Krku **ista vrijednost** |
-
-Nema graničnih očitanja brojila i nema `consumption_source` (`grep consumption_source 773bca6
--- backend/app` → nula datoteka). Dakle preračun iz §2.4 na Krku **nije moguć**, a §3.2 rang 7
-(`measurement_missing`) se iz NFC payloada Krka **ne može okinuti**.
-
-Spojeno: **brojke struje s Krka mogu biti životni zbrojevi, a voda se ne može ni identificirati.**
-Naplata iz tog payloada bez zaštite naplatila bi gostu cijeli vijek utičnice. To je BLOK-3.
-
----
+> **Odlučeno** · **Ako u bilo kojem odgovoru ormara postoji polje s cijenom, ERP ga odbacuje
+> pri parsiranju** — ne samo ne koristi.
+>
+> **Zašto** · Tvoja odluka, i D0/D4: ormar mjeri i izvršava, ERP odlučuje i naplaćuje. Ormar
+> prema svojoj specifikaciji cijenu više ne šalje, ali pravilo je jeftinije od pretpostavke:
+> polje koje samo ignoriramo ostaje u logu i u odgovoru, i prvi koji ga ugleda pomislit će da
+> je mjerodavno. Odbačeno pri parsiranju znači da u ERP-u nikad ne postoji.
+>
+> **Ako griješim** · Jedan ključ u listi odbacivanja; ako ormar ikad legitimno pošalje cijenu,
+> to je izmjena ugovora i ide kroz §1, ne kroz parser.
 
 ## §1 Blokirajuće
 
-Jedna odluka. Pet iz v1 su odlučene i preseljene u svoje sekcije kao odlučene (§1.0).
-Ova jedna je nova, iz §0.6, i blokira točno navedeno.
+**Prazno. Nema otvorenih blokatora.** Sve u ovom dokumentu je odlučeno.
 
-### §1.0 · Odlučeno u v2 — gdje je svaka otišla
+Sekcija ostaje jer je mjesto kamo ide prva odluka koja mi zatreba. Pravilo iz prompta vrijedi
+i dalje: odluku koja nedostaje ne izmišljam — dodajem je ovdje i nastavljam s onim što ne
+blokira.
 
-| v1 | Odluka | Primijenjeno u |
+### §1.0 · Odlučeno — gdje je svaka otišla
+
+| Bilo | Odluka | Primijenjeno u |
 |---|---|---|
-| 1.1 BLOK-2 | **(a)** — ERP šalje tag iz mapiranja, **samo uloge `admin`/`operator`**, **obvezan razlog**, audit `tag_source='mapping'` | §4.7, §5.3 |
-| 1.2 BLOK-1 | **D18** — mapiranje na obje strane, Admin unosi, ERP uspoređuje, neslaganje je stanje; **nije (b)** | §4.3, §7.2 R1 |
-| 1.3 tarifa | model podržava **(c)**; **pilot: jedna cijena po kWh i po litri za cijelu marinu**; VT/NT i ugovorne cijene su proširenje | §4.5 |
-| 1.4 račun | **(a)** — ERP vodi obračunske zapise; **fiskalni račun za pilot izdaje blagajna recepcije** | §4.5, §6.4 |
-| 1.5 kredit | **(a)** — recepcija unosi dopunu u ERP-u | §4.5, §6.4 |
+| v1 1.1 · BLOK-2, ručno paljenje | **(a)** — ERP šalje tag iz mapiranja, **samo uloge `admin`/`operator`**, **obvezan razlog**, audit `tag_source='mapping'` | §4.7, §5.3 |
+| v1 1.2 · BLOK-1, master mapiranja | **D18** — mapiranje na obje strane, Admin unosi, ERP uspoređuje, neslaganje je stanje; **nije (b)** | §4.3, §7.2 R1/R10 |
+| v1 1.3 · oblik tarife | model podržava (c); **pilot: jedna cijena po kWh i po litri za cijelu marinu**; VT/NT i ugovorne cijene su proširenje | §4.5 |
+| v1 1.4 · fiskalni račun | **(a)** — ERP vodi obračunske zapise; **fiskalni račun za pilot izdaje blagajna recepcije** | §4.5, §6.4, §12 |
+| v1 1.5 · dopuna kredita | **(a)** — recepcija unosi dopunu u ERP-u | §4.5, §6.4 |
+| v2 1.1 · BLOK-3, naplata na Krku | **zatvoren** — ormar je popravljen prema specifikaciji, ne naplaćuje i ne računa cijenu; referenca je ugovor, ne commit | §0.5, §0.6, §2.4, §10 |
 
-### §1.1 · BLOK-3 — kako faza 7 naplaćuje na Krku prije nadogradnje ormara
+### §1.1 · Što je zatvoreno čitanjem koda, a ne odlukom
 
-Iz §0.6: payload Krka nosi 10 ključeva, bez `session_type`, bez `water_liters`, sa
-`socket_id` koji je uvijek `"Qn"`, i s `energy_kwh` koji pada na životni zbroj brojila.
-Faza 7 je „poslovna logika i NFC tok" i njen prihvatni test D11-1 traži da se potrošnja
-**slaže na obje strane**. Na Krku se danas ne može ni usporediti.
+**Pull endpoint po vremenskom rasponu ne postoji.** Postoji po korisniku:
+`GET /api/nfc/sessions/by-user/{user_id}?status=&limit=` s `X-API-Key`. Posljedica za §5.2:
+ERP usklađuje **iterirajući korisnike**, ne pitajući za prozor.
 
-| Opcija | Što ERP radi | Cijena |
-|---|---|---|
-| **(a)** Faza 7 čeka nadogradnju Krka na ugovor sa 16 ključeva (§7.2 R9) | ERP do tada **prikuplja** sesije s Krka u `sessions` s `billing_state='not_billable'` i prikazuje ih, ali ne naplaćuje | faza 7 ovisi o rasporedu tima ormara; **ništa drugo ne čeka** |
-| **(b)** ERP naplaćuje samo struju s Krka, uz tvrdu zaštitu | odbija svaku brojku bez graničnih očitanja → u praksi **gotovo sve ide u `manual_review`** | naplata postoji a nitko je ne može koristiti; plus put u kodu koji se nakon nadogradnje briše |
-| **(c)** ERP sam računa potrošnju iz `load.socket_history_ext` | ERP integrira snagu kroz vrijeme | **protivno D10** — „brojka sesije je razlika registra brojila, ne izračun iz snage". Isti defekt koji je ormar upravo uklonio, samo na našoj strani |
-
-**Preporuka: (a).** Jedina opcija koja ne prodaje brojku u koju ne vjerujemo. (b) izgleda kao
-napredak a daje ručni pregled kao normalno stanje; (c) ponavlja grešku čije je uklanjanje
-cijeli `develop` ugovor i izazvalo.
-
-**Blokira:** naplatu u fazi 7 i prihvatne testove D11-1, D11-2, D11-4.
-**Ne blokira:** faze 1–6 u cijelosti; fazu 8; prikupljanje sesija s Krka i njihov prikaz;
-D11-3 (odbijanje bez kredita — to je ERP-ova odluka, ormaru se ništa ne šalje), D11-5
-(istek pripreme), D11-6 (stop od osoblja).
-
-> Ako odlučiš (a), faza 7 se dijeli na **7a** (odluka, priprema, kredit, stop, D11-3/5/6 —
-> ne traži nadogradnju) i **7b** (naplata, D11-1/2/4 — traži je). To je jedini redak koji se
-> mijenja u §10, i dobiva se pola faze 7 bez čekanja.
-
-### §1.2 · Što više nije blokator — zatvoreno čitanjem koda
-
-Dvije stvari iz „Otvoreno" u `odluke.md` imaju odgovor, i jedna se u v2 **promijenila**.
-
-**1 · Pull endpoint postoji, ali ne po vremenskom rasponu.** Takav ne postoji ni na Krku ni na
-`develop`. Postoji po korisniku: `GET /api/nfc/sessions/by-user/{user_id}?status=&limit=`
-s `X-API-Key` — na Krku `773bca6:…/nfc.py:264`, na `develop` `:711`. Posljedica za §5.2: ERP
-usklađuje **iterirajući korisnike**, ne pitajući za prozor.
-
-**2 · Ta ruta na `develop` MIJENJA STANJE, na Krku ne.** Vidi §7.2 R2 — to je u v2 prešlo iz
-„odgovor" u „zahtjev".
-
-**3 · Ugovor sesije ima dva oblika, ne jedan.** §0.6 i §2.4.
+**Ta ruta na `develop` mijenja stanje na ormaru** — `mark_reconciled` postavlja
+`last_reconciled_at` i commita. Zahtjev je §7.2 R2; dok ne prođe, ERP je ne koristi za prikaz
+(§7.2).
 
 ## §2 Ugovor s ormarom
 
@@ -425,75 +399,73 @@ podstring test koji ne hvata `{pedestal_id}`. Crveni badge ne sprječava aktivac
 ### §2.4 · Kanal B — NFC, izravno, `X-API-Key`, **nije** kroz `/api/ext`
 
 NFC nije u `ENDPOINT_CATALOG` (specifikacija ormara, odgođeno D4) — `/api/ext/nfc/…` uvijek
-daje 403. ERP do njega dolazi isključivo izravno. Linije su za oba commita, jer se `nfc.py`
-razlikuje (+573/−46, §0.5).
+daje 403. ERP do njega dolazi isključivo izravno.
 
-| namjena | poziv | tijelo / parametri | Krk `773bca6` | `develop a709cf8` |
-|---|---|---|---|---|
-| Pripremi priključak | `POST /api/nfc/scan` | `{nfc_tag_id, user_id}` | `nfc.py:211` | `nfc.py:543` |
-| Stanje sesije | `GET /api/nfc/session/{session_id}` | — | `:253` | `:688` |
-| Sesije korisnika | `GET /api/nfc/sessions/by-user/{user_id}` | `?status=active\|ended&limit=1..500` | `:264` | `:711` ⚠ piše (R2) |
-| Zaustavi sesiju | `POST /api/nfc/session/{session_id}/stop` | — | `:294` | `:762` |
-| Stanje usklađivanja | `GET /api/nfc/reconciliation` | — | **ne postoji** | `:797`, ali traži operaterski JWT (R2) |
-| Nepotvrđene sesije | `GET /api/nfc/reconciliation/divergence` | `?limit=` | **ne postoji** | `:830`, isto |
+| namjena | poziv | tijelo / parametri | napomena |
+|---|---|---|---|
+| Pripremi priključak | `POST /api/nfc/scan` | `{nfc_tag_id, user_id}` | ne uključuje — uključuje se na priklop |
+| Stanje sesije | `GET /api/nfc/session/{session_id}` | — | **ovo se koristi za prikaz** |
+| Sesije korisnika | `GET /api/nfc/sessions/by-user/{user_id}` | `?status=active\|ended&limit=1..500` | ⚠ **mijenja stanje** — samo iz usklađivača (§7.2 R2) |
+| Zaustavi sesiju | `POST /api/nfc/session/{session_id}/stop` | — | 409 kad je osoblje već zatvorilo |
 
-Autentifikacija: `X-API-Key`, `require_erp_api_key`
-(`Cloud_IOT/backend/app/auth/erp_api_key.py:20-33` — **identično na oba commita**) — `401` na
-nevaljali ili odsutni ključ, `503` ako ključ nije konfiguriran na ormaru.
+Autentifikacija: `X-API-Key`, `require_erp_api_key` — `401` na nevaljali ili odsutni ključ,
+`503` ako ključ nije konfiguriran na ormaru. Linije u kodu ormara: §0.5 i §7.2.
 
 `POST /session/{id}/stop` vraća **409 „Session already ended by operator"** — osoblje marine
 ima prednost (D10). **To nije greška** i ne logira se kao greška.
 
-#### Dva ugovora sesije, oba poznata danas
+#### Ugovor sesije — 16 ključeva
 
-| | **Krk `773bca6`** | **`develop a709cf8`** |
+Ormar je popravljen prema svojoj specifikaciji. Ugovor je
+`Cloud_IOT/docs/erp_session_payload_contract.md`, pinan testom
+`test_nfc_six_tag_model.py::test_tc_six_13g_the_payload_key_set_is_exactly_the_documented_contract`.
+
+| ključ | tip | što ERP s njim radi |
 |---|---|---|
-| ključeva | **10** | **16** |
-| pin test | — | `test_nfc_six_tag_model.py::test_tc_six_13g_…` |
-| dokument | nema | `docs/erp_session_payload_contract.md` (nov) |
-| `socket_id` | **uvijek `"Qn"`** — V1 javlja `"Q1"` | `"Q1"`–`"Q4"` / `"V1"`–`"V2"` |
-| `session_type` | **nema** | `"electricity"` \| `"water"` |
-| `water_liters` | **nema** | float \| null |
-| `energy_kwh` | pada na **životni zbroj brojila** | razlika registra, ili `null` |
-| granična očitanja brojila | **nema** | `meter_energy_start/end_kwh`, `meter_water_start/end_l` |
-| `consumption_source` | **nema** | `register` \| `integrated_legacy` \| `unknown` \| `null` |
-| `power_kw_current` | `0.0` i kad je mjerenje odbijeno | `null` kad je odbijeno |
-| `estimated_cost` | **postoji** — ormar cijeni | **uklonjen** u v3.47 |
+| `session_id` | int | ormarov PK → `sessions.cabinet_session_id` |
+| `cabinet_id` | string \| null | `display_id`, npr. `MAR_KRK_ORM_01` |
+| `socket_id` | string \| null | **`"Q1"`–`"Q4"` / `"V1"`–`"V2"`** — usklađuje se **na string, nikad na broj** |
+| `session_type` | `electricity` \| `water` | **ERP se oslanja na ovo**, ne na to koje polje nije prazno (D10) |
+| `customer_id` | string \| null | ERP-ov `user_id` poslan u `/scan` |
+| `status` | `active` \| `ended` | |
+| `activated_at` | ISO 8601 Z | |
+| `duration_minutes` | float | |
+| `energy_kwh` | float \| **null** | kWh ove sesije; `null` na vodnim sesijama |
+| `water_liters` | float \| **null** | litre ove sesije; `null` na električnim |
+| `meter_energy_start_kwh` / `_end_kwh` | float \| null | granična očitanja → **preračun** |
+| `meter_water_start_l` / `_end_l` | float \| null | isto, za vodu |
+| `consumption_source` | string \| null | `register` \| `integrated_legacy` \| `unknown` \| `null` |
+| `power_kw_current` | float \| **null** | **samo za prikaz uživo**; `null` = mjerenje odbijeno, **nije** 0 |
 
-Dokaz za Krk: `773bca6:backend/app/services/nfc_service.py:182-236`; za `develop`:
-`backend/app/services/nfc_service.py:386,434,446,449,460`. Potpuna analiza u §0.6.
+> **Odlučeno** · `socket_id` se usklađuje kao **string s prefiksom**, nikad kao broj.
+>
+> **Zašto** · `V1` i `Q1` su na ormaru oba `socket_id = 1` interno, i prefiks je jedino što ih
+> razlikuje — ugovor to izrijekom kaže. Cijeli broj kao ključ pripisao bi vodnu sesiju
+> električnoj utičnici, i to bi se vidjelo samo na računu.
+>
+> **Ako griješim** · Nema verzije ovoga koju bih izveo drukčije.
 
-> **Odlučeno** · Klijent ima **dva parsera za isti ugovor**, bira ih po prisutnosti
-> `session_type`, i **oba prolaze kroz istu validaciju** prije nego brojka smije u naplatu.
+> **Odlučeno** · **Svako polje s cijenom u odgovoru ormara odbacuje se pri parsiranju.** Lista
+> odbacivanja je eksplicitna (`estimated_cost`, `cost`, `price`, `amount`) i test tvrdi da
+> nijedno **ne postoji** u ERP-ovom modelu nakon parsiranja.
 >
-> **Zašto** · Oblik Krka i oblik `develop` razlikuju se u šest točaka (§0.6), a ERP mora
-> raditi s Krkom danas i s `develop` nakon nadogradnje. Birati po `session_type` a ne po
-> verziji ormara znači da nadogradnja jednog ormara ne traži konfiguraciju u ERP-u — polje se
-> pojavi i parser se prebaci sam.
+> **Zašto** · Tvoja odluka, i D0/D4. Ormar po svojoj specifikaciji cijenu ne šalje, ali
+> pravilo je jeftinije od pretpostavke, i traži se **odsutnost**, ne ignoriranje — polje koje
+> samo ne koristimo ostaje u logu, i prvi koji ga ugleda pomislit će da je mjerodavno.
 >
-> **Ako griješim** · Kad svi ormari budu nadograđeni, stari parser se briše s jednim testom.
+> **Ako griješim** · Jedan ključ u listi. Ako ormar ikad legitimno pošalje cijenu, to je
+> izmjena ugovora i ide kroz §1, ne kroz parser.
 
-> **Odlučeno** · Iz oblika Krka ERP **nikad ne naplaćuje** — sesija ulazi s
-> `billing_state='not_billable'` i `consumption_source=NULL`, i to se prikazuje kao **—**.
-> `estimated_cost` s ormara se **odbacuje pri parsiranju**, ne samo ne koristi.
+> **Odlučeno** · ERP **preračunava** svaku brojku iz dvaju graničnih očitanja i **neslaganje
+> prijavljuje kao nalaz**:
+> `energy_kwh == meter_energy_end_kwh − meter_energy_start_kwh`,
+> `water_liters == meter_water_end_l − meter_water_start_l`.
 >
-> **Zašto** · §0.6 nalaz 4: brojka može biti životni zbroj utičnice, a nema graničnih
-> očitanja da se provjeri. Nalaz 5: cijena koju ormar pošalje računata je njegovom tarifom,
-> a cijena je ERP-ov posao (D0, D4) — ako je samo ignoriramo, prvi koji je ugleda u logu
-> pomislit će da je mjerodavna. Odbacivanje pri parsiranju znači da nikad ne postoji u ERP-u.
+> **Zašto** · §0.6, drugo pravilo. Pri `consumption_source == "register"` to vrijedi po
+> konstrukciji, pa svako neslaganje znači da nešto ne štima na jednoj od dvije strane — i to
+> je nalaz koji ormar izrijekom traži da mu prijavimo.
 >
-> **Ako griješim** · Ovo je BLOK-3; ako odlučiš drukčije, mijenja se jedan uvjet i jedna
-> konstanta `billing_state`.
-
-> **Odlučeno** · Na obliku `develop` ERP **preračunava** svaku brojku iz dvaju graničnih
-> očitanja i **neslaganje prijavljuje kao nalaz**, ne prihvaća tiho.
->
-> **Zašto** · Ormar to izrijekom traži („Recompute our figures — please"), a defekt koji je
-> cijeli taj ugovor izazvao bio je upravo brojka bez provjere — ista ona koja je na Krku još
-> uvijek živa. Dva neovisna zapisa iste činjenice vrijede daleko više od jednog.
->
-> **Ako griješim** · Preračun je jedna funkcija i jedan test; ako se pokaže nepotrebnim,
-> ostaje kao jeftina provjera.
+> **Ako griješim** · Jedna funkcija, jedan test.
 
 ### §2.5 · Rukovanje odgovorima — jedna tablica, bez iznimki
 
@@ -591,11 +563,10 @@ vlagu i temperaturu.
 **Stanje bez unosa u ovoj tablici ne može se iscrtati** — postaje `unknown` /
 „Nešto treba provjeriti". To je pošteno i tjera da se unos doda, umjesto da praznina prođe.
 
-**Rang 7 (`measurement_missing`) se iz NFC payloada Krka ne može okinuti**, jer Krk ne šalje
-`consumption_source` (§0.6). Dok Krk nije nadograđen (R9), to stanje dolazi isključivo iz
-`load.*_alarms_ext` i iz ERP-ove vlastite provjere da sesija nema izvedivu brojku — a na Krku
-nema izvedive brojke **nijedna** sesija, pa se ne prikazuje kao alarm nego kao
-`billing_state='not_billable'` na §6.3. Alarm koji se diže na svaku sesiju nije alarm.
+**Rang 7 (`measurement_missing`) okida se iz `consumption_source == "unknown"`** u ugovoru
+sesije (§2.4), i dodatno iz ERP-ove provjere preračuna: ako se brojka ne slaže s razlikom
+graničnih očitanja, sesija je za pregled. To je jedino mjesto na kojem čovjek sazna da
+potrošnja nije izmjerena — ormar je prijavio pošteno, ERP mora to i pokazati.
 
 > **Odlučeno** · Rangovi 1, 2 i 2.5 su `unknown`, **ne** `attention`.
 >
@@ -1235,15 +1206,14 @@ Isti slijed pri **svakom** skeniranju; razlikuje se samo treći odgovor:
 >
 > **Ako griješim** · Nijedan povijesni redak se ne dira; novi nose novi `tariff_id`.
 
-> **Odlučeno** · **Dok Krk nije nadograđen (R9), ništa se ne naplaćuje** — koraci 9 do 12
-> NFC toka se prikupljaju i prikazuju, ali `billing_state` ostaje `'not_billable'`.
+> **Odlučeno** · Sesija ulazi u `billing_records` **samo** kad ima izvedivu brojku:
+> `consumption_source == "register"` **i** preračun se slaže. Sve ostalo je `manual_review`.
 >
-> **Zašto** · BLOK-3 i §0.6. Koraci 1–8 i stop na nuli rade bez toga: odluka o kreditu je
-> ERP-ova (D11-3), priprema i istek su ormarovi (D11-5), stop od osoblja je ormarov (D11-6).
-> Jedino što čeka je pretvorba brojke u iznos, jer brojka može biti životni zbroj utičnice.
+> **Zašto** · §0.6, prvo i drugo pravilo. Ormar sada pošteno razlikuje „nismo izmjerili" od
+> „nula", pa ERP nema izgovora da to spoji. Naplatiti brojku koja se ne slaže s graničnim
+> očitanjima znači naplatiti nešto što nijedna strana ne može obraniti.
 >
-> **Ako griješim** · Ovo je BLOK-3; ako odlučiš (b) ili (c), mijenja se jedan uvjet pri ulasku
-> sesije u `billing_records`.
+> **Ako griješim** · Uvjet je jedan izraz; `manual_review` je zaslon koji ionako postoji (§6.3).
 
 > **Odlučeno** · Stop od osoblja marine ima prednost; ERP-ov stop na već završenu sesiju
 > dobiva **409** i to **nije greška** — obračuna se po zadnjoj brojci.
@@ -1480,11 +1450,12 @@ račun; lažni ormar u Tailscale mreži.
 ### §7.2 · Što ERP traži od ormara — zahtjevi, ne izmjene
 
 Repo ormara se ne dira. Ovo je lista koju nosim u njegov chat. **Uz svaki zahtjev je commit
-na kojem je utvrđen i vrijedi li za Krk** (`773bca6`); metoda i tablica po datoteci su §0.5.
+na kojem je utvrđen**; metoda i tablica po datoteci su §0.5. Stupac „Na Krku?" opisuje stanje
+na dan čitanja i služi prioritizaciji — **ugovorna provjera je TC-ERP-LIVE-01**, ne ovaj stupac.
 
 | # | Zahtjev | Utvrđeno na | Na Krku? | Blokira |
 |---|---|---|---|---|
-| **R9** | **NFC payload po ugovoru sa 16 ključeva** — `session_type`, `water_liters`, `socket_id` s pravim prefiksom (`V1` ≠ `Q1`), granična očitanja brojila, `consumption_source`; **bez** pada `energy_kwh` na životni zbroj; **bez** `estimated_cost` | `773bca6:…/nfc_service.py:182-236` protiv `a709cf8:…/nfc_service.py:386-460` | **ne** — Krk ima 10 ključeva | **naplatu u fazi 7 (BLOK-3)**, D11-1/2/4 |
+| ~~R9~~ | ~~NFC payload po ugovoru sa 16 ključeva~~ — **ZATVOREN u v3**: ormar je popravljen prema specifikaciji, ne naplaćuje i ne računa cijenu, vraća stanje brojila. Provjerava se **živim odgovorom** pri spajanju (TC-ERP-LIVE-01), ne commitom | — | — | ništa; BLOK-3 je zatvoren |
 | **R2** | **`GET /api/nfc/sessions/by-user` ne smije mijenjati stanje** — ili, ako mora, to mora biti dokumentirano i idempotentno, a `/reconciliation` i `/divergence` dostupni s `X-API-Key` | vidi okvir ispod | **djelomično** — na Krku ne piše; na `develop` piše | bolji pull u fazi 4; iteracija po korisnicima radi bez toga |
 | **R1** | **Ext endpoint za čitanje mapiranja** vez → `socket_id`/`valve_id` (D18, „odmah") | NALAZ 4.2; `api_catalog.py` identičan na oba | **ne** — nijedna `/api/marina/*` ruta nije u katalogu; na `773bca6` `berth_assignment.py` ni ne postoji | §4.3 prelazi iz `'unverifiable'` u stvarnu usporedbu |
 | **R10** | **Ext endpoint za upis mapiranja** — bidirectional, s autorom i auditom (D18, „kasnije") | isto | **ne** | cilj iz D18 („Admin unosi u ERP, ERP šalje ormaru"); usporedba radi bez toga |
@@ -1659,7 +1630,19 @@ završetak faze 5:
 
 | # | Test | Što tvrdi | Mora pasti kad |
 |---|---|---|---|
-| **TC-ERP-BOOT-01** | aplikacija se diže | pravi `vite build`, pravi uvicorn, prava migracija; `GET /api/health` → 200; prijava → 200; `/marina/:id` iscrta redove vezova | bundle se ne gradi, migracija pada, ruta je pokvarena, `JWT_SECRET` fali |
+| **TC-ERP-BOOT-01a** | aplikacija se diže — **faza 1** | pravi `tsc` + `vite build`, prava migracija, pravi uvicorn; `GET /api/health` → 200; prijava → 200 + token; autentificirana ruta → 200 | bundle se ne gradi, migracija pada, ruta je pokvarena, `JWT_SECRET` fali, server se ne digne |
+| **TC-ERP-BOOT-01b** | zasloni se iscrtavaju — **faza 2** | pravi browser nad pravim bundleom; `/marina/:id` iscrta redove vezova protiv **simulatora**; nema error boundaryja ni uncaught console errora | CORE oblik se promijenio, ruta je pokvarena, komponenta pukne |
+
+> **Odlučeno** · Boot gate je podijeljen: **01a u fazi 1, 01b u fazi 2**.
+>
+> **Zašto** · 01b tvrdi da se **redovi vezova iscrtavaju**, a redovi vezova dolaze iz ormara.
+> U fazi 1 nema ormara koji bi odgovorio ni simulatora koji bi ga zamijenio (simulator je
+> faza 2, §10), pa bi 01b u fazi 1 morao imati stub napisan samo za njega — a stub napisan
+> za test koji provjerava da aplikacija radi je točno ono prazno prolaženje koje gate mora
+> spriječiti. 01a ipak tvrdi sve što faza 1 gradi: build, migraciju, server, prijavu, rutu.
+>
+> **Ako griješim** · Ako faza 2 zakasni, 01b se može privremeno vrtjeti protiv snimljenog
+> odgovora — ali tada je to jedan test oblika, ne tvrdnja da sustav radi, i to se tako i zove.
 | **TC-ERP-BOOT-02** | gate ne može proći prazno | ako backend nije podignut, stage **pada**, nikad `exit 0`; ispiše broj preskočenih | netko „popravi" gate preskakanjem |
 | **TC-ERP-GATE-01** | gate je u repou | `.githooks/pre-push` postoji **i** `core.hooksPath` je postavljen; CI vrti isti skript | gate je samo lokalan |
 | **TC-ERP-DEP-01** | ovisnosti su pinane | lock datoteka postoji; instalacija iz nje daje izmjerene verzije (§0.4) | netko doda nepinanu ovisnost |
@@ -1681,12 +1664,10 @@ završetak faze 5:
 
 | # | Test | Scenarij |
 |---|---|---|
-| **TC-ERP-SIM-00** | simulator odgovara **obama** ugovorima | profil `develop`: ključevi su **točno** 16 iz `erp_session_payload_contract.md`. Profil `krk`: **točno** 10 iz `773bca6:…/nfc_service.py:182-236`. Tri oblika occupancy odgovora iz NALAZ 4.1 u oboje |
-| **TC-ERP-SIM-00b** | **oblik Krka ne ulazi u naplatu** | profil `krk` → svaka sesija dobiva `billing_state='not_billable'`, `consumption_source=NULL`, prikaz **—**; `billing_records` ostaje prazan |
-| **TC-ERP-SIM-00c** | **`estimated_cost` s ormara se odbacuje** | profil `krk` šalje `estimated_cost: 12.34` → polje **ne postoji** nigdje u ERP-u nakon parsiranja (traži se odsutnost, ne ignoriranje) |
-| **TC-ERP-SIM-00d** | **vodna sesija s Krka se ne pripisuje struji** | profil `krk`, sesija na V1 javlja `socket_id: "Q1"` i nema `session_type` → ERP **odbija pripisati** priključku, sesija ide u `manual_review`, **nikad na Q1** |
-| **TC-ERP-SIM-00e** | **životni zbroj se ne naplaćuje** | profil `krk`, `energy_kwh: 481.76` bez graničnih očitanja → `not_billable`, nikad `billing_records` |
-| **TC-ERP-SIM-00f** | **parser se bira po `session_type`, ne po konfiguraciji** | isti ormar prvo vrati 10-ključni pa 16-ključni payload → ERP se prebaci bez izmjene konfiguracije |
+| **TC-ERP-SIM-00** | simulator odgovara ugovoru | ključevi payloada su **točno** 16 iz `erp_session_payload_contract.md`; tri oblika occupancy odgovora iz NALAZ 4.1 |
+| **TC-ERP-SIM-00c** | **polje s cijenom se odbacuje** | simulator pošalje `estimated_cost: 12.34` → **ne postoji** nigdje u ERP-u nakon parsiranja (traži se **odsutnost**, ne ignoriranje); isto za `cost`, `price`, `amount` |
+| **TC-ERP-SIM-00d** | **voda se ne pripisuje struji** | sesija s `session_type: "water"` i `socket_id: "V1"` → pripisuje se **V1**, nikad Q1; pripisivanje ide po stringu |
+| **TC-ERP-SIM-00e** | **preračun se provjerava** | `energy_kwh` koji se ne slaže s `meter_energy_end − start` → nalaz + `manual_review`, **nikad `billing_records`** |
 | **TC-ERP-SIM-00g** | **`by-user` se ne zove za prikaz** | izvorni skan + test ponašanja: zaslon sesija zove `GET /session/{id}`; `by-user` se zove **samo** iz usklađivača (§7.2 R2) |
 | **TC-ERP-SIM-01** | **puni ormar** 4+2 | Q1–Q4, V1, V2; mapiranje, mogućnosti, NFC tagovi |
 | **TC-ERP-SIM-02** | **retrofit** | samo utičnice; **voda se ne iscrtava nigdje** — ni kao onemogućena kontrola |
@@ -1704,6 +1685,21 @@ završetak faze 5:
 | **TC-ERP-SIM-14** | oba zapisa UID-a | tag nađen i po `uid_primary` i po `uid_reversed` |
 | **TC-ERP-SIM-15** | statusi se računaju na serveru | izvorni skan: nijedna `status_code` vrijednost se ne izvodi u `frontend/src/**` |
 | **TC-ERP-SIM-16** | odsutna mogućnost | `available: false` → **nijedan** kontrolni element u DOM-u (traži se odsutnost, ne `disabled`) |
+
+### §9.1b · Prvi stvarni spoj — ugovor se provjerava na živom odgovoru
+
+> **Odlučeno** · **TC-ERP-LIVE-01**: pri prvom stvarnom spajanju ormara, ERP provjerava
+> **živi odgovor**, ne verziju koda. Test čita `pedestals.health`, `berths.list` i jedan
+> `GET /api/nfc/session/{id}`, i tvrdi: ključni skup payloada je onaj iz §2.4; `socket_id`
+> nosi prefiks; nema polja s cijenom; `smart_mode` je prisutan. Pada s imenom ključa koji
+> fali, ne s „nešto ne radi".
+>
+> **Zašto** · Tvoja odluka (§0.5). Commit koji smo čitali bit će star na dan spajanja, a ERP
+> se ne spaja na commit nego na uređaj. Živi odgovor hvata i verziju i konfiguraciju i stvarno
+> stanje — commit ne hvata ni jedno.
+>
+> **Ako griješim** · Test je jedan skript s read-only GET-ovima; vrti se pri spajanju i u
+> runbooku (§8.4), ne na svaki push.
 
 ### §9.2 · Prihvatni testovi na pravom ormaru (D11)
 
@@ -1733,17 +1729,16 @@ završava zelenim gateom i ažuriranom ovom specifikacijom (verzija +1, što se 
 | **4** | **Prikupljanje + retencija u istom commitu** — poller po §5.2, pull-usklađivanje `by-user`, prijemnik webhooka (danas `X-API-Key`, spreman za HMAC), `command_audit` | podaci teku; **rast baze izmjeren i ograničen** — brojka prije i poslije 7 dana |
 | **5** | **VPS** — systemd (§8), 2 GB / 20 GB, Postgres, nginx, `cloudflared` samo za UI, Tailscale prema ormarima, **slojevi 0 i 1 PRIJE javnog izlaganja**, backup + probna obnova, runbook; `docker-compose.yml` obrisan | ERP javno dostupan iza Cloudflare Accessa; **runbook proveden na čistom VPS-u** |
 | **6** | **Zauzeće vezova + 2D SVG** — četiri signala iz §3.1, tablica stanja §3.2, statični SVG s `svg_id` po vezu | **Krk na karti, četiri signala, sivo za tiho** |
-| **7a** | **NFC tok bez naplate** — §5.1 koraci 1–8, odluka o kreditu (§5.4), stop na nuli, istek pripreme, stop od osoblja. **Ne traži nadogradnju Krka** | **TC-ERP-ACC-03, -05, -06 prolaze na Krku** |
-| **7b** | **Naplata** — tarifa (§4.5), `billing_records`, izvoz za blagajnu, knjiga kredita u iznosima. **Traži R9 (§7.2)** | **TC-ERP-ACC-01, -02, -04 prolaze na Krku**; potrošnja se slaže na obje strane |
+| **7** | **Poslovna logika i NFC tok** — §5.1, §5.4, tarifa (§4.5), `billing_records`, izvoz za blagajnu, knjiga kredita u iznosima | **TC-ERP-ACC-01..06 prolaze na pravom ormaru**; potrošnja se slaže na obje strane |
 | **8** | **Sigurnosni modul v1** — mamci, domenske detekcije, signali vrata i novog uređaja, servisni prozori, CVE/KEV prema **pinanim** verzijama, zaslon §6.5 | prvi stvarni nalazi na VPS-u i Krku |
 | **9** | **Energetski agent** — tek kad postoji povijest iz faze 4 | — |
 
 Faza 2 prije faze 6 ima isti razlog kao korak 1 prije koraka 4 u ormarovoj specifikaciji: s
 ugovorom pokrivenim simulatorom, L1 je posao iscrtavanja nad fiksnim oblikom.
 
-**Faza 7 je podijeljena zbog BLOK-3.** 7a ne čeka ništa i daje tri od šest prihvatnih testova;
-7b čeka R9 — nadogradnju Krka na 16-ključni payload. Ako BLOK-3 završi kao (b) ili (c), 7a i 7b
-se spajaju natrag u jednu fazu i ovaj redak se briše.
+**Faza 7 je jedna** (v3): BLOK-3 je zatvoren, ormar vraća stanje brojila po ugovoru i ne
+računa cijenu, pa naplata ne čeka ništa osim faza prije sebe. Pri prvom spajanju ormara vrti
+se **TC-ERP-LIVE-01** (§9.1b), koji provjerava živi odgovor.
 
 ---
 
@@ -1758,7 +1753,7 @@ Nađeno usput. Nije u izvedbi gore; tvoje je da odlučiš prioritet.
 | O3 | Bundle je **646 kB** u jednom chunku (§0.2); Vite to i prijavljuje | radi; code-splitting je optimizacija bez korisnika koji se žali |
 | O4 | `frontend/package-lock.json` je **nepraćen** u repou (`git status`) — a faza 1 traži lock datoteku | riješit će ga faza 1; navedeno da se ne izgubi |
 | O5 | ~~`erp_docs_inputs.zip` u korijenu~~ — **obrisan u v2** na tvoj zahtjev | zatvoreno |
-| O11 | **Krk vrti `773bca6`, a `develop` je `a709cf8`** — 8 od 18 citiranih datoteka se razlikuje (§0.5). ERP nema način da iz API-ja sazna koju verziju ormar vrti | parser se bira po obliku payloada (§2.4), ne po verziji, pa ERP ne treba znati. Ako ikad zatreba, `pedestals.list` bi mogao nositi verziju — zahtjev, ne izmjena |
+| O11 | **ERP nema način da iz API-ja sazna koju verziju ormar vrti** | u v3 ne treba: referenca je ugovor, a provjerava se živim odgovorom (TC-ERP-LIVE-01). Ako ikad zatreba, `pedestals.list` bi mogao nositi verziju — zahtjev, ne izmjena |
 | O12 | **`GET /api/nfc/sessions/by-user` na `develop` piše u bazu** (`erp_reconciliation.py:112-124`) | §7.2 R2 — zahtjev je podnesen; ERP se dotad samoograničava |
 | O6 | 11 događaja se emitira na ormaru a nije u `EVENT_CATALOG`, među njima **`meter_telemetry_received`** (telemetrija brojila) i **`direct_cmd_sent`** (jedina push-potvrda da je naredba otišla) — NALAZ 6.3 | ERP ih **ne može pretplatiti**; pull ih pokriva. Zahtjev prema ormaru ako ikad zatrebaju |
 | O7 | `usage.*`, `mobile.*`, `qr.*` rute: usmjeravanje je isto na `773bca6` i `main`, ali `usage_history.py` (+30/−7), `mobile.py` (+168/−28) i `qr.py` (+7/−2) su mijenjani — **oblik odgovora se može razlikovati** | izvještaj ormara to nije provjeravao polje po polje; ERP koristi samo `usage.history`, i to za usklađivanje |
@@ -1779,10 +1774,13 @@ Nađeno usput. Nije u izvedbi gore; tvoje je da odlučiš prioritet.
 - **Ne gradim fiskalizaciju.** Odluka 1.4 je (a): fiskalni račun za pilot izdaje blagajna
   recepcije. ERP **nikad ne ispisuje dokument koji izgleda kao račun** — izvozi obračunske
   zapise i time je gotov.
-- **Ne naplaćujem iz payloada Krka.** §0.6: brojka može biti životni zbroj utičnice, voda se ne
-  može identificirati. Dok R9 ne prođe, sesije se prikupljaju i prikazuju, ne naplaćuju.
+- **Ne prihvaćam cijenu od ormara.** Ormar mjeri i izvršava, ERP odlučuje i naplaćuje (D0, D4).
+  Polje s cijenom se **odbacuje pri parsiranju**, i test traži njegovu **odsutnost** u modelu —
+  ne ignoriranje.
+- **Ne naplaćujem brojku koja se ne slaže sa svojim graničnim očitanjima.** Takva sesija ide u
+  `manual_review`, i to je jedino mjesto na kojem čovjek sazna da nešto ne štima.
 - **Ne računam potrošnju sam iz telemetrije snage.** D10: brojka sesije je razlika registra
-  brojila, ne izračun iz snage. To je BLOK-3 opcija (c) i ne predlažem je.
+  brojila, ne izračun iz snage. `power_kw_current` je samo za prikaz uživo.
 - **Ne prepisujem ormarovo mapiranje.** D18: neslaganje je stanje koje treba riješiti, nikad
   tiho prepisivanje ni u jednom smjeru. Dok endpointa za čitanje nema, usporedba kaže
   **„nije moguće provjeriti"**, ne „usklađeno".
@@ -1801,9 +1799,10 @@ Nađeno usput. Nije u izvedbi gore; tvoje je da odlučiš prioritet.
 
 ---
 
-`docs/erp_spec.md` · verzija 2 · 2026-10-11 · zamjenjuje v1 istog dana
+`docs/erp_spec.md` · verzija 3 · 2026-10-11 · zamjenjuje v2 istog dana
 
-Pet odluka iz v1 su odlučene i primijenjene (§1.0). Ostaje **jedan blokator** — BLOK-3, kako
-faza 7 naplaćuje na Krku prije nadogradnje ormara. **Faze 1 do 6, 7a i 8 ne čekaju ništa.**
+**§1 je prazan — nema otvorenih blokatora.** Šest odluka iz v1 i v2 je odlučeno i primijenjeno
+(§1.0). Referenca za ormar je **ugovor**, a provjerava se **živim odgovorom pri spajanju**
+(TC-ERP-LIVE-01), ne commitom.
 
-Po odobrenju: faza 1, pa stop do tvog OK-a. Faza 1 ne počinje bez tvoje riječi.
+**Faza 1 je odobrena i u izvedbi.** Na kraju faze: gate zelen, izvještaj s brojkama, stop.
