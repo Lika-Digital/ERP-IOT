@@ -1,6 +1,7 @@
 # ERP-IOT — dnevnik odluka
 
-**Verzija 2 · 2026-10-11** — zamjenjuje verziju od 2026-10-10.
+**Verzija 2.1 · 2026-10-11** — zamjenjuje verziju od 2026-10-10.
+v2.1 dodaje **D18** (mapiranje na obje strane); prvi isporučeni zip sadržavao je stariju v2 bez njega.
 Ormar (Cloud_IOT) je druga strana ugovora; ovdje se bilježe odluke koje se tiču ERP-a i ono što ERP traži od ormara.
 
 Izvori, redom po težini:
@@ -260,6 +261,15 @@ Redoslijed je obvezujući. Svaka faza završava nečim što se može provjeriti,
 | 9 | **Energetski agent** — tek kad postoji povijest iz faze 4 | — |
 
 Što ERP ne radi: ne gradi vlastiti MQTT, ne mijenja kod ormara (zahtjevi prema ormaru idu kroz zaseban chat), ne prikazuje imena kupaca na zaslonima marine, ne uključuje automatsko izvršavanje agenata.
+
+## D18 · Mapiranje vez → priključak postoji na obje strane
+Sada: mapiranje postoji i u ERP-u i na ormaru (`berth_assignments`). Unosi ga Admin (Lika) prema jednoj definiciji. ERP redovito uspoređuje svoje mapiranje s ormarovim i neslaganje prikazuje kao stanje koje treba riješiti — nikad ga tiho ne prepisuje ni u jednom smjeru. Svaka izmjena ima autora i vrijeme.
+
+Cilj (kad se s marinom dogovori proces): Admin unosi u ERP, ERP šalje ormaru preko ext API-ja; čarobnjak na ormaru ostaje za servis.
+
+Zahtjev prema ormaru: ext endpoint za čitanje mapiranja (odmah) i za upis (kasnije, bidirectional, s autorom i auditom).
+
+Dok endpoint za čitanje ne postoji, usporedba je **„nije moguće provjeriti"**, ne „usklađeno".
 
 ---
 
