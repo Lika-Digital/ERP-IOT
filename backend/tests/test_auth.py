@@ -9,7 +9,6 @@ Verifies:
 - 401 on wrong password
 - Inactive user cannot login
 """
-import pytest
 
 
 def test_super_admin_login_returns_jwt(client):

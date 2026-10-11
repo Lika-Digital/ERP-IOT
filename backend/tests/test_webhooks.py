@@ -11,7 +11,6 @@ Verifies:
 import hashlib
 import hmac
 import json
-import pytest
 from unittest.mock import AsyncMock, patch
 
 

@@ -15,7 +15,7 @@ os.environ.setdefault("DATABASE_URL", "sqlite:///./tests/test_erp.db")
 os.environ.setdefault("JWT_SECRET", "test-secret-for-erp-iot-ci")
 os.environ.setdefault("ERP_ENCRYPTION_KEY", "ZmDfcTF7_60GrrY167zsiPd67pEvs0aGOv2oasOM1Pg=")
 
-from app.services.pedestal_api import PedestalAPIService, _update_cache, _get_cache
+from app.services.pedestal_api import PedestalAPIService
 
 MOCK_BASE_URL = "http://pedestal-sw.test"
 MOCK_EMAIL = "erp@service.test"

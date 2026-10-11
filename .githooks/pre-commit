@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# ERP-IOT pre-commit — fast gate (lint, pytest, bandit). Versioned in .githooks/;
+# enabled by: git config core.hooksPath .githooks   (spec §9 TC-ERP-GATE-01)
+exec bash "$(git rev-parse --show-toplevel)/scripts/gate.sh" --fast

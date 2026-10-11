@@ -8,8 +8,6 @@ Verifies:
 - super_admin sees all marinas
 - Service account fields are accepted; encrypted password is never returned
 """
-import pytest
-from datetime import datetime
 
 
 def test_super_admin_can_create_marina(client, admin_headers):

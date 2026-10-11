@@ -1,0 +1,9 @@
+# Rules are pinned here so the result does not depend on the ruff version default
+# or on a global config on the author's machine (spec §9, TC-ERP-GATE-01).
+# E9 + F = syntax errors, undefined names, unused imports/variables: real defects,
+# not style. Wider rule sets are a separate decision (spec §11).
+target-version = "py311"
+extend-exclude = [".venv"]
+
+[lint]
+select = ["E9", "F"]

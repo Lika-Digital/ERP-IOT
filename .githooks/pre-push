@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# ERP-IOT pre-push — FULL gate on every branch, including frontend build and
+# real boot (spec §9). Versioned in .githooks/; enabled by:
+#   git config core.hooksPath .githooks
+#
+# The previous hook skipped the gate entirely for feature branches. A branch is
+# where broken code lives longest, so it now runs everywhere.
+#
+# Pushing to main additionally asks for confirmation (CLOUD_IOT_RELEASE=1 for
+# non-interactive use), as before.
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+TARGET_BRANCH=""
+while IFS=' ' read -r _local_ref _local_sha remote_ref _remote_sha; do
+    TARGET_BRANCH="${remote_ref#refs/heads/}"
+done
+
+if [ "$TARGET_BRANCH" = "main" ] && [ "${CLOUD_IOT_RELEASE:-}" != "1" ]; then
+    if read -r -p "Pushing to MAIN. Type 'release' to confirm: " CONFIRM < /dev/tty 2>/dev/null; then
+        [ "$CONFIRM" = "release" ] || { echo "Push to main cancelled."; exit 1; }
+    else
+        echo "Pushing to main needs an interactive terminal or CLOUD_IOT_RELEASE=1."
+        exit 1
+    fi
+fi
+
+exec bash "$REPO_ROOT/scripts/gate.sh"

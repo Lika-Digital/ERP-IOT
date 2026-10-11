@@ -41,7 +41,7 @@ async def allow_session(
     factory: PedestalAPIClientFactory = Depends(get_pedestal_factory),
 ):
     """Allow a pending session on the Pedestal SW + log to audit trail."""
-    marina = _get_marina_and_check_access(marina_id, user, db)
+    _get_marina_and_check_access(marina_id, user, db)
 
     client = factory.get_client(marina_id, db)
     result = await client.allow_session(session_id)
@@ -70,7 +70,7 @@ async def deny_session(
     factory: PedestalAPIClientFactory = Depends(get_pedestal_factory),
 ):
     """Deny a pending session with optional reason + log to audit trail."""
-    marina = _get_marina_and_check_access(marina_id, user, db)
+    _get_marina_and_check_access(marina_id, user, db)
 
     client = factory.get_client(marina_id, db)
     result = await client.deny_session(session_id, body.reason)
@@ -98,7 +98,7 @@ async def stop_session(
     factory: PedestalAPIClientFactory = Depends(get_pedestal_factory),
 ):
     """Stop an active session + log to audit trail."""
-    marina = _get_marina_and_check_access(marina_id, user, db)
+    _get_marina_and_check_access(marina_id, user, db)
 
     client = factory.get_client(marina_id, db)
     result = await client.stop_session(session_id)
@@ -125,7 +125,7 @@ async def run_diagnostics(
     factory: PedestalAPIClientFactory = Depends(get_pedestal_factory),
 ):
     """Run diagnostics on a pedestal."""
-    marina = _get_marina_and_check_access(marina_id, user, db)
+    _get_marina_and_check_access(marina_id, user, db)
 
     client = factory.get_client(marina_id, db)
     result = await client.run_diagnostics(pedestal_id)

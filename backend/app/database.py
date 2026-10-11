@@ -1,6 +1,6 @@
 """PostgreSQL database session and base model setup."""
 import logging
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 
 from .config import settings

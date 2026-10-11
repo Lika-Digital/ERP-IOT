@@ -3,7 +3,7 @@ import logging
 from typing import List
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -213,7 +213,6 @@ async def test_connection(
         return {"success": False, "detail": "Service account credentials not configured"}
 
     from ..utils.encryption import decrypt_password
-    from ..services.pedestal_api import PedestalAuthError
     import httpx
 
     try:

@@ -1,7 +1,7 @@
 """Audit log service — records every control action with user and marina context."""
 import logging
 from datetime import datetime
-from typing import Optional, Any
+from typing import Optional
 from sqlalchemy.orm import Session
 
 from ..models.cache import AuditLog

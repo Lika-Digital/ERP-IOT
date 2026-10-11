@@ -28,8 +28,6 @@ from app.services.pedestal_api import (
     PedestalAPIClient,
     PedestalAuthError,
     StaleResponse,
-    _update_cache,
-    _get_cache,
 )
 from app.utils.encryption import encrypt_password, decrypt_password
 
