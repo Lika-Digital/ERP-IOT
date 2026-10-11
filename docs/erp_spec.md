@@ -1646,7 +1646,7 @@ završetak faze 5:
 | **TC-ERP-BOOT-02** | gate ne može proći prazno | ako backend nije podignut, stage **pada**, nikad `exit 0`; ispiše broj preskočenih | netko „popravi" gate preskakanjem |
 | **TC-ERP-GATE-01** | gate je u repou | `.githooks/pre-push` postoji **i** `core.hooksPath` je postavljen; CI vrti isti skript | gate je samo lokalan |
 | **TC-ERP-DEP-01** | ovisnosti su pinane | lock datoteka postoji; instalacija iz nje daje izmjerene verzije (§0.4) | netko doda nepinanu ovisnost |
-| **TC-ERP-AUTH-01** | neautentificirano = **401** | sve **23** zaštićene rute (mjereno: `grep -rho "Depends(get_current_user)" backend/app/routers/*.py \| wc -l` → 23, od 30 ukupno); **strogo 401**, ne `in (401, 403)` | HTTPBearer se vrati na 403 (§0.1) |
+| **TC-ERP-AUTH-01** | neautentificirano = **401** | sve **27** zaštićene rute od **31** (mjereno iz grafa ovisnosti aplikacije, ne grepom — grep po `Depends(get_current_user)` daje 23 jer promašuje rute zaštićene kroz `require_super_admin`/`require_any_operator`); javni skup je **imenovan** (login, refresh, webhook, health) i nova nezaštićena ruta pada; **strogo 401**, ne `in (401, 403)`, i bez tokena i s neispravnim tokenom | HTTPBearer se vrati na 403 (§0.1) |
 | **TC-ERP-AUTH-02** | `JWT_SECRET` fail-fast | podizanje bez njega **pada** | netko vrati slučajno generiranje |
 | **TC-ERP-CACHE-01** | keš preživi restart | `cache_key` kao stupac; dva procesa, isti ključ, isti redak | hash se vrati kao ključ |
 
@@ -1754,6 +1754,7 @@ Nađeno usput. Nije u izvedbi gore; tvoje je da odlučiš prioritet.
 | O4 | `frontend/package-lock.json` je **nepraćen** u repou (`git status`) — a faza 1 traži lock datoteku | riješit će ga faza 1; navedeno da se ne izgubi |
 | O5 | ~~`erp_docs_inputs.zip` u korijenu~~ — **obrisan u v2** na tvoj zahtjev | zatvoreno |
 | O11 | **ERP nema način da iz API-ja sazna koju verziju ormar vrti** | u v3 ne treba: referenca je ugovor, a provjerava se živim odgovorom (TC-ERP-LIVE-01). Ako ikad zatreba, `pedestals.list` bi mogao nositi verziju — zahtjev, ne izmjena |
+| O14 | **Prijava neaktivnog računa s točnom lozinkom vraća 403 `Account is disabled`** (`backend/app/routers/auth.py:127-131`), a pogrešna lozinka 401 — razlika otkriva da račun postoji i da je lozinka točna (enumeracija). Test je u fazi 1 pritegnut na **trenutno** ponašanje (403), ne promijenjen | promjena odgovora autentifikacije je odluka, ne nusproizvod pritezanja testa; ako se odluči ujednačiti na 401, mijenja se jedan redak i jedan assertion |
 | O12 | **`GET /api/nfc/sessions/by-user` na `develop` piše u bazu** (`erp_reconciliation.py:112-124`) | §7.2 R2 — zahtjev je podnesen; ERP se dotad samoograničava |
 | O6 | 11 događaja se emitira na ormaru a nije u `EVENT_CATALOG`, među njima **`meter_telemetry_received`** (telemetrija brojila) i **`direct_cmd_sent`** (jedina push-potvrda da je naredba otišla) — NALAZ 6.3 | ERP ih **ne može pretplatiti**; pull ih pokriva. Zahtjev prema ormaru ako ikad zatrebaju |
 | O7 | `usage.*`, `mobile.*`, `qr.*` rute: usmjeravanje je isto na `773bca6` i `main`, ali `usage_history.py` (+30/−7), `mobile.py` (+168/−28) i `qr.py` (+7/−2) su mijenjani — **oblik odgovora se može razlikovati** | izvještaj ormara to nije provjeravao polje po polje; ERP koristi samo `usage.history`, i to za usklađivanje |

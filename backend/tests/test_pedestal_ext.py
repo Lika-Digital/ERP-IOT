@@ -294,12 +294,17 @@ def test_marina_manager_can_access_own_marina_berths(client, manager_headers, ma
 # ─── TC-PX-11  unauthenticated returns 401 ───────────────────────────────────
 
 def test_unauthenticated_ext_endpoints_return_401(client, marina_id):
-    # Security middleware may return 403 or FastAPI bearer returns 401; both signal unauthenticated.
+    """Strogo 401. Pritegnuto u fazi 1.
+
+    Stari komentar je tvrdio da SecurityMiddleware moze vratiti 403 — ne moze:
+    middleware/security.py:9 kaze da nikad ne blokira, samo logira i dodaje
+    zaglavlja. Tolerancija je bila na HTTPBearer, koji je u travnju vracao 403
+    a danas vraca 401 (spec §0.1). Pinane ovisnosti znace da se to ne mijenja
+    pod nama, pa test smije biti strog — i mora, inace ne bi uhvatio povratak.
+    """
     for endpoint in ["berths/occupancy", "camera/frame", "camera/stream"]:
         r = client.get(f"/api/marinas/{marina_id}/pedestals/1/{endpoint}")
-        assert r.status_code in (401, 403), (
-            f"Expected 401 or 403 for {endpoint}, got {r.status_code}"
-        )
+        assert r.status_code == 401, f"Expected 401 for {endpoint}, got {r.status_code}"
 
 
 # ─── TC-PX-12  allow session logs audit ──────────────────────────────────────

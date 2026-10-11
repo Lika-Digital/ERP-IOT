@@ -6,6 +6,7 @@ lagati o sebi: da su ovisnosti pinane, da je gate u repou, da autentifikacija
 vraca 401, i da se tajna ne izmislja u tisini.
 
 TC-ERP-DEP-01   ovisnosti su pinane i instalirano se slaze s pinovima
+TC-ERP-AUTH-01  neautentificirano = strogo 401 na svakoj zasticenoj ruti
 TC-ERP-AUTH-02  JWT_SECRET koji fali ili je prazan zaustavlja podizanje
 
 Ostali testovi faze 1 dodaju se u istom commitu kao i ponasanje koje tvrde,
@@ -219,3 +220,86 @@ def test_tc_erp_auth_02_app_does_not_bind_all_interfaces_by_default():
         "app_host default je 0.0.0.0 — prvo pogresno pravilo vatrozida izlozilo bi "
         "backend izravno (spec §8.1)"
     )
+
+
+# ─── TC-ERP-AUTH-01 ───────────────────────────────────────────────────────────
+#
+# Popis ruta se NE pise rukom i ne broji grepom. Grep po
+# `Depends(get_current_user)` daje 23 (spec §9 v3), ali promasuje rute koje su
+# zasticene kroz require_super_admin / require_any_operator — stvarni graf
+# ovisnosti ima 27 od 31. Rucni popis bi zastario s prvom novom rutom; graf ne.
+
+_PUBLIC_ROUTES = {
+    ("POST", "/api/auth/login"),
+    ("POST", "/api/auth/refresh"),
+    ("POST", "/api/webhooks/pedestal/{marina_id}"),  # vlastita provjera X-API-Key
+    ("GET", "/api/health"),
+}
+
+
+def _route_calls(dependant):
+    for sub in dependant.dependencies:
+        yield sub.call
+        yield from _route_calls(sub)
+
+
+def _routes():
+    from fastapi.routing import APIRoute
+    from app.main import app
+    from app.routers.auth import get_current_user
+
+    out = []
+    for r in app.routes:
+        if not isinstance(r, APIRoute):
+            continue
+        protected = get_current_user in set(_route_calls(r.dependant))
+        for m in sorted(r.methods):
+            out.append((m, r.path, protected))
+    return out
+
+
+def _concrete(path: str) -> str:
+    return re.sub(r"\{[^}]+\}", "1", path)
+
+
+def test_tc_erp_auth_01_public_set_is_exactly_known():
+    """Svaka ruta bez get_current_user mora biti ovdje navedena po imenu.
+
+    Nova ruta koja zaboravi autentifikaciju ne smije proci tiho kao "javna" —
+    pada ovdje, i netko mora svjesno dopisati je u _PUBLIC_ROUTES.
+    """
+    public = {(m, p) for m, p, prot in _routes() if not prot}
+    assert public == _PUBLIC_ROUTES
+
+
+def test_tc_erp_auth_01_protected_count_matches_graph():
+    """27 zasticenih od 31 — izmjereno iz grafa ovisnosti, ne grepom."""
+    rs = _routes()
+    assert (sum(p for _, _, p in rs), len(rs)) == (27, 31)
+
+
+def test_tc_erp_auth_01_no_credentials_is_strictly_401(client):
+    """Bez Authorization zaglavlja: strogo 401 na SVAKOJ zasticenoj ruti.
+
+    Ne `in (401, 403)`. Upravo je ta tolerancija sakrila da se ponasanje
+    HTTPBearera promijenilo pod repoom bez ijednog commita (spec §0.1).
+    """
+    wrong = []
+    for m, p, prot in _routes():
+        if prot:
+            code = client.request(m, _concrete(p)).status_code
+            if code != 401:
+                wrong.append((m, p, code))
+    assert wrong == []
+
+
+def test_tc_erp_auth_01_garbage_token_is_strictly_401(client):
+    """Neispravan token je isto 'ne znamo ko si' — 401, ne 403 ni 422."""
+    h = {"Authorization": "Bearer not-a-jwt"}
+    wrong = []
+    for m, p, prot in _routes():
+        if prot:
+            code = client.request(m, _concrete(p), headers=h).status_code
+            if code != 401:
+                wrong.append((m, p, code))
+    assert wrong == []

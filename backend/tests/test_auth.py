@@ -91,12 +91,24 @@ def test_unknown_email_returns_401(client):
     assert r.status_code == 401
 
 
-def test_inactive_user_cannot_login(client):
+def test_inactive_user_login_returns_403_account_disabled(client):
+    """Neaktivan racun s TOCNOM lozinkom dobiva 403, ne 401.
+
+    Pritegnuto u fazi 1: bilo je `in (401, 403)`, sto je izgledalo kao
+    tolerancija na HTTPBearer bug iz spec §0.1 — nije. Ovo je vlastiti odgovor
+    login endpointa (auth.py:127-131), i 403 je ispravan: identitet je
+    provjeren, pristup nije dopusten. 401 bi znacio "ne znamo ko si".
+
+    Nuansa enumeracije racuna zapisana je kao odgodena, ne tiho promijenjena
+    (spec §11 O14) — mijenjanje odgovora autentifikacije je odluka, ne
+    nusproizvod pritezanja testa.
+    """
     r = client.post("/api/auth/login", json={
         "email": "inactive@test.erp",
         "password": "inactive1234",
     })
-    assert r.status_code in (401, 403)
+    assert r.status_code == 403
+    assert r.json()["detail"] == "Account is disabled"
 
 
 def test_unauthenticated_me_returns_401(client):
