@@ -9,6 +9,9 @@ TC-ERP-DEP-01   ovisnosti su pinane i instalirano se slaze s pinovima
 TC-ERP-AUTH-01  neautentificirano = strogo 401 na svakoj zasticenoj ruti
 TC-ERP-AUTH-02  JWT_SECRET koji fali ili je prazan zaustavlja podizanje
 TC-ERP-CACHE-01 kes API odgovora prezivi restart (cache_key stupac, ne hash)
+TC-ERP-GATE-01  gate je u repou: .githooks + core.hooksPath, CI vrti isti skript
+TC-ERP-BOOT-02  gate ne moze proci prazno (boot pada glasno, preskoceni test je pad)
+(TC-ERP-BOOT-01a sam je scripts/boot_check.py — pravi uvicorn, vrti ga gate)
 
 Ostali testovi faze 1 dodaju se u istom commitu kao i ponasanje koje tvrde,
 da nijedan commit ne ostavi suite crvenim.
@@ -435,3 +438,122 @@ def test_no_call_to_nonexistent_camera_detections_route():
     assert not hasattr(PedestalAPIClient, "get_camera_detections")
     src = (_BACKEND / "app" / "services" / "pedestal_api.py").read_text(encoding="utf-8")
     assert "/detections" not in src
+
+
+# ─── TC-ERP-GATE-01 ───────────────────────────────────────────────────────────
+
+def test_tc_erp_gate_01_hooks_are_versioned_and_call_the_gate():
+    for hook, arg in (("pre-commit", "--fast"), ("pre-push", "")):
+        p = _REPO / ".githooks" / hook
+        assert p.is_file(), f".githooks/{hook} ne postoji — gate bi bio samo lokalan"
+        text = p.read_text(encoding="utf-8")
+        assert "scripts/gate.sh" in text
+        if arg:
+            assert arg in text
+
+
+def test_tc_erp_gate_01_ci_runs_the_same_script():
+    wf = _REPO / ".github" / "workflows" / "gate.yml"
+    assert wf.is_file(), "CI workflow ne postoji"
+    text = wf.read_text(encoding="utf-8")
+    assert "bash scripts/gate.sh" in text
+    assert "requirements.lock" in text, "CI mora instalirati iz locka, ne iz requirements.txt"
+    assert "npm ci" in text, "CI mora instalirati frontend iz package-lock.json"
+
+
+def test_tc_erp_gate_01_hooks_path_is_set_or_this_is_ci():
+    """Lokalno core.hooksPath mora pokazivati na .githooks.
+
+    U CI-ju hookovi ne postoje kao pojam — tamo isti skript vrti workflow, sto
+    gornji test tvrdi. Ovo nije preskakanje: u CI-ju se tvrdi workflow, lokalno
+    oboje.
+    """
+    import os
+
+    if os.environ.get("CI") == "true":
+        assert (_REPO / ".github" / "workflows" / "gate.yml").is_file()
+        return
+    r = subprocess.run(["git", "config", "core.hooksPath"],
+                       cwd=_REPO, capture_output=True, text=True)
+    assert r.stdout.strip() == ".githooks", (
+        "core.hooksPath nije postavljen — pokreni: git config core.hooksPath .githooks"
+    )
+
+
+def test_tc_erp_gate_01_hooks_are_executable_in_git():
+    r = subprocess.run(["git", "ls-files", "-s", ".githooks"],
+                       cwd=_REPO, capture_output=True, text=True)
+    modes = {ln.split()[3]: ln.split()[0] for ln in r.stdout.splitlines()}
+    assert modes.get(".githooks/pre-commit") == "100755"
+    assert modes.get(".githooks/pre-push") == "100755"
+
+
+# ─── TC-ERP-BOOT-02 ───────────────────────────────────────────────────────────
+
+def test_tc_erp_boot_02_boot_check_fails_loudly_when_nothing_comes_up():
+    """Baza koja ne postoji -> migracija pada -> boot_check NIKAD ne izlazi s 0."""
+    import os
+
+    e = dict(os.environ)
+    e["BOOT_DATABASE_URL"] = "postgresql://nobody:x@127.0.0.1:1/none"
+    r = subprocess.run(
+        [sys.executable, str(_REPO / "scripts" / "boot_check.py")],
+        capture_output=True, text=True, env=e, timeout=120,
+    )
+    assert r.returncode != 0
+    assert "BOOT: 0/8 checks passed" in r.stdout
+
+
+def _junit(tmp_path, tests: int, skipped: int, failures: int = 0) -> Path:
+    cases = "".join(
+        f'<testcase classname="t" name="c{i}">'
+        + ('<skipped message="backend not up"/>' if i < skipped else "")
+        + "</testcase>"
+        for i in range(tests)
+    )
+    p = tmp_path / "junit.xml"
+    p.write_text(
+        f'<testsuites><testsuite tests="{tests}" skipped="{skipped}" '
+        f'failures="{failures}" errors="0">{cases}</testsuite></testsuites>',
+        encoding="utf-8",
+    )
+    return p
+
+
+def _counts(path: Path) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        [sys.executable, str(_REPO / "scripts" / "pytest_counts.py"), str(path)],
+        capture_output=True, text=True,
+    )
+
+
+def test_tc_erp_boot_02_skipped_test_fails_the_gate(tmp_path):
+    r = _counts(_junit(tmp_path, tests=5, skipped=1))
+    assert r.returncode != 0
+    assert "skipped=1" in r.stdout
+    assert "t::c0" in r.stdout, "preskoceni test mora biti imenovan"
+
+
+def test_tc_erp_boot_02_empty_run_fails_the_gate(tmp_path):
+    r = _counts(_junit(tmp_path, tests=0, skipped=0))
+    assert r.returncode != 0
+    assert "collected=0" in r.stdout
+
+
+def test_tc_erp_boot_02_missing_report_fails_the_gate(tmp_path):
+    assert _counts(tmp_path / "nope.xml").returncode != 0
+
+
+def test_tc_erp_boot_02_clean_run_passes(tmp_path):
+    r = _counts(_junit(tmp_path, tests=3, skipped=0))
+    assert r.returncode == 0, r.stdout
+
+
+def test_tc_erp_boot_02_gate_has_no_soft_fallbacks():
+    """Stari run_tests.sh: sistemski Python, pip install bez pina, bandit 'skipping'."""
+    assert not (_REPO / "tests" / "run_tests.sh").exists()
+    gate = (_REPO / "scripts" / "gate.sh").read_text(encoding="utf-8")
+    # jedini dopusteni "pip install" je uputa za instalaciju IZ locka
+    assert not re.search(r"pip install(?! -r backend/requirements\.lock)", gate)
+    assert "skipping" not in gate.lower()
+    assert "command -v python" not in gate, "gate ne smije pasti na sistemski Python"

@@ -1,0 +1,42 @@
+# Same script as the local hooks (spec §9 TC-ERP-GATE-01). CI does not have its
+# own idea of what "green" means.
+name: gate
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  gate:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: erp
+          POSTGRES_PASSWORD: erp-ci-only
+          POSTGRES_DB: erp_boot
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U erp" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Backend venv from the lock
+        run: |
+          python -m venv backend/.venv
+          backend/.venv/bin/pip install --no-deps -r backend/requirements.lock
+      - name: Frontend from the lock
+        run: npm ci
+        working-directory: frontend
+      - name: Gate
+        env:
+          # boot check migrates and boots against real Postgres here, SQLite locally
+          BOOT_DATABASE_URL: postgresql://erp:erp-ci-only@localhost:5432/erp_boot
+        run: bash scripts/gate.sh
