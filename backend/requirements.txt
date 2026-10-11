@@ -1,21 +1,35 @@
-fastapi[standard]
-uvicorn[standard]
-sqlalchemy
-psycopg2-binary
-alembic
-pydantic[email]
-pydantic-settings
-python-jose[cryptography]
-passlib[bcrypt]
-cryptography
+# ERP-IOT backend — DIREKTNE ovisnosti, SVE PINANE.
+#
+# Faza 1, spec §0.1: u travnju je HTTPBearer na auth.py:21 vracao 403, danas vraca
+# 401 — ista linija koda, druga verzija FastAPI-ja. Ponasanje autentifikacije
+# promijenilo se pod repoom bez ijednog commita. Zato su pinovi, i zato su egzaktni.
+#
+# bcrypt je NOSIV pin: passlib 1.7.4 puca s bcrypt >= 4.1 (nedostaje __about__).
+# Ne 'ciscuj' ga pri azuriranju — spec §11 O1.
+#
+# bandit i ruff su OVDJE, ne globalno: gate koji ovisi o globalnoj instalaciji
+# prolazi na stroju autora i preskace na cistom VPS-u. Nalaz faze 1.
+#
+# Puni tranzitivni set je requirements.lock. Instalacija na VPS-u ide IZ LOCKA
+# (spec §8.4 korak 5).
+
+fastapi[standard]==0.135.3
+uvicorn[standard]==0.44.0
+sqlalchemy==2.0.49
+psycopg2-binary==2.9.11
+alembic==1.18.4
+pydantic[email]==2.12.5
+pydantic-settings==2.13.1
+python-jose[cryptography]==3.5.0
+passlib[bcrypt]==1.7.4
+cryptography==46.0.7
 bcrypt==4.0.1
-httpx
-python-multipart
-starlette
+httpx==0.28.1
+python-multipart==0.0.24
+starlette==1.0.0
 
-# Testing
-pytest
-pytest-asyncio
-
-# Security scanning (optional but checked in run_tests.sh)
-bandit
+# Testiranje i provjere
+pytest==9.0.2
+pytest-asyncio==1.3.0
+bandit==1.9.4
+ruff==0.17.0
