@@ -1,16 +1,25 @@
 """Cache and log models for pedestal data, alarms, sessions, and sync operations."""
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text, JSON, Float
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text, JSON, Float, UniqueConstraint
 from ..database import Base
 
 
 class PedestalCache(Base):
-    """Last-known data from each pedestal, used for stale-data fallback."""
+    """Last-known data, used for stale-data fallback and webhook readings.
+
+    Two identity spaces, never mixed in one column (spec §4.8):
+      - API response cache: `cache_key` set (e.g. "list_pedestals"), pedestal_id NULL
+      - webhook rows: real `pedestal_id` from the cabinet, cache_key NULL
+    """
     __tablename__ = "pedestal_cache"
+    __table_args__ = (
+        UniqueConstraint("marina_id", "cache_key", name="uq_pedestal_cache_marina_key"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     marina_id = Column(Integer, ForeignKey("marinas.id", ondelete="CASCADE"), nullable=False, index=True)
-    pedestal_id = Column(Integer, nullable=False, index=True)
+    pedestal_id = Column(Integer, nullable=True, index=True)
+    cache_key = Column(String(255), nullable=True)
     last_seen_data = Column(JSON, nullable=True)  # Full API response payload
     last_synced_at = Column(DateTime, nullable=True)
     is_stale = Column(Boolean, nullable=False, default=False)

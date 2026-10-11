@@ -8,6 +8,7 @@ vraca 401, i da se tajna ne izmislja u tisini.
 TC-ERP-DEP-01   ovisnosti su pinane i instalirano se slaze s pinovima
 TC-ERP-AUTH-01  neautentificirano = strogo 401 na svakoj zasticenoj ruti
 TC-ERP-AUTH-02  JWT_SECRET koji fali ili je prazan zaustavlja podizanje
+TC-ERP-CACHE-01 kes API odgovora prezivi restart (cache_key stupac, ne hash)
 
 Ostali testovi faze 1 dodaju se u istom commitu kao i ponasanje koje tvrde,
 da nijedan commit ne ostavi suite crvenim.
@@ -303,3 +304,119 @@ def test_tc_erp_auth_01_garbage_token_is_strictly_401(client):
             if code != 401:
                 wrong.append((m, p, code))
     assert wrong == []
+
+
+# ─── TC-ERP-CACHE-01 ──────────────────────────────────────────────────────────
+#
+# Restart se simulira kao sto se stvarno dogada: novi proces s DRUGIM
+# PYTHONHASHSEED. U istom procesu hash(str) je stabilan, pa test unutar jednog
+# procesa ne bi mogao uhvatiti stari bug.
+
+_CACHE_SCRIPT = r"""
+import sys
+from sqlalchemy import create_engine, func
+from sqlalchemy.orm import sessionmaker
+from app.database import Base
+from app.models import marina, user, cache  # noqa: F401
+from app.models.cache import PedestalCache
+from app.services.pedestal_api import _update_cache, _get_cache
+
+engine = create_engine(sys.argv[1])
+Base.metadata.create_all(bind=engine)
+db = sessionmaker(bind=engine)()
+if sys.argv[2] == "write":
+    _update_cache(db, 1, "list_pedestals", {"writer": sys.argv[3]})
+else:
+    print(_get_cache(db, 1, "list_pedestals"))
+print("ROWS", db.query(func.count(PedestalCache.id)).scalar())
+"""
+
+
+def _cache_proc(db_url: str, seed: str, *args: str) -> str:
+    import os
+
+    e = dict(os.environ)
+    e.update({
+        "PYTHONPATH": str(_BACKEND),
+        "PYTHONHASHSEED": seed,
+        "DATABASE_URL": db_url,
+        "JWT_SECRET": "cache-test",
+        "DEFAULT_ADMIN_PASSWORD": "cache-test",
+        "ERP_ENCRYPTION_KEY": "ZmDfcTF7_60GrrY167zsiPd67pEvs0aGOv2oasOM1Pg=",
+    })
+    r = subprocess.run(
+        [sys.executable, "-c", _CACHE_SCRIPT, db_url, *args],
+        cwd=str(_BACKEND), capture_output=True, text=True, env=e,
+    )
+    assert r.returncode == 0, r.stderr
+    return r.stdout
+
+
+def test_tc_erp_cache_01_cache_survives_restart(tmp_path):
+    """Dva procesa, razliciti hash seed, isti kljuc -> isti redak.
+
+    Prije faze 1 kljuc je bio abs(hash(cache_key)) % 10**9: drugi proces
+    nije nalazio redak prvoga, stale fallback je tiho vracao None, a stari
+    redak je ostajao siroce (spec §4.8).
+    """
+    url = f"sqlite:///{tmp_path / 'cache.db'}"
+    out_a = _cache_proc(url, "1", "write", "A")
+    assert "ROWS 1" in out_a
+
+    out_b = _cache_proc(url, "2", "read")
+    assert "{'writer': 'A'}" in out_b, "drugi proces ne vidi kes prvoga"
+
+    out_c = _cache_proc(url, "3", "write", "C")
+    assert "ROWS 1" in out_c, "restart je stvorio novi redak umjesto azuriranja"
+
+
+def test_tc_erp_cache_01_key_is_a_column_with_unique_constraint():
+    from app.models.cache import PedestalCache
+
+    t = PedestalCache.__table__
+    assert "cache_key" in t.c
+    uniques = {
+        tuple(c.name for c in con.columns)
+        for con in t.constraints
+        if con.__class__.__name__ == "UniqueConstraint"
+    }
+    assert ("marina_id", "cache_key") in uniques
+
+
+def test_tc_erp_cache_01_migration_drops_hash_rows_keeps_readings(tmp_path):
+    """Migracija 005 na pravoj bazi s redcima kakve je stari kod ostavio."""
+    import os
+    import sqlite3
+
+    db = tmp_path / "mig.db"
+    e = dict(os.environ)
+    e.update({
+        "DATABASE_URL": f"sqlite:///{db}",
+        "JWT_SECRET": "mig-test",
+        "DEFAULT_ADMIN_PASSWORD": "mig-test",
+    })
+
+    def alembic(*a):
+        r = subprocess.run(
+            [sys.executable, "-m", "alembic", *a],
+            cwd=str(_BACKEND), capture_output=True, text=True, env=e,
+        )
+        assert r.returncode == 0, r.stderr
+
+    alembic("upgrade", "004")
+    con = sqlite3.connect(db)
+    # SQLite ne provodi FK bez PRAGMA, pa marina 1 ne mora postojati
+    # hash-keyed API cache row, as the old code wrote it
+    con.execute("INSERT INTO pedestal_cache (marina_id, pedestal_id, last_seen_data, is_stale) "
+                "VALUES (1, 734512901, '{}', 0)")
+    # webhook row with readings, real pedestal id
+    con.execute("INSERT INTO pedestal_cache (marina_id, pedestal_id, last_readings, is_stale) "
+                "VALUES (1, 3, '{\"heartbeat\": {}}', 0)")
+    con.commit()
+    con.close()
+
+    alembic("upgrade", "head")
+    con = sqlite3.connect(db)
+    rows = con.execute("SELECT pedestal_id, cache_key FROM pedestal_cache").fetchall()
+    con.close()
+    assert rows == [(3, None)]

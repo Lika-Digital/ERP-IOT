@@ -244,15 +244,18 @@ class PedestalAPIClient:
         marina_id: int,
         db: Optional[Session],
         sync_type: str,
-        cache_key: Optional[str] = None,
         params: Optional[dict] = None,
     ) -> Tuple[Any, bool]:
-        """GET with cache write on success."""
+        """GET with cache write on success.
+
+        The cache is keyed by sync_type on both write (here) and read (_request
+        fallback). A separate write-only key would let the two diverge.
+        """
         data, is_stale = await self._request(
             "GET", path, marina_id, db, sync_type, params=params
         )
         if not is_stale and data is not None and db is not None:
-            _update_cache(db, marina_id, cache_key or sync_type, data)
+            _update_cache(db, marina_id, sync_type, data)
         return data, is_stale
 
     # ─── Public API methods ───────────────────────────────────────────────────
@@ -480,12 +483,11 @@ def _update_cache(
     if db is None:
         return
     try:
-        cache_id = abs(hash(cache_key)) % (10**9)
         entry = (
             db.query(PedestalCache)
             .filter(
                 PedestalCache.marina_id == marina_id,
-                PedestalCache.pedestal_id == cache_id,
+                PedestalCache.cache_key == cache_key,
             )
             .first()
         )
@@ -496,7 +498,7 @@ def _update_cache(
         else:
             entry = PedestalCache(
                 marina_id=marina_id,
-                pedestal_id=cache_id,
+                cache_key=cache_key,
                 last_seen_data=data,
                 last_synced_at=datetime.utcnow(),
                 is_stale=False,
@@ -517,12 +519,11 @@ def _get_cache(
     if db is None:
         return None
     try:
-        cache_id = abs(hash(cache_key)) % (10**9)
         entry = (
             db.query(PedestalCache)
             .filter(
                 PedestalCache.marina_id == marina_id,
-                PedestalCache.pedestal_id == cache_id,
+                PedestalCache.cache_key == cache_key,
             )
             .first()
         )
