@@ -3,10 +3,10 @@
 Što se gradi, u kojem redoslijedu, i svaka odluka izrečena tako da ispravak
 košta jedan redak, a ne razgovor.
 
-    Verzija 5.2 — dopuna v5: odgovor ormara na R14 (2026-10-12)
+    Verzija 6 — zamjenjuje v5.2 od 2026-10-12
     Datum 2026-10-12
-    Status faze 1 i 2 ZAVRŠENE, gate i CI zeleni (§10.1, §10.2); faza 3 čeka odobrenje;
-           §1 je prazan, ali §0.7 donosi točke koje traže tvoju potvrdu
+    Status faze 1, 2 i 3 ZAVRŠENE, gate i CI zeleni (§10.1–§10.3); faza 4 čeka odobrenje;
+           §1 je prazan; O28 (ventili na ormaru 1) čeka nekoga s pristupom ormaru
 
 Čita se uz `docs/inputs/odluke.md` **v2.1** (odluke, obvezujuće — v2.1 dodaje **D18**),
 `docs/inputs/ormar_gateway_izvjestaj.md` (ugovor s ormarom, file:line),
@@ -14,6 +14,17 @@ košta jedan redak, a ne razgovor.
 `docs/inputs/ormar_ui_v2_spec.txt` (specifikacija ormara — uzor forme i izvor rječnika stanja).
 
 **Sve u ovom dokumentu je ODLUČENO. §1 je prazan — nema otvorenih blokatora.**
+
+### Što se promijenilo u verziji 6
+
+| | |
+|---|---|
+| **Faza 3 završena** | gate 6/6 i CI zeleni, na PostgreSQL-u; izvještaj u **§10.3** |
+| **§4 · model je u bazi** | 17 novih tablica (migracija `007`), osam starih netaknuto. Pravila §4 drži **baza**, ne kod — 14 sondi to provjerava na PostgreSQL-u i SQLite-u |
+| **§4.0 · NOVO — odluke faze 3** | naivni UTC umjesto `TIMESTAMPTZ`; `berth_outlets.medium` kao kopija pod složenim FK-om; `berths.cabinet_id` + `cabinet_berth_id`; `sessions.erp_ref`, status `reserved` |
+| **§0.7 #3 riješen** | `device_type` i mapiranje su u tablicama; `ERP_CABINETS_FILE` je uklonjen |
+| **O17 zatvoren dvaput** | migracija `006` (9 indeksa, SQLite) i `008` (dvostruka jedinstvenost `users.email`, vidljiva **samo** na PostgreSQL-u) |
+| **§11** | O30–O33 novi |
 
 ### Što se promijenilo u verziji 5.2
 
@@ -708,8 +719,8 @@ Veza ormar↔ERP, zasebno od veza-stanja: `online | stale | offline | auth_faile
 
 ## §4 Model podataka
 
-PostgreSQL, Alembic. Postojeće migracije idu do `005`
-(`backend/alembic/versions/005_pedestal_cache_key.py`, faza 1, §4.8); nove počinju od `006`.
+PostgreSQL, Alembic. Migracije idu do **`008`**: `005` (faza 1, §4.8), `006` i `008` (O17),
+`007` (model faze 3). Nove počinju od `009`.
 Postojećih tablica je osam (mjereno: `grep -c "__tablename__" backend/app/models/*.py` → 8):
 `users`, `user_marina_access`, `marinas`, `pedestal_cache`, `alarm_log`, `session_log`,
 `sync_log`, `audit_log`.
@@ -722,6 +733,53 @@ Postojećih tablica je osam (mjereno: `grep -c "__tablename__" backend/app/model
 > nešto pukne.
 >
 > **Ako griješim** · Brisanje nekorištene tablice je jedna migracija, u bilo kojem trenutku.
+
+### §4.0 · Odluke faze 3 koje odstupaju od nacrta ispod
+
+Nacrt tablica u §4.1–§4.7 pisan je prije koda. Gdje se izvedba razlikuje, ovdje je zašto.
+
+> **Odlučeno** · **Vrijeme je naivni UTC** (`DateTime`), kao u cijeloj postojećoj shemi, a ne
+> `TIMESTAMPTZ` iz nacrta.
+>
+> **Zašto** · O18 je odlučio da je ugovor sheme naivni UTC (`app/utils/time.utcnow`). Novi stupci
+> s vremenskom zonom uz stare bez nje vratili bi točno onaj `TypeError` (svjestan − naivan) koji
+> je O18 izbjegao.
+>
+> **Ako griješim** · Prijelaz na `timestamptz` je jedna migracija za **sve** tablice odjednom (O30).
+
+> **Odlučeno** · `berth_outlets` nosi **kopiju `medium`**, vezanu složenim FK-om
+> `(outlet_id, medium) → outlets(id, medium)`.
+>
+> **Zašto** · D1 traži „jedna utičnica → najviše jedan vez" i „jedan vez → najviše jedna
+> utičnica", a za vodu ništa. Djelomični jedinstveni indeks to izražava, ali ne vidi drugu
+> tablicu. Kopija pod FK-om ne može lagati — sonda pokušava ventil prijaviti kao struju i baza
+> odbija.
+>
+> **Ako griješim** · Okidač umjesto kopije; pravilo ostaje u bazi.
+
+> **Odlučeno** · `berths` dobiva **`cabinet_id` i `cabinet_berth_id`** (nisu bili u nacrtu §4.2).
+>
+> **Zašto** · Signal plovila (`state_code`) dolazi po **ormarovu** vezu iz `berths.list`. Bez
+> te veze ERP ne zna koji ERP-ov vez gleda koja kamera.
+>
+> **Ako griješim** · Dva stupca.
+
+> **Odlučeno** · `sessions` dobiva **`erp_ref`** (jedinstven, obvezan), `cabinet_session_id`
+> postaje **nullable**, a `status` dobiva **`reserved`**.
+>
+> **Zašto** · R14 (prihvaćen): ERP generira `erp_ref` i šalje ga u `/scan` **prije** nego ormar
+> ima sesiju; ormar ga vraća. ERP-ova sesija dakle postoji prije ormarove.
+>
+> **Ako griješim** · Nema verzije ovoga koju bih izveo drukčije, s obzirom na R14.
+
+> **Odlučeno** · Pravila §4 drži **baza**: CHECK-ovi, djelomični indeksi, okidač knjige kredita.
+> `scripts/schema_probes.py` pokušava prekršiti svako (11) i provjerava ono što mora biti dopušteno
+> (3) — u boot checku (PostgreSQL u CI-ju) i u pytestu (migrirani SQLite i `create_all`).
+>
+> **Zašto** · `alembic check` uspoređuje tablice, stupce i indekse, **ne** CHECK-ove ni okidače.
+> Bez sondi bi „knjiga je append-only" bila tvrdnja iz komentara.
+>
+> **Ako griješim** · Sonda više je jedna funkcija.
 
 ### §4.1 · Uređaji i mogućnosti (D3)
 
@@ -769,15 +827,14 @@ outlets                         -- priključci, uvijek pravim imenom (D3)
 >
 > **Ako griješim** · Nema verzije ovoga koju bih izveo drukčije.
 
-> **Odlučeno (faza 2, ⚠ potvrdi)** · `device_type` i mapiranje vez → priključak su **ERP podatak**:
-> ormar ih ne izlaže (§0.7 #3, NALAZ 4.2). Do tablica faze 3 dolaze iz jedne JSON datoteke
-> (`ERP_CABINETS_FILE`, `backend/app/cabinet/cabinet_config.py`). **Bez datoteke se ništa ne
-> pogađa**: voda se ne crta, signal struje veza je `UNKNOWN`, a zaslon to i kaže.
+> **Odlučeno** · `device_type` i mapiranje vez → priključak su **ERP podatak**: ormar ih ne
+> izlaže (§0.7 #3, NALAZ 4.2). Od faze 3 su u `cabinets.device_type` i `berth_outlets`;
+> privremena datoteka iz faze 2 (`ERP_CABINETS_FILE`) je **uklonjena**. **Bez ormara u bazi se
+> ništa ne pogađa**: voda se ne crta, signal struje veza je `UNKNOWN`.
 >
-> **Zašto** · Faza 2 ne smije dodavati migracije — `006` je tvojom odlukom O17 (faza 3).
-> Alternativa — zaključivati iz `valves/config` — dala bi vodu svakom retrofitu.
+> **Zašto** · Alternativa — zaključivati iz `valves/config` — dala bi vodu svakom retrofitu.
 >
-> **Ako griješim** · Faza 3 preuzima isti oblik u tablice `cabinets` / `outlets`; datoteka se briše.
+> **Ako griješim** · Kad ormar izloži stvarni broj ventila (R13), to postaje provjera, ne izvor.
 
 > **Odlučeno** · `phases` i oblik telemetrije su podatak, ne pretpostavka koda.
 >
@@ -1914,6 +1971,43 @@ je prva stvarna provjera; boot tamo ide protiv pravog Postgresa 16, lokalno prot
 lokalno, ali ih `core.hooksPath=.githooks` zaobilazi; zovu obrisani `tests/run_tests.sh`, pa bi
 bez `hooksPath` pali, a ne prošli.
 
+### §10.3 · Faza 3 — izvještaj (2026-10-12)
+
+**Gate zelen, CI zelen.** CI run
+[`38224718300`](https://github.com/Lika-Digital/ERP-IOT/actions/runs/38224718300), Linux, pravi
+PostgreSQL 16 i Chromium, posao 247 s:
+`GATE (full): 6/6; PYTEST: collected=289 passed=289 skipped=0; BOOT: 10/10; BROWSER: 12/12`.
+
+**Kriterij faze — uvoz Krk CSV-a pogađa točan priključak: DA.** Test čita tablicu iz D6.1
+(`docs/inputs/odluke.md`, ne prepisuje je), uvozi je i za svih **6 naljepnica u oba zapisa**
+(12 traženja) tvrdi `MAR_KRK_ORM_01` + točan Q/V i koji je zapis pogođen. Mutacija (traženje
+samo po primarnom zapisu) ruši test.
+
+| Mjera | Kraj faze 2 | Kraj faze 3 | Kako izmjereno |
+|---|---|---|---|
+| Backend testova | 242 | **289**, 0 preskočenih | `scripts/pytest_counts.py` |
+| Tablica | 8 | **25** (+17; stare netaknute) | `grep -c __tablename__` |
+| Migracija | 005 | **008** | `alembic/versions/` |
+| Pravila §4 koja drži BAZA | 0 | **14 sondi** (11 odbijanja, 3 dopuštenja) — na PostgreSQL-u i SQLite-u | `scripts/schema_probes.py` |
+| Boot provjera | 8 | **10** (+ `alembic check`, + sonde) | `scripts/boot_check.py` |
+| Razilaženje modela i migracija | 9 indeksa (SQLite) + 1 skriveno (PG) | **0** na oba | `alembic check` u bootu |
+| Zaštićenih ruta | 28/32 | **35/39** (+7 admin modela) | TC-ERP-AUTH-01 |
+| Izvor `device_type` i mapiranja | JSON datoteka | **baza** | `cabinet_config.load` |
+
+**Mutacije:** stupac u modelu bez migracije → boot „1/10"; uklonjen okidač knjige →
+sonda „the database ACCEPTED it"; traženje NFC-a po jednom zapisu → Krk test pada.
+
+**Dva crvena CI runa, i što su naučila.** Prvi push faze 3 pao je na PostgreSQL-u (BOOT 1/10):
+`alembic check` je našao **dvostruku jedinstvenost `users.email`** iz migracije `001` — na SQLite-u
+nevidljivu, pa je O17 u fazi 1 bio izmjeren nepotpuno. Sirovi log traži prijavu, pa sam prvo
+dodao **javne anotacije s razlogom pada** (`::error`), drugi run je pokazao razlog, a migracija
+`008` ga je popravila. Lokalni gate bio je zelen cijelo vrijeme — **samo CI s pravim
+PostgreSQL-om ga je mogao uhvatiti**, i to je razlog zašto boot u CI-ju ide protiv PG-a.
+
+**Što faza 3 nije napravila (namjerno):** sučelje za admina — postoji API (`cabinet_admin.py`),
+zaslona nema (O32); klijent ormara i dalje se spaja po URL-u marine, ne po `cabinets.base_url`
+(O31, faza 4 kad poller iterira ormare); retencija je faza 4 (§4.7, D7).
+
 ### §10.2 · Faza 2 — izvještaj (2026-10-12)
 
 **Gate zelen, CI zelen.** Lokalno `bash scripts/gate.sh` → `GATE (full): 6/6`, 71 s. CI run
@@ -1971,7 +2065,7 @@ Nađeno usput. Nije u izvedbi gore; tvoje je da odlučiš prioritet.
 | O15 | ~~Nepoznat e-mail odgovarao je brže od krive lozinke~~ — **popravljeno nakon faze 1**: lažna bcrypt provjera istog cost faktora; test broji provjere (1 po odbijanju). Izmjereno: prije 2,6 ms / 220 ms, poslije 173 / 190 ms | zatvoreno |
 | O12 | **`GET /api/nfc/sessions/by-user` na `develop` piše u bazu** (`erp_reconciliation.py:112-124`) | §7.2 R2 — zahtjev je podnesen; ERP se dotad samoograničava |
 | O16 | ~~`backend/alembic.ini` nosio je lozinku baze u čistom tekstu~~ — **odlučeno i primijenjeno:** `alembic.ini` nema URL, `alembic/env.py` ga uzima iz `app.config`, `DATABASE_URL` je obvezan (fail-fast, bez zadanog URL-a — zadani je nosio drugu lozinku), `.env.example` prazan. Test: nijedna konfiguracijska datoteka ne sadrži URL s lozinkom. **Gdje se lozinka koristila:** `alembic.ini` od commita `b534175` (21 verzija u povijesti, repo je **javan**), spec v4 (citirana), lokalni `backend/.env` kao `DEFAULT_ADMIN_PASSWORD`, i **lokalni Postgres je prihvaća** za `erp_user` — mora se rotirati | zatvoreno u kodu; rotacija je na vlasniku baze |
-| O17 | **Modeli i migracije se razilaze u 9 indeksa** (`alembic check`) — **odlučeno: faza 3, migracija `006`**; uz to `alembic check` ulazi u gate | faza 3 |
+| O17 | ~~Modeli i migracije se razilaze~~ — **zatvoren**: `006` (9 indeksa, SQLite) i `008` (dvostruka jedinstvenost `users.email`, samo PostgreSQL); `alembic check` je provjera u bootu, i u CI-ju ide protiv PG-a | zatvoreno |
 | O18 | ~~ruff s defaultima prijavljuje 327 nalaza~~ — **odlučeno:** uključena samo **DTZ** pravila; svih 36 `datetime.utcnow()` poziva i 8 `default=` stupaca ide kroz `app/utils/time.utcnow()` (naivan UTC, isti ugovor kao stupci). Ostala pravila (BLE001 ×18, UP…) kasnije | DTZ zatvoren; ostalo odgođeno |
 | O19 | ~~`npm run lint` zove eslint koji nije instaliran~~ — **odlučeno i primijenjeno:** skripta `lint` uklonjena iz `frontend/package.json`; frontend gate je `tsc --noEmit` + `vite build` | zatvoreno |
 | O20 | ~~API keš je ključan samo po `sync_type`~~ — **zatvoreno u fazi 2**: ključ je endpoint + putanja + parametri upita; test: drugi raspon datuma nikad ne dobije tuđi keš | zatvoreno |
@@ -1984,6 +2078,10 @@ Nađeno usput. Nije u izvedbi gore; tvoje je da odlučiš prioritet.
 | O27 | ~~R14 poslan ormaru?~~ — **odgovoreno 2026-10-12, prihvaćen** (§7.2 R14, R15); što ERP mijenja i kada: O29 | zatvoreno |
 | O28 | ⚠ **Ventili na ormaru 1 možda se otvaraju sami.** Zadano `valve_configs.auto_activate = true` (`a709cf8:…/pedestal_config.py:551-572`); ormar traži da se odmah pokrene `SELECT pedestal_id, valve_id, auto_activate FROM valve_configs;` na ormaru 1. Ako je `1`, voda može teći bez rezervacije i bez naplate | **netko s pristupom bazi ormara** — ERP nema pristup; rezultat upisati ovdje. Ormarov korak a0 to gasi u kodu |
 | O29 | Kad ERP prelazi na novi ugovor kanala B | b (`erp_ref`, raspon) → klijent kanala B, simulator, parser i usklađivanje po rasponu (faza 4); `/scan` po priključku (faza 7). c (`ack`) → `ack` nakon obračuna (faza 4/7). a (voda) → NFC tok za vodu (faza 7). Faze 3 i 4 ne čekaju ormar; faza 4 privremeno koristi `by-user` samo iz usklađivača ako b i c još nisu na Krku |
+| O30 | Vrijeme je naivni UTC u cijeloj shemi (§4.0); `TIMESTAMPTZ` iz nacrta nije primijenjen | jedna migracija za **sve** tablice odjednom, kad se odluči; nikad djelomično |
+| O31 | Klijent ormara spaja se po `marinas.pedestal_api_base_url`, ne po `cabinets.base_url` | faza 4: poller iterira `cabinets`; tada se i tvornica klijenata prebacuje |
+| O32 | Admin modela ima API, nema zaslona (ormari, registar vezova, mapiranje, NFC uvoz) | prvi zaslon kad zatreba instalacija; do tada API + CSV |
+| O33 | Zaslon Vezovi prikazuje imena vezova s ormara, ne `berths.berth_number` iz ERP-a | faza 6 (zauzeće + 2D karta) gradi zaslon na ERP-ovim vezovima |
 | O6 | 11 događaja se emitira na ormaru a nije u `EVENT_CATALOG`, među njima **`meter_telemetry_received`** (telemetrija brojila) i **`direct_cmd_sent`** (jedina push-potvrda da je naredba otišla) — NALAZ 6.3 | ERP ih **ne može pretplatiti**; pull ih pokriva. Zahtjev prema ormaru ako ikad zatrebaju |
 | O7 | `usage.*`, `mobile.*`, `qr.*` rute: usmjeravanje je isto na `773bca6` i `main`, ali `usage_history.py` (+30/−7), `mobile.py` (+168/−28) i `qr.py` (+7/−2) su mijenjani — **oblik odgovora se može razlikovati** | izvještaj ormara to nije provjeravao polje po polje; ERP koristi samo `usage.history`, i to za usklađivanje |
 | O8 | Postoji li brojilo na glavnom priključku marine (za vršnu snagu, D14) | energetski agent, faza 9 |
@@ -2028,11 +2126,12 @@ Nađeno usput. Nije u izvedbi gore; tvoje je da odlučiš prioritet.
 
 ---
 
-`docs/erp_spec.md` · verzija 5.2 · 2026-10-12 · dopuna v5: odgovor ormara (R14, R15)
+`docs/erp_spec.md` · verzija 6 · 2026-10-12 · zamjenjuje v5.2 istog dana
 
 **§1 je prazan — nema otvorenih blokatora.** Šest odluka iz v1 i v2 je odlučeno i primijenjeno
 (§1.0). Referenca za ormar je **ugovor**, a provjerava se **živim odgovorom pri spajanju**
 (TC-ERP-LIVE-01), ne commitom.
 
-**Faze 1 i 2 su završene** — gate i CI zeleni, izvještaji u §10.1 i §10.2. **Tri točke traže tvoju
-potvrdu** (§0.7 #1, §0.7 #3, O26). **Faza 3 ne počinje bez odobrenja.**
+**Faze 1, 2 i 3 su završene** — gate i CI zeleni, izvještaji u §10.1–§10.3. Otvoreno za tebe:
+§0.7 #1 (prikaz NFC sesija — R14 c ga rješava), O26 (grana), **O28 (ventili na ormaru 1 — hitno)**.
+**Faza 4 ne počinje bez odobrenja.**
