@@ -26,11 +26,16 @@ interval instead of adding a row: an idle outlet is one row, not 288 a day.
 
 One process collects. On PostgreSQL the collector takes an advisory lock and a
 second process stays on standby; SQLite is single-process by nature.
+
+It runs on ITS OWN thread and event loop (CollectorThread): its database work is
+synchronous, and a cabinet can take seconds to answer — neither may ever make an
+operator's request wait.
 """
 from __future__ import annotations
 
 import asyncio
 import logging
+import threading
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
@@ -334,6 +339,38 @@ class Collector:
             return conn
         conn.close()
         return None
+
+
+class CollectorThread:
+    """The collector on a thread of its own, with its own event loop."""
+
+    def __init__(self, col: Collector):
+        self.col = col
+        self._thread: Optional[threading.Thread] = None
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._stop: Optional[asyncio.Event] = None
+        self._ready = threading.Event()
+
+    def start(self) -> None:
+        self._thread = threading.Thread(target=self._run, name="collector", daemon=True)
+        self._thread.start()
+        self._ready.wait(timeout=10)
+
+    def _run(self) -> None:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        self._loop, self._stop = loop, asyncio.Event()
+        self._ready.set()
+        try:
+            loop.run_until_complete(self.col.run_forever(self._stop))
+        finally:
+            loop.close()
+
+    def stop(self, timeout: float = 30) -> None:
+        if self._loop is not None and self._stop is not None and not self._loop.is_closed():
+            self._loop.call_soon_threadsafe(self._stop.set)
+        if self._thread is not None:
+            self._thread.join(timeout)
 
 
 collector = Collector()

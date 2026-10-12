@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
 from .database import init_db
 from .middleware.security import SecurityMiddleware
-from .services.collector import collector
+from .services.collector import CollectorThread, collector
 from .services.websocket_manager import ws_manager
 from .routers import (auth, marinas, dashboard, controls, energy, alarms, webhooks, pedestal_ext,
                       cabinet_admin)
@@ -26,17 +26,17 @@ log = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     log.info("ERP-IOT starting up...")
     init_db()
-    stop = asyncio.Event()
-    task = None
+    worker = None
     if settings.collector_enabled:
-        # spec §5.2: an ERP that does not collect is broken, so it starts with the app
-        task = asyncio.create_task(collector.run_forever(stop), name="collector")
+        # spec §5.2: an ERP that does not collect is broken, so it starts with the app —
+        # on its own thread, so no operator request ever waits on it (§4.0b)
+        worker = CollectorThread(collector)
+        worker.start()
     else:
         log.warning("COLLECTOR_ENABLED is false: nothing is collected from the cabinets")
     yield
-    stop.set()
-    if task is not None:
-        await task
+    if worker is not None:
+        await asyncio.to_thread(worker.stop)
     log.info("ERP-IOT shutting down.")
 
 

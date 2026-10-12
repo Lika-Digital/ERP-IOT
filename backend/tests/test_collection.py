@@ -564,3 +564,29 @@ def test_sync_log_records_changes_not_every_successful_poll(sim, cab):
     finally:
         db.close()
     assert rows == ["success", "error", "stale", "success"]
+
+
+def test_a_slow_collector_never_makes_the_api_wait(client):
+    """§4.0b: the collector's database work is synchronous and a cabinet can take
+    seconds; it runs on its own thread and loop, so an operator's request does not wait."""
+    import time
+    from pathlib import Path
+    from app.services.collector import Collector, CollectorThread
+
+    class Slow(Collector):
+        async def tick(self, force_nightly=False):
+            time.sleep(1.5)            # blocking, like a long sync query or a hung cabinet
+            return {}
+
+    w = CollectorThread(Slow(session_factory=_db))
+    w.start()
+    try:
+        time.sleep(0.2)                # the slow tick is under way
+        t0 = time.monotonic()
+        r = client.get("/api/health")
+        waited = time.monotonic() - t0
+    finally:
+        w.stop()
+    assert r.status_code == 200 and waited < 1.0, f"the API waited {waited:.2f} s"
+    main = (Path(__file__).resolve().parents[1] / "app" / "main.py").read_text(encoding="utf-8")
+    assert "CollectorThread(collector)" in main, "the app must start the collector on its thread"

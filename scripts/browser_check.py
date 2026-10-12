@@ -339,6 +339,12 @@ def main() -> int:
             fail(11, "\n         ".join(problems[:10]))
         ok(11)
         server.should_exit = True
+    except Exception as exc:  # noqa: BLE001 — a step that blew up: say which, with the ERP's log
+        erp_log = t / "erp.log"
+        tail = (erp_log.read_text(encoding="utf-8", errors="replace")[-3000:]
+                if erp_log.exists() else "(no erp.log)")
+        fail(min(len(_passed), len(EXPECTED) - 1),
+             f"{type(exc).__name__}: {str(exc)[:500]}\n--- erp.log (tail) ---\n{tail}")
     finally:
         for p in procs:
             p.terminate()
