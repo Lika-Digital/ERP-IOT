@@ -18,6 +18,10 @@ log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 _pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Verified against when the email is unknown, so that path costs one bcrypt
+# check like every other refusal; otherwise response time reveals whether the
+# account exists (spec §11 O15). Same cost factor as real hashes.
+_DUMMY_HASH = _pwd_ctx.hash("erp-iot-timing-equaliser")
 _bearer = HTTPBearer()
 
 
@@ -119,10 +123,11 @@ def require_marina_access(marina_id: int, user: User, db: Session) -> None:
 @router.post("/login", response_model=TokenResponse)
 def login(body: LoginRequest, db: Session = Depends(get_db)):
     # Every refusal is the same 401 with the same message, so the response never
-    # reveals whether the account exists or the password was right (spec §11 O14).
-    # The real reason goes only to the log.
+    # reveals whether the account exists or the password was right (spec §11 O14),
+    # nor how long it took (O15). The real reason goes only to the log.
     user = db.query(User).filter(User.email == body.email).first()
     if not user:
+        _pwd_ctx.verify(body.password, _DUMMY_HASH)
         reason = "unknown email"
     elif not _pwd_ctx.verify(body.password, user.password_hash):
         reason = "wrong password"

@@ -128,6 +128,42 @@ def test_inactive_user_login_is_indistinguishable_from_wrong_password(client, ca
     )
 
 
+def test_every_login_refusal_costs_exactly_one_bcrypt_check(client, monkeypatch):
+    """Nepoznat e-mail placa istu bcrypt provjeru kao kriva lozinka (spec §11 O15).
+
+    Bez toga nepoznat e-mail odgovara u mikrosekundama, a postojeci u ~200 ms:
+    isti odgovor, razlicito vrijeme, enumeracija racuna po stoperici. Test
+    broji provjere umjesto da mjeri vrijeme — mjerenje vremena u CI-ju je
+    krhko, a broj provjera je tocno ono sto vrijeme odreduje.
+    """
+    from app.routers import auth
+
+    calls = []
+    real_verify = auth._pwd_ctx.verify
+    monkeypatch.setattr(
+        auth._pwd_ctx, "verify",
+        lambda pw, h: calls.append(h) or real_verify(pw, h),
+    )
+
+    for email, pw in (
+        ("nobody@test.erp", "whatever1234"),       # unknown email
+        ("superadmin@test.erp", "wrongpassword"),  # wrong password
+        ("inactive@test.erp", "inactive1234"),     # disabled account
+    ):
+        calls.clear()
+        r = client.post("/api/auth/login", json={"email": email, "password": pw})
+        assert r.status_code == 401
+        assert len(calls) == 1, f"{email}: {len(calls)} bcrypt provjera, ocekivana 1"
+
+
+def test_dummy_hash_has_the_same_cost_as_real_hashes():
+    """Lazni hash s nizim cost faktorom bio bi brzi — i opet bi odao racun."""
+    from app.routers import auth
+
+    real = auth._pwd_ctx.hash("x")
+    assert auth._DUMMY_HASH.split("$")[2] == real.split("$")[2]
+
+
 def test_unauthenticated_me_returns_401(client):
     r = client.get("/api/auth/me")
     assert r.status_code == 401
