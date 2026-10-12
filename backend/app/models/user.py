@@ -1,8 +1,8 @@
 """User, UserMarinaAccess, and audit log models."""
-from datetime import datetime
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from ..database import Base
+from ..utils.time import utcnow
 
 
 class User(Base):
@@ -17,7 +17,7 @@ class User(Base):
     role = Column(String(50), nullable=False, default="marina_manager")
 
     is_active = Column(Boolean, nullable=False, default=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=utcnow)
     last_login = Column(DateTime, nullable=True)
 
     # Relationships
@@ -35,7 +35,7 @@ class UserMarinaAccess(Base):
 
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     marina_id = Column(Integer, ForeignKey("marinas.id", ondelete="CASCADE"), primary_key=True)
-    granted_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    granted_at = Column(DateTime, nullable=False, default=utcnow)
     granted_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     # Relationships

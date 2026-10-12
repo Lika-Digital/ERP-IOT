@@ -1,10 +1,10 @@
 """Audit log service — records every control action with user and marina context."""
 import logging
-from datetime import datetime
 from typing import Optional
 from sqlalchemy.orm import Session
 
 from ..models.cache import AuditLog
+from ..utils.time import utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +41,7 @@ def record_action(
         action=action,
         target_id=target_id,
         details=details,
-        performed_at=datetime.utcnow(),
+        performed_at=utcnow(),
     )
     db.add(entry)
     try:

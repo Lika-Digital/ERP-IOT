@@ -13,6 +13,7 @@ from ..database import get_db
 from ..config import settings
 from ..models.user import User, UserMarinaAccess
 from ..schemas.auth import LoginRequest, TokenResponse, UserMeResponse
+from ..utils.time import utcnow
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -143,7 +144,7 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
         )
 
     # Update last_login
-    user.last_login = datetime.utcnow()
+    user.last_login = utcnow()
     db.commit()
 
     marina_ids = _get_marina_ids(db, user)

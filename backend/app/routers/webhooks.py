@@ -22,6 +22,7 @@ from ..database import get_db
 from ..models.marina import Marina
 from ..models.cache import AlarmLog, SessionLog, PedestalCache
 from ..services.websocket_manager import ws_manager
+from ..utils.time import utcnow
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/webhooks", tags=["webhooks"])
@@ -79,7 +80,7 @@ async def receive_webhook(
 
     event_type = payload.get("event_type", payload.get("event", "unknown"))
     pedestal_id = payload.get("pedestal_id", 0)
-    now = datetime.utcnow()
+    now = utcnow()
 
     # ── 1. Update pedestal_cache ──────────────────────────────────────────────
     _update_cache(db, marina_id, pedestal_id, payload, now)

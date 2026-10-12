@@ -1,7 +1,7 @@
 """Marina model — one record per physical marina installation."""
-from datetime import datetime
 from sqlalchemy import Column, Integer, String, DateTime
 from ..database import Base
+from ..utils.time import utcnow
 
 
 class Marina(Base):
@@ -28,5 +28,5 @@ class Marina(Base):
     # Status: active | inactive | maintenance
     status = Column(String(50), nullable=False, default="active")
 
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=utcnow)
+    updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)

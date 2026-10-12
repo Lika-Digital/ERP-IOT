@@ -6,8 +6,8 @@ Verifies:
 - alarm_log is filtered by marina_id
 - marina_manager blocked from other marinas
 """
-from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
+from app.utils.time import utcnow
 
 
 def _mock_factory(**methods):
@@ -40,7 +40,7 @@ def _seed_alarm(marina_id: int, pedestal_id: int = 1) -> int:
             marina_id=marina_id,
             pedestal_id=pedestal_id,
             alarm_data={"id": 100, "alarm_type": "temperature", "value": 60.0},
-            received_at=datetime.utcnow(),
+            received_at=utcnow(),
         )
         db.add(entry)
         db.commit()

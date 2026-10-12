@@ -19,6 +19,7 @@ os.environ["ERP_ENCRYPTION_KEY"] = "ZmDfcTF7_60GrrY167zsiPd67pEvs0aGOv2oasOM1Pg=
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from app.utils.time import utcnow
 
 TEST_DB_URL = "sqlite:///./tests/test_erp.db"
 test_engine = create_engine(TEST_DB_URL, connect_args={"check_same_thread": False})
@@ -83,7 +84,6 @@ def setup_test_database():
         db.flush()  # get IDs
 
         # Marina — encrypt test credentials
-        from datetime import datetime
         from app.utils.encryption import encrypt_password
         marina_obj = Marina(
             name="Test Marina",
@@ -94,8 +94,8 @@ def setup_test_database():
             pedestal_service_password_encrypted=encrypt_password("test-service-pass-123"),
             webhook_secret="test-webhook-secret",
             status="active",
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=utcnow(),
+            updated_at=utcnow(),
         )
         db.add(marina_obj)
         db.flush()
@@ -109,8 +109,8 @@ def setup_test_database():
             pedestal_service_email="erp@test2.service",
             pedestal_service_password_encrypted=encrypt_password("test-service-pass-456"),
             status="active",
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=utcnow(),
+            updated_at=utcnow(),
         )
         db.add(marina2)
         db.flush()
@@ -119,7 +119,7 @@ def setup_test_database():
         db.add(UserMarinaAccess(
             user_id=manager.id,
             marina_id=marina_obj.id,
-            granted_at=datetime.utcnow(),
+            granted_at=utcnow(),
             granted_by=super_admin.id,
         ))
 

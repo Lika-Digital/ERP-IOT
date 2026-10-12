@@ -1,7 +1,6 @@
 """Marinas router — CRUD, user access management, and connection testing."""
 import logging
 from typing import List
-from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -12,6 +11,7 @@ from ..models.user import User, UserMarinaAccess
 from ..schemas.marina import MarinaCreate, MarinaUpdate, MarinaResponse, MarinaAccessGrant
 from ..utils.encryption import encrypt_password
 from .auth import get_current_user, require_super_admin, require_marina_access
+from ..utils.time import utcnow
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/marinas", tags=["marinas"])
@@ -61,7 +61,7 @@ def create_marina(
     db: Session = Depends(get_db),
 ):
     """Create a new marina — super_admin only."""
-    now = datetime.utcnow()
+    now = utcnow()
     # Encrypt the service account password before storing
     encrypted_password = encrypt_password(body.pedestal_service_password)
 
@@ -109,7 +109,7 @@ def update_marina(
 
     for key, value in updates.items():
         setattr(marina, key, value)
-    marina.updated_at = datetime.utcnow()
+    marina.updated_at = utcnow()
     db.commit()
     db.refresh(marina)
 
@@ -162,7 +162,7 @@ def grant_access(
             UserMarinaAccess(
                 user_id=body.user_id,
                 marina_id=marina_id,
-                granted_at=datetime.utcnow(),
+                granted_at=utcnow(),
                 granted_by=user.id,
             )
         )

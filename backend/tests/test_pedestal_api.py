@@ -8,7 +8,7 @@ Authorization: Bearer (not X-API-Key) in all requests.
 import pytest
 import httpx
 from unittest.mock import AsyncMock, MagicMock, patch
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 import os
 os.environ.setdefault("DATABASE_URL", "sqlite:///./tests/test_erp.db")
@@ -16,6 +16,7 @@ os.environ.setdefault("JWT_SECRET", "test-secret-for-erp-iot-ci")
 os.environ.setdefault("ERP_ENCRYPTION_KEY", "ZmDfcTF7_60GrrY167zsiPd67pEvs0aGOv2oasOM1Pg=")
 
 from app.services.pedestal_api import PedestalAPIService
+from app.utils.time import utcnow
 
 MOCK_BASE_URL = "http://pedestal-sw.test"
 MOCK_EMAIL = "erp@service.test"
@@ -36,7 +37,7 @@ def svc():
     # Pre-load token cache so we don't need to mock login in every test
     instance._token_cache = {
         "token": MOCK_TOKEN,
-        "expires_at": datetime.utcnow() + timedelta(hours=6),
+        "expires_at": utcnow() + timedelta(hours=6),
     }
     return instance
 

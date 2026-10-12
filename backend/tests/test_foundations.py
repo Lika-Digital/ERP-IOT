@@ -580,3 +580,27 @@ def test_tc_erp_boot_02_gate_has_no_soft_fallbacks():
     assert not re.search(r"pip install(?! -r backend/requirements\.lock)", gate)
     assert "skipping" not in gate.lower()
     assert "command -v python" not in gate, "gate ne smije pasti na sistemski Python"
+
+
+# ─── O18: jedan sat, bez datetime.utcnow ─────────────────────────────────────
+
+def test_o18_utcnow_is_naive_utc_like_the_columns():
+    """Stupci su naivni i drze UTC; utcnow() mora vratiti tocno taj oblik.
+
+    Svjestan (aware) datetime usporeden s naivnim iz baze baca TypeError — zato
+    pomocnik NIJE samo datetime.now(timezone.utc).
+    """
+    from datetime import datetime, timezone
+
+    from app.utils.time import utcnow
+
+    t = utcnow()
+    assert t.tzinfo is None
+    ref = datetime.now(timezone.utc).replace(tzinfo=None)
+    assert abs((ref - t).total_seconds()) < 5
+
+
+def test_o18_ruff_enforces_dtz():
+    """DTZ je u pinanim pravilima — novi datetime.utcnow() ruši lint stage."""
+    text = (_BACKEND / "ruff.toml").read_text(encoding="utf-8")
+    assert re.search(r'^select = \[.*"DTZ".*\]', text, re.M)

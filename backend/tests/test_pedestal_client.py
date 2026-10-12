@@ -15,7 +15,7 @@ Covers (Step 11 spec):
 """
 import pytest
 import httpx
-from datetime import datetime, timedelta
+from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 # Ensure test env vars are set before importing app modules
@@ -30,6 +30,7 @@ from app.services.pedestal_api import (
     StaleResponse,
 )
 from app.utils.encryption import encrypt_password, decrypt_password
+from app.utils.time import utcnow
 
 
 MOCK_BASE_URL = "http://pedestal-sw.test"
@@ -104,7 +105,7 @@ async def test_get_token_returns_cached_if_not_expired(client):
     # Pre-populate cache with a non-expired token
     client._token_cache = {
         "token": MOCK_TOKEN,
-        "expires_at": datetime.utcnow() + timedelta(hours=6),
+        "expires_at": utcnow() + timedelta(hours=6),
     }
     with patch("httpx.AsyncClient") as mock_cls:
         token = await client._get_token()
@@ -130,7 +131,7 @@ async def test_get_token_calls_login_on_empty_cache(client):
 
     assert token == MOCK_TOKEN
     assert client._token_cache["token"] == MOCK_TOKEN
-    assert client._token_cache["expires_at"] > datetime.utcnow()
+    assert client._token_cache["expires_at"] > utcnow()
 
 
 @pytest.mark.asyncio
@@ -138,7 +139,7 @@ async def test_get_token_refreshes_on_expiry(client):
     """_get_token re-authenticates when cached token is past expiry."""
     client._token_cache = {
         "token": "old-token",
-        "expires_at": datetime.utcnow() - timedelta(seconds=1),  # expired
+        "expires_at": utcnow() - timedelta(seconds=1),  # expired
     }
     with patch("httpx.AsyncClient") as mock_cls:
         mock_http = AsyncMock()
@@ -198,7 +199,7 @@ async def test_request_uses_bearer_header(client, mock_db):
     """_request must send Authorization: Bearer <token>."""
     client._token_cache = {
         "token": MOCK_TOKEN,
-        "expires_at": datetime.utcnow() + timedelta(hours=6),
+        "expires_at": utcnow() + timedelta(hours=6),
     }
     captured_headers: dict = {}
 
@@ -228,7 +229,7 @@ async def test_request_prefixes_api_ext(client, mock_db):
     """_request must prefix path with /api/ext/ if not already present."""
     client._token_cache = {
         "token": MOCK_TOKEN,
-        "expires_at": datetime.utcnow() + timedelta(hours=6),
+        "expires_at": utcnow() + timedelta(hours=6),
     }
     captured_urls: list = []
 
@@ -260,7 +261,7 @@ async def test_request_retries_3x_on_5xx(client, mock_db):
     """_request retries up to _MAX_RETRIES times on 5xx responses."""
     client._token_cache = {
         "token": MOCK_TOKEN,
-        "expires_at": datetime.utcnow() + timedelta(hours=6),
+        "expires_at": utcnow() + timedelta(hours=6),
     }
     call_count = 0
 
@@ -295,7 +296,7 @@ async def test_request_returns_stale_none_when_no_cache(client, mock_db):
     """When all retries fail and no cache exists, returns (None, True)."""
     client._token_cache = {
         "token": MOCK_TOKEN,
-        "expires_at": datetime.utcnow() + timedelta(hours=6),
+        "expires_at": utcnow() + timedelta(hours=6),
     }
 
     with patch("httpx.AsyncClient") as mock_cls:
@@ -321,7 +322,7 @@ async def test_request_returns_stale_cache_on_failure(client):
     """When all retries fail, _request returns cached data with is_stale=True."""
     client._token_cache = {
         "token": MOCK_TOKEN,
-        "expires_at": datetime.utcnow() + timedelta(hours=6),
+        "expires_at": utcnow() + timedelta(hours=6),
     }
     cached_data = [{"id": 1, "name": "Pedestal A"}]
 
@@ -356,7 +357,7 @@ async def test_list_pedestals_success_returns_not_stale(client, mock_db):
     """Successful list_pedestals call returns is_stale=False."""
     client._token_cache = {
         "token": MOCK_TOKEN,
-        "expires_at": datetime.utcnow() + timedelta(hours=6),
+        "expires_at": utcnow() + timedelta(hours=6),
     }
     mock_data = [{"id": 1, "name": "Pedestal A"}]
 
@@ -388,7 +389,7 @@ def test_stale_response_defaults():
 
 def test_stale_response_with_data():
     """StaleResponse can hold data and a last_synced_at timestamp."""
-    ts = datetime.utcnow()
+    ts = utcnow()
     sr = StaleResponse(data={"pedestals": []}, is_stale=False, last_synced_at=ts)
     assert sr.is_stale is False
     assert sr.last_synced_at == ts

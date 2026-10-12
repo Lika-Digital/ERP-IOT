@@ -25,6 +25,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from ..models.cache import PedestalCache, SyncLog
+from ..utils.time import utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +95,7 @@ class PedestalAPIClient:
 
     async def _get_token(self) -> str:
         """Return a valid JWT, logging in (and caching) if necessary."""
-        now = datetime.utcnow()
+        now = utcnow()
         cached_token = self._token_cache.get("token")
         expires_at = self._token_cache.get("expires_at")
 
@@ -168,7 +169,7 @@ class PedestalAPIClient:
             path = "/api/ext/" + path.lstrip("/")
 
         url = f"{self.base_url}{path}"
-        started_at = datetime.utcnow()
+        started_at = utcnow()
         last_error: Optional[str] = None
 
         for attempt in range(_MAX_RETRIES):
@@ -188,7 +189,7 @@ class PedestalAPIClient:
                     resp.raise_for_status()
                     data = resp.json()
 
-                completed_at = datetime.utcnow()
+                completed_at = utcnow()
                 _write_sync_log(db, marina_id, sync_type, "success", started_at, completed_at)
                 return data, False
 
@@ -227,7 +228,7 @@ class PedestalAPIClient:
                 break
 
         # All retries exhausted — fall back to stale cache
-        completed_at = datetime.utcnow()
+        completed_at = utcnow()
         _write_sync_log(db, marina_id, sync_type, "error", started_at, completed_at, last_error)
 
         cached = _get_cache(db, marina_id, sync_type)
@@ -391,7 +392,7 @@ class PedestalAPIClient:
         """
         url = f"{self.base_url}/api/ext/pedestals/{pedestal_id}/camera/frame"
         sync_type = f"camera_frame_{pedestal_id}"
-        started_at = datetime.utcnow()
+        started_at = utcnow()
         last_error: Optional[str] = None
 
         for attempt in range(_MAX_RETRIES):
@@ -403,7 +404,7 @@ class PedestalAPIClient:
                     resp.raise_for_status()
                     frame_bytes = resp.content
 
-                completed_at = datetime.utcnow()
+                completed_at = utcnow()
                 _write_sync_log(db, marina_id, sync_type, "success", started_at, completed_at)
                 return frame_bytes
 
@@ -433,7 +434,7 @@ class PedestalAPIClient:
                 logger.error(f"[PedestalAPI] {sync_type} unexpected error: {last_error}")
                 break
 
-        completed_at = datetime.utcnow()
+        completed_at = utcnow()
         _write_sync_log(
             db, marina_id, sync_type, "error", started_at, completed_at, last_error
         )
@@ -481,14 +482,14 @@ def _update_cache(
         )
         if entry:
             entry.last_seen_data = data
-            entry.last_synced_at = datetime.utcnow()
+            entry.last_synced_at = utcnow()
             entry.is_stale = False
         else:
             entry = PedestalCache(
                 marina_id=marina_id,
                 cache_key=cache_key,
                 last_seen_data=data,
-                last_synced_at=datetime.utcnow(),
+                last_synced_at=utcnow(),
                 is_stale=False,
             )
             db.add(entry)

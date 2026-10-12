@@ -1,7 +1,7 @@
 """Cache and log models for pedestal data, alarms, sessions, and sync operations."""
-from datetime import datetime
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text, JSON, Float, UniqueConstraint
 from ..database import Base
+from ..utils.time import utcnow
 
 
 class PedestalCache(Base):
@@ -39,7 +39,7 @@ class AlarmLog(Base):
     marina_id = Column(Integer, ForeignKey("marinas.id", ondelete="CASCADE"), nullable=False, index=True)
     pedestal_id = Column(Integer, nullable=False, index=True)
     alarm_data = Column(JSON, nullable=False)  # Raw alarm payload from Pedestal SW
-    received_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    received_at = Column(DateTime, nullable=False, default=utcnow, index=True)
     acknowledged_at = Column(DateTime, nullable=True)
     acknowledged_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
@@ -52,7 +52,7 @@ class SessionLog(Base):
     marina_id = Column(Integer, ForeignKey("marinas.id", ondelete="CASCADE"), nullable=False, index=True)
     pedestal_id = Column(Integer, nullable=False, index=True)
     session_data = Column(JSON, nullable=False)  # Raw session payload
-    recorded_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    recorded_at = Column(DateTime, nullable=False, default=utcnow, index=True)
 
 
 class SyncLog(Base):
@@ -63,7 +63,7 @@ class SyncLog(Base):
     marina_id = Column(Integer, ForeignKey("marinas.id", ondelete="CASCADE"), nullable=False, index=True)
     sync_type = Column(String(100), nullable=False)  # e.g. 'list_pedestals', 'get_health'
     status = Column(String(50), nullable=False)  # 'success' | 'error' | 'stale'
-    started_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    started_at = Column(DateTime, nullable=False, default=utcnow)
     completed_at = Column(DateTime, nullable=True)
     error_message = Column(Text, nullable=True)
 
@@ -79,4 +79,4 @@ class AuditLog(Base):
     action = Column(String(100), nullable=False)  # e.g. 'allow_session', 'deny_session'
     target_id = Column(Integer, nullable=True)   # e.g. session_id, alarm_id
     details = Column(JSON, nullable=True)         # Extra context
-    performed_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    performed_at = Column(DateTime, nullable=False, default=utcnow, index=True)

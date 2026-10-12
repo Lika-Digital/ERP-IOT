@@ -1,6 +1,5 @@
 """Alarms router — list, acknowledge, and log alarms."""
 import logging
-from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -14,6 +13,7 @@ from ..models.user import User
 from ..services.pedestal_api_factory import PedestalAPIClientFactory, get_pedestal_factory
 from ..services.audit_log import record_action
 from .auth import get_current_user, require_marina_access
+from ..utils.time import utcnow
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/marinas", tags=["alarms"])
@@ -114,7 +114,7 @@ async def acknowledge_alarm(
         .filter(AlarmLog.alarm_data["id"].as_integer() == alarm_id)
         .first()
     )
-    now = datetime.utcnow()
+    now = utcnow()
     if local_entry:
         local_entry.acknowledged_at = now
         local_entry.acknowledged_by = user.id

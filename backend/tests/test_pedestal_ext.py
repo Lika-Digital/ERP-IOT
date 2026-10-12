@@ -26,7 +26,7 @@ All existing ERP tests continue to pass (no shared mutable state introduced here
 """
 import pytest
 import httpx
-from datetime import datetime, timedelta
+from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import os
@@ -35,6 +35,7 @@ os.environ.setdefault("JWT_SECRET", "test-secret-for-erp-iot-ci")
 os.environ.setdefault("ERP_ENCRYPTION_KEY", "ZmDfcTF7_60GrrY167zsiPd67pEvs0aGOv2oasOM1Pg=")
 
 from app.services.pedestal_api import PedestalAPIClient
+from app.utils.time import utcnow
 
 MOCK_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test"
 FAKE_JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 100  # minimal JPEG magic bytes
@@ -456,7 +457,7 @@ async def test_api_client_get_berth_occupancy_correct_path():
     )
     client._token_cache = {
         "token": MOCK_TOKEN,
-        "expires_at": datetime.utcnow() + timedelta(hours=6),
+        "expires_at": utcnow() + timedelta(hours=6),
     }
     captured_urls: list = []
 
@@ -495,7 +496,7 @@ async def test_api_client_get_camera_frame_retries_and_raises():
     )
     client._token_cache = {
         "token": MOCK_TOKEN,
-        "expires_at": datetime.utcnow() + timedelta(hours=6),
+        "expires_at": utcnow() + timedelta(hours=6),
     }
     call_count = 0
 
@@ -535,7 +536,7 @@ async def test_api_client_get_camera_stream_url_correct_path():
     )
     client._token_cache = {
         "token": MOCK_TOKEN,
-        "expires_at": datetime.utcnow() + timedelta(hours=6),
+        "expires_at": utcnow() + timedelta(hours=6),
     }
     captured_urls: list = []
 
