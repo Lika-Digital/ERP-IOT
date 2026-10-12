@@ -3,7 +3,7 @@
 Što se gradi, u kojem redoslijedu, i svaka odluka izrečena tako da ispravak
 košta jedan redak, a ne razgovor.
 
-    Verzija 5 — zamjenjuje v4 od 2026-10-11
+    Verzija 5.1 — dopuna v5 istog dana (odluka D6.2, zahtjev R14)
     Datum 2026-10-12
     Status faze 1 i 2 ZAVRŠENE, gate i CI zeleni (§10.1, §10.2); faza 3 čeka odobrenje;
            §1 je prazan, ali §0.7 donosi točke koje traže tvoju potvrdu
@@ -14,6 +14,14 @@ košta jedan redak, a ne razgovor.
 `docs/inputs/ormar_ui_v2_spec.txt` (specifikacija ormara — uzor forme i izvor rječnika stanja).
 
 **Sve u ovom dokumentu je ODLUČENO. §1 je prazan — nema otvorenih blokatora.**
+
+### Što se promijenilo u verziji 5.1
+
+| | |
+|---|---|
+| **D6.2 · NOVO — što ormar zna, a što ne** | tvoja odluka od 2026-10-12: ormar **zna sesije kao mjerenje**, ali **ne zna NFC mapiranje ni korisnike** (§2.4) |
+| **§7.2 R14** | zahtjev ormaru: **zakomentirati (ne brisati)** registar naljepnica i MODE 2, `/scan` po priključku s `erp_ref`, sesija bez korisnika, čitanje bez nuspojava + izričit `ack` |
+| **§11 O27** | prati R14; dok ormar ne odgovori, vrijedi stanje iz faze 2 (§0.7 #1) |
 
 ### Što se promijenilo u verziji 5
 
@@ -445,6 +453,32 @@ podstring test koji ne hvata `{pedestal_id}`. Crveni badge ne sprječava aktivac
 (`ApiGateway.tsx:627` nema `disabled`). NALAZ 3.1 i 3.2.
 
 ### §2.4 · Kanal B — NFC, izravno, `X-API-Key`, **nije** kroz `/api/ext`
+
+> **Odlučeno (D6.2, 2026-10-12)** · **Ormar zna sesije, ali ne zna NFC mapiranje ni korisnike.**
+>
+> - **NFC mapiranje** (naljepnica → ormar + priključak) postoji **samo u ERP-u** (D6.1 doslovno).
+>   Registar naljepnica na ormaru (`/api/nfc/tags`, `/tags/bulk`) i razrješavanje tag → priključak
+>   u `/scan` su višak.
+> - **Korisnik** postoji samo u ERP-u. Ormar ne treba `nfc_user_id` / `customer_id`, korisničke
+>   tokene ni MODE 2 (`nfc_direct_client_mode`). Ormar bez ERP-a s mobilnom aplikacijom ne
+>   razgovara nikad: aplikacija ide isključivo kroz ERP i njegovu poslovnu logiku (D6 korak 3).
+> - **Sesija ostaje — kao mjerenje:** „priključak Q1, od t1 do t2, registar a → b,
+>   `consumption_source`", označena **neprozirnom ERP referencom** (`erp_ref`) koju ERP pošalje
+>   pri pripremi i koju ormar samo vrati.
+>
+> **Zašto ormar mora znati sesiju** · (1) granice sesije su fizički događaji na ormaru — priklop
+> i isključenje — i samo ormar u tim trenucima može očitati registar brojila (D10: brojka sesije
+> je razlika registra, ne zbroj iz snage; ERP vidi telemetriju tek svakih ~60 s); (2) ako ERP ili
+> mreža padnu usred punjenja, ormar mora znati da je priključak u uporabi i zatvoriti ga
+> pravilno; (3) ugovor sa 16 ključeva (potrošnja + oba registra) počiva na sesiji.
+>
+> **Zašto ne mapiranje i korisnik** · dva mjesta s mapiranjem znače dva mjesta koja se mogu
+> razići, a pogrešno prepoznata naljepnica je gora od neprepoznate (D6.1). Korisnik na ormaru
+> nema nikakvu ulogu: ormar ne odlučuje i ne naplaćuje (D0, D4).
+>
+> **Stanje** · na ormaru (`a709cf8`) danas postoji i registar naljepnica i korisnik na sesiji.
+> Promjena je **zahtjev R14** (§7.2), ne izmjena koju ERP radi. Do odgovora ormara vrijedi
+> ugovor ispod i privremena odluka §0.7 #1.
 
 NFC nije u `ENDPOINT_CATALOG` (specifikacija ormara, odgođeno D4) — `/api/ext/nfc/…` uvijek
 daje 403. ERP do njega dolazi isključivo izravno.
@@ -1534,6 +1568,7 @@ na dan čitanja i služi prioritizaciji — **ugovorna provjera je TC-ERP-LIVE-0
 |---|---|---|---|---|
 | ~~R9~~ | ~~NFC payload po ugovoru sa 16 ključeva~~ — **ZATVOREN u v3**: ormar je popravljen prema specifikaciji, ne naplaćuje i ne računa cijenu, vraća stanje brojila. Provjerava se **živim odgovorom** pri spajanju (TC-ERP-LIVE-01), ne commitom | — | — | ništa; BLOK-3 je zatvoren |
 | **R2** | **`GET /api/nfc/sessions/by-user` ne smije mijenjati stanje** — ili, ako mora, to mora biti dokumentirano i idempotentno, a `/reconciliation` i `/divergence` dostupni s `X-API-Key` | vidi okvir ispod | **djelomično** — na Krku ne piše; na `develop` piše | bolji pull u fazi 4; iteracija po korisnicima radi bez toga |
+| **R14** | **Pojednostavljenje kanala B po D6.2** — (1) **zakomentirati u kodu, ne brisati** registar naljepnica (`/api/nfc/tags`, `/tags/bulk`) i MODE 2 (`nfc_direct_client_mode`, korisnički tokeni na `/api/nfc/*`), uz oznaku `D6.2 / R14` na svakom mjestu; (2) `POST /api/nfc/scan` prima `{cabinet_id, outlet: "Q1".."V2", erp_ref}` umjesto `{nfc_tag_id, user_id}` — priprema i 5-min čekanje na priklop ostaju; (3) sesija nosi `erp_ref` umjesto `customer_id`/`nfc_user_id`, sve ostalo u ugovoru ostaje; (4) **čitanje bez nuspojava** — `GET /session/{id}` ne upisuje `last_reconciled_at`; ERP potvrđuje obračun izričito, npr. `POST /api/nfc/sessions/ack {session_ids}`, i tek tada detektor `erp_reconciliation_silent` mjeri pravu stvar; (5) `by-user` se zamjenjuje čitanjem po `erp_ref` ili po vremenskom rasponu; (6) ugovor sa 16 ključeva, `test_tc_six_13g` i testovi koji pokrivaju zakomentirani kod usklađuju se u istom commitu, da suite ormara ostane zelen. **Zakomentirati, ne brisati** — tvoja odluka 2026-10-12: kod ostaje u repou ormara za slučaj da zatreba | `a709cf8:…/nfc.py` (11 ruta), `nfc.py:543-685` (`/scan` razrješava tag), `nfc.py:688-759` + `erp_reconciliation.py:112-124` (`mark_reconciled`) | nije provjereno | ništa danas; kad prođe, otpadaju R2, R2b, O21, O23, §0.7 #1 i iteracija po korisnicima u §5.2 |
 | **R2b** | **`GET /api/nfc/session/{id}` ne smije mijenjati stanje** — isto kao R2 (§0.7 #1) | `a709cf8:…/nfc.py:688-708` → `erp_reconciliation.py:112-124` | nije provjereno | bez toga ERP nema read-only put do pojedine sesije |
 | **R12** | **`GET /api/berths` ne smije stvarati vezove** (O22) | `a709cf8:…/berths.py:213-223` | nije provjereno | ništa |
 | **R13** | **`valves/config` neka kaže koliko ventila ormar STVARNO ima** (ili `available`) | `a709cf8:…/pedestal_config.py:551-572` | nije provjereno | ništa — ERP ima `device_type` |
@@ -1935,6 +1970,7 @@ Nađeno usput. Nije u izvedbi gore; tvoje je da odlučiš prioritet.
 | O24 | `outlet_silent` (rang 2.5) nema izvor na ext API-ju | zahtjev prema ormaru ako zatreba; do tada nikad istinit |
 | O25 | tijela `camera.stream_ext` i `analytics.*` u simulatoru nisu izvađena iz koda | ERP ih prosljeđuje bez čitanja ključeva; LIVE-01 ih može dodati |
 | O26 | `faza/1-temelji` na originu sadrži i dva commita faze 2 | vratiti granu na `ab87e8b` traži force-push — **tvoja odluka**; ništa ne ovisi o tome |
+| O27 | **R14 poslan ormaru?** Pojednostavljenje kanala B po D6.2 (§2.4, §7.2) | kad ormar odgovori: u ERP-u se mijenjaju §2.4 (tijelo `/scan`, `customer_id` → `erp_ref`, `ack`), §5.2 (usklađivanje po referenci/vremenu), klijent kanala B i simulator; zatvaraju se O21, O23 |
 | O6 | 11 događaja se emitira na ormaru a nije u `EVENT_CATALOG`, među njima **`meter_telemetry_received`** (telemetrija brojila) i **`direct_cmd_sent`** (jedina push-potvrda da je naredba otišla) — NALAZ 6.3 | ERP ih **ne može pretplatiti**; pull ih pokriva. Zahtjev prema ormaru ako ikad zatrebaju |
 | O7 | `usage.*`, `mobile.*`, `qr.*` rute: usmjeravanje je isto na `773bca6` i `main`, ali `usage_history.py` (+30/−7), `mobile.py` (+168/−28) i `qr.py` (+7/−2) su mijenjani — **oblik odgovora se može razlikovati** | izvještaj ormara to nije provjeravao polje po polje; ERP koristi samo `usage.history`, i to za usklađivanje |
 | O8 | Postoji li brojilo na glavnom priključku marine (za vršnu snagu, D14) | energetski agent, faza 9 |
@@ -1979,7 +2015,7 @@ Nađeno usput. Nije u izvedbi gore; tvoje je da odlučiš prioritet.
 
 ---
 
-`docs/erp_spec.md` · verzija 5 · 2026-10-12 · zamjenjuje v4 od 2026-10-11
+`docs/erp_spec.md` · verzija 5.1 · 2026-10-12 · dopuna v5 istog dana (D6.2, R14)
 
 **§1 je prazan — nema otvorenih blokatora.** Šest odluka iz v1 i v2 je odlučeno i primijenjeno
 (§1.0). Referenca za ormar je **ugovor**, a provjerava se **živim odgovorom pri spajanju**
