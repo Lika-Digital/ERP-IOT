@@ -38,7 +38,7 @@ def override_get_db():
 def setup_test_database():
     """Create all tables and seed test data."""
     from app.database import Base
-    from app.models import marina, user, cache  # noqa: F401
+    import app.models  # noqa: F401 — every model
 
     Base.metadata.drop_all(bind=test_engine)
     Base.metadata.create_all(bind=test_engine)

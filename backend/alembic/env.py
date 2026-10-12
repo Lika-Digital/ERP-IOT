@@ -10,7 +10,7 @@ from alembic import context
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from app.database import Base  # noqa: E402
-from app.models import marina, user, cache  # noqa: F401, E402  — register all models
+import app.models  # noqa: F401, E402  — registers every model (app/models/__init__.py)
 
 config = context.config
 

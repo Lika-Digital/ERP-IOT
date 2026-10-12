@@ -41,6 +41,7 @@ STARTUP_TIMEOUT_S = 40
 EXPECTED_CHECKS = [
     "migration: alembic upgrade head on empty database",
     "migration: alembic check - models and migrations agree (O17)",
+    "schema: the database itself enforces the spec §4 rules (probes)",
     "negative: without JWT_SECRET the server does not come up",
     "server: uvicorn comes up",
     "GET /api/health -> 200, status ok",
@@ -138,8 +139,24 @@ def main() -> int:
             fail(name, (r.stdout + r.stderr).strip()[-2000:])
         ok(name)
 
-        # ── 2. negative: no JWT_SECRET -> must not come up ───────────────────
+        # ── 1c. CHECKs and triggers — alembic check does not compare them ──
         name = EXPECTED_CHECKS[2]
+        sys.path.insert(0, str(ROOT / "scripts"))
+        import schema_probes
+        from sqlalchemy import create_engine
+        eng = create_engine(db_url)
+        try:
+            results = schema_probes.run(eng)
+        finally:
+            eng.dispose()
+        bad = [f"{n}: {d}" for n, good, d in results if not good]
+        if bad or not results:
+            fail(name, "\n         ".join(bad) or "no probes ran")
+        ok(name)
+        print(f"         {len(results)} probes, all held", flush=True)
+
+        # ── 2. negative: no JWT_SECRET -> must not come up ───────────────────
+        name = EXPECTED_CHECKS[3]
         port = free_port()
         p = subprocess.Popen(uvicorn_cmd(port), cwd=tmp, env=base_env(db_url),
                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
@@ -168,7 +185,7 @@ def main() -> int:
         srv = subprocess.Popen(uvicorn_cmd(port), cwd=tmp, env=env,
                                stdout=log_f, stderr=subprocess.STDOUT)
         try:
-            name = EXPECTED_CHECKS[3]
+            name = EXPECTED_CHECKS[4]
             deadline = time.monotonic() + STARTUP_TIMEOUT_S
             up = False
             while time.monotonic() < deadline:
@@ -186,13 +203,13 @@ def main() -> int:
                            + log_path.read_text(encoding="utf-8")[-2000:])
             ok(name)
 
-            name = EXPECTED_CHECKS[4]
+            name = EXPECTED_CHECKS[5]
             code, body = http("GET", f"{base}/api/health")
             if code != 200 or json.loads(body).get("status") != "ok":
                 fail(name, f"{code} {body[:300]}")
             ok(name)
 
-            name = EXPECTED_CHECKS[5]
+            name = EXPECTED_CHECKS[6]
             code, body = http("POST", f"{base}/api/auth/login",
                               {"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD})
             token = json.loads(body).get("access_token") if code == 200 else None
@@ -200,19 +217,19 @@ def main() -> int:
                 fail(name, f"{code} {body[:300]}")
             ok(name)
 
-            name = EXPECTED_CHECKS[6]
+            name = EXPECTED_CHECKS[7]
             code, body = http("GET", f"{base}/api/auth/me", token=token)
             if code != 200 or json.loads(body).get("email") != ADMIN_EMAIL:
                 fail(name, f"{code} {body[:300]}")
             ok(name)
 
-            name = EXPECTED_CHECKS[7]
+            name = EXPECTED_CHECKS[8]
             code, body = http("GET", f"{base}/api/marinas", token=token)
             if code != 200:
                 fail(name, f"{code} {body[:300]}")
             ok(name)
 
-            name = EXPECTED_CHECKS[8]
+            name = EXPECTED_CHECKS[9]
             code, body = http("GET", f"{base}/api/auth/me")
             if code != 401:
                 fail(name, f"{code} {body[:300]}")

@@ -38,7 +38,7 @@ def get_db():
 
 def init_db():
     """Create all tables and seed default data."""
-    from .models import marina, user, cache  # noqa: F401  — register models
+    from . import models  # noqa: F401  — registers every model
 
     Base.metadata.create_all(bind=engine)
     log.info("Database tables created/verified.")
