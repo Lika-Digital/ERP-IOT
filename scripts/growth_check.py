@@ -338,9 +338,20 @@ def main() -> int:
     print(f"  intervals {float(kwh_before):.3f} kWh -> monthly {float(kwh_monthly):.3f} kWh; "
           f"sessions {sessions_before} -> {sessions_after}")
     print(f"  projected steady state: {ceiling_mb:.1f} MB (budget {BUDGET_MB} MB)")
+    def total_bytes(snap):
+        if engine.dialect.name == "sqlite":
+            return snap["_file_bytes"]
+        return sum(snap[t]["bytes"] or 0 for t in tables)
+
+    # the public CI annotation carries this line, so it says what the report needs:
+    # size before and after, and the tables that grow, per day
+    growing = sorted(((t, per) for t, _, _, per, _, _, _, _ in lines if per > 0),
+                     key=lambda x: -x[1])
     summary = {"dialect": engine.dialect.name, "days": days,
                "rows_day0": sum(before[t]["rows"] for t in tables),
                "rows_dayN": sum(after[t]["rows"] for t in tables),
+               "bytes_day0": total_bytes(before), "bytes_dayN": total_bytes(after),
+               "per_day": {t: round(per, 1) for t, per in growing},
                "ceiling_mb": round(ceiling_mb, 1), "problems": problems}
     print("GROWTH_JSON " + json.dumps(summary))
     for p in problems:
