@@ -64,6 +64,8 @@ def ok(i: int) -> None:
 
 def fail(i: int, detail: str) -> None:
     print(f"  [FAIL] {EXPECTED[i]}\n         {detail}", flush=True)
+    from boot_check import _annotate
+    _annotate(EXPECTED[i], detail)
     summary()
     raise SystemExit(1)
 
