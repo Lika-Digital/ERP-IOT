@@ -1,20 +1,31 @@
 """Controls router — session allow/deny/stop, outlet commands, diagnostics.
 
-Every command is audited WITH its outcome code, and answered through one
-mapping (routers/_cabinet.py): a cabinet refusal is a 409/503 with a sentence,
-never a 500 (spec §2.5). Before phase 2 this module had no try block at all and
-a Smart Mode 409 from the cabinet surfaced as an ERP 500.
+Every command is answered through one mapping (routers/_cabinet.py): a cabinet
+refusal is a 409/503 with a sentence, never a 500 (spec §2.5).
+
+Phase 4 (spec §4.7, §5.3, D13): every command is written to command_audit
+BEFORE it is sent and completed with its outcome, so a command that never got
+an answer stays visible. That needs two things the request must carry:
+  - the cabinet it goes to — a marina with no cabinet in the ERP gets no
+    command (there is nothing to write the row against);
+  - a REASON — an operator's command without one is refused here with 422 and
+    by the database's CHECK; nothing is sent.
+The older audit_log row is still written, with the outcome, as before.
 """
 import logging
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from ..cabinet.client import CabinetClient
 from ..cabinet.outcomes import Outcome
 from ..database import get_db
+from ..models.berth import OutletNfcTag
+from ..models.cabinet import Cabinet, Outlet
 from ..models.user import User
+from ..services import command_audit
 from ..services.audit_log import record_action
 from ..services.pedestal_api_factory import PedestalAPIClientFactory, get_pedestal_factory
 from ._cabinet import command, marina_client
@@ -23,13 +34,21 @@ from .auth import get_current_user
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/marinas", tags=["controls"])
 
+Reason = Field(min_length=3, max_length=500,
+               description="Why — required for every operator command (§5.3)")
+
+
+class CommandBody(BaseModel):
+    reason: str = Reason
+
 
 class DenyRequest(BaseModel):
-    reason: Optional[str] = Field(default=None, max_length=500)
+    reason: str = Reason
 
 
 class OutletCommand(BaseModel):
     action: Literal["activate", "stop"]
+    reason: str = Reason
 
 
 def _audit(db, user, marina_id, action, outcome: Outcome, pedestal_id=None, target_id=None,
@@ -44,18 +63,64 @@ def _audit(db, user, marina_id, action, outcome: Outcome, pedestal_id=None, targ
              action, marina_id, target_id, user.id, outcome.code)
 
 
+def _cabinet_for(db: Session, marina_id: int, pedestal_pk: Optional[int]) -> Cabinet:
+    q = db.query(Cabinet).filter(Cabinet.marina_id == marina_id)
+    if pedestal_pk is not None:
+        cab = q.filter(Cabinet.pedestal_pk == pedestal_pk).first()
+    else:
+        cabs = q.order_by(Cabinet.id).all()
+        if len(cabs) > 1:
+            raise HTTPException(status_code=422, detail={
+                "code": "pedestal_required",
+                "sentence": "Marina ima više ormara — naredba mora reći kojem ide (pedestal_id)."})
+        cab = cabs[0] if cabs else None
+    if cab is None:
+        raise HTTPException(status_code=409, detail={
+            "code": "cabinet_not_configured",
+            "sentence": "Ormar nije podešen u ERP-u. Naredba se ne šalje bez zapisa u "
+                        "command_audit.",
+            "endpoint": None, "is_stale": False, "data_as_of": None})
+    return cab
+
+
+def _target(marina_id: int, pedestal_pk: Optional[int], user: User, db: Session,
+            factory: PedestalAPIClientFactory) -> tuple[Cabinet, CabinetClient]:
+    marina_client(marina_id, user, db, factory)        # 404 / access check, as before
+    cab = _cabinet_for(db, marina_id, pedestal_pk)
+    return cab, factory.for_cabinet(cab)
+
+
+async def _send(db, request: Request, user: User, cab: Cabinet, client: CabinetClient, *,
+                endpoint_key: str, path_params: dict, action: str, reason: str, call,
+                outlet_id: Optional[int] = None, tag_source: Optional[str] = None) -> Outcome:
+    row = command_audit.begin(
+        db, cabinet_id=cab.id, outlet_id=outlet_id, endpoint_key=endpoint_key, action=action,
+        actor_type="operator", actor_ref=user.email, reason=reason, tag_source=tag_source,
+        request_url=client.url_for(endpoint_key, **path_params),
+        source_ip=request.client.host if request.client else None)
+    outcome = await call()
+    command_audit.complete(db, row, outcome)
+    return outcome
+
+
 @router.post("/{marina_id}/sessions/{session_id}/allow")
 async def allow_session(
     marina_id: int,
     session_id: int,
+    body: CommandBody,
+    request: Request,
     pedestal_id: Optional[int] = Query(default=None),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     factory: PedestalAPIClientFactory = Depends(get_pedestal_factory),
 ):
-    _, client = marina_client(marina_id, user, db, factory)
-    outcome = await client.allow_session(session_id, db=db)
-    _audit(db, user, marina_id, "allow_session", outcome, pedestal_id, session_id)
+    cab, client = _target(marina_id, pedestal_id, user, db, factory)
+    outcome = await _send(db, request, user, cab, client, endpoint_key="controls.allow",
+                          path_params={"session_id": session_id}, action="allow",
+                          reason=body.reason,
+                          call=lambda: client.allow_session(session_id, db=db))
+    _audit(db, user, marina_id, "allow_session", outcome, pedestal_id, session_id,
+           reason=body.reason)
     return command(outcome)
 
 
@@ -63,14 +128,18 @@ async def allow_session(
 async def deny_session(
     marina_id: int,
     session_id: int,
-    body: DenyRequest = DenyRequest(),
+    body: DenyRequest,
+    request: Request,
     pedestal_id: Optional[int] = Query(default=None),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     factory: PedestalAPIClientFactory = Depends(get_pedestal_factory),
 ):
-    _, client = marina_client(marina_id, user, db, factory)
-    outcome = await client.deny_session(session_id, body.reason, db=db)
+    cab, client = _target(marina_id, pedestal_id, user, db, factory)
+    outcome = await _send(db, request, user, cab, client, endpoint_key="controls.deny",
+                          path_params={"session_id": session_id}, action="deny",
+                          reason=body.reason,
+                          call=lambda: client.deny_session(session_id, body.reason, db=db))
     _audit(db, user, marina_id, "deny_session", outcome, pedestal_id, session_id,
            reason=body.reason)
     return command(outcome)
@@ -80,14 +149,20 @@ async def deny_session(
 async def stop_session(
     marina_id: int,
     session_id: int,
+    body: CommandBody,
+    request: Request,
     pedestal_id: Optional[int] = Query(default=None),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     factory: PedestalAPIClientFactory = Depends(get_pedestal_factory),
 ):
-    _, client = marina_client(marina_id, user, db, factory)
-    outcome = await client.stop_session(session_id, db=db)
-    _audit(db, user, marina_id, "stop_session", outcome, pedestal_id, session_id)
+    cab, client = _target(marina_id, pedestal_id, user, db, factory)
+    outcome = await _send(db, request, user, cab, client, endpoint_key="controls.stop",
+                          path_params={"session_id": session_id}, action="stop",
+                          reason=body.reason,
+                          call=lambda: client.stop_session(session_id, db=db))
+    _audit(db, user, marina_id, "stop_session", outcome, pedestal_id, session_id,
+           reason=body.reason)
     return command(outcome)
 
 
@@ -97,6 +172,7 @@ async def outlet_command(
     pedestal_id: int,
     outlet: str,
     body: OutletCommand,
+    request: Request,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     factory: PedestalAPIClientFactory = Depends(get_pedestal_factory),
@@ -104,12 +180,29 @@ async def outlet_command(
     """Operator path (D3): switch an outlet by its real name, Q1-Q4 / V1-V2.
 
     `pedestal_id` here is the cabinet's numeric PK — the command routes refuse a
-    display_id (NALAZ 3.1), and the contract module refuses to send one.
+    display_id (NALAZ 3.1), and the contract module refuses to send one. On
+    activate, the ERP sends the outlet's tag FROM ITS OWN MAPPING and the audit
+    says so (tag_source='mapping', never 'scan' — §5.3).
     """
-    _, client = marina_client(marina_id, user, db, factory)
-    outcome = await client.socket_cmd(pedestal_id, outlet, body.action, db=db)
+    cab, client = _target(marina_id, pedestal_id, user, db, factory)
+    out_row = (db.query(Outlet).filter(Outlet.cabinet_id == cab.id,
+                                       Outlet.outlet_name == outlet).first())
+    tag = None
+    if out_row is not None and body.action == "activate":
+        t = (db.query(OutletNfcTag).filter(OutletNfcTag.outlet_id == out_row.id,
+                                           OutletNfcTag.active.is_(True)).first())
+        tag = t.uid_primary if t else None
+    water = outlet.startswith("V")
+    key = "controls.water_cmd" if water else "controls.socket_cmd"
+    name = "valve_name" if water else "socket_name"
+    outcome = await _send(
+        db, request, user, cab, client, endpoint_key=key,
+        path_params={"pedestal_id": pedestal_id, name: outlet}, action=body.action,
+        reason=body.reason, outlet_id=out_row.id if out_row else None,
+        tag_source="mapping" if tag else None,
+        call=lambda: client.socket_cmd(pedestal_id, outlet, body.action, nfc_tag_id=tag, db=db))
     _audit(db, user, marina_id, f"outlet_{body.action}", outcome, pedestal_id,
-           outlet=outlet)
+           outlet=outlet, reason=body.reason)
     return command(outcome)
 
 
@@ -117,11 +210,16 @@ async def outlet_command(
 async def run_diagnostics(
     marina_id: int,
     pedestal_id: int,
+    body: CommandBody,
+    request: Request,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     factory: PedestalAPIClientFactory = Depends(get_pedestal_factory),
 ):
-    _, client = marina_client(marina_id, user, db, factory)
-    outcome = await client.run_diagnostics(pedestal_id, db=db)
-    _audit(db, user, marina_id, "run_diagnostics", outcome, pedestal_id)
+    cab, client = _target(marina_id, pedestal_id, user, db, factory)
+    outcome = await _send(db, request, user, cab, client, endpoint_key="diagnostics.run",
+                          path_params={"pedestal_id": pedestal_id}, action="run",
+                          reason=body.reason,
+                          call=lambda: client.run_diagnostics(pedestal_id, db=db))
+    _audit(db, user, marina_id, "run_diagnostics", outcome, pedestal_id, reason=body.reason)
     return command(outcome)

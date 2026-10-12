@@ -1,9 +1,14 @@
 """PostgreSQL database session and base model setup."""
 import logging
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, DeclarativeBase
+from sqlalchemy import create_engine, event
+from sqlalchemy.orm import Session, sessionmaker, DeclarativeBase
 
 from .config import settings
+from .utils.time import refuse_aware_datetimes
+
+# Every session in the process, the app's and the tests' alike (spec §4.0).
+if not event.contains(Session, "before_flush", refuse_aware_datetimes):
+    event.listen(Session, "before_flush", refuse_aware_datetimes)
 
 log = logging.getLogger(__name__)
 

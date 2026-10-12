@@ -59,6 +59,10 @@ class CabinetIn(BaseModel):
     service_password: Optional[str] = None
     erp_api_key: Optional[str] = None
     dock: Optional[str] = None
+    # what THIS cabinet sends as X-API-Key on its webhooks; none -> all refused (§5.2)
+    webhook_key: Optional[str] = None
+    webhook_hmac: bool = False
+    webhook_secret: Optional[str] = None
 
 
 def _cabinet_out(db: Session, c: Cabinet) -> dict:
@@ -67,6 +71,13 @@ def _cabinet_out(db: Session, c: Cabinet) -> dict:
     return {
         "id": c.id, "pedestal_pk": c.pedestal_pk, "display_id": c.display_id,
         "device_type": c.device_type, "base_url": c.base_url, "dock": c.dock,
+        # whether keys are set — never the keys themselves
+        "webhook": {"key_set": c.webhook_key_enc is not None, "hmac": c.webhook_hmac},
+        "collector": {"smart_mode": c.smart_mode,
+                      "last_heartbeat_at": c.last_heartbeat_at.isoformat() + "Z"
+                      if c.last_heartbeat_at else None,
+                      "last_polled_at": c.last_polled_at.isoformat() + "Z"
+                      if c.last_polled_at else None},
         "outlets": [{"id": o.id, "name": o.outlet_name, "medium": o.medium, "phases": o.phases,
                      "rated_amps": o.rated_amps, "rated_lpm": o.rated_lpm}
                     for o in db.query(Outlet).filter(Outlet.cabinet_id == c.id)
@@ -93,7 +104,8 @@ def create_cabinet(marina_id: int, body: CabinetIn, db: Session = Depends(get_db
             db, marina_id=marina_id, pedestal_pk=body.pedestal_pk, display_id=body.display_id,
             device_type=body.device_type, base_url=body.base_url or m.pedestal_api_base_url,
             service_email=email, service_password=password, erp_api_key=body.erp_api_key,
-            dock=body.dock)
+            dock=body.dock, webhook_key=body.webhook_key, webhook_hmac=body.webhook_hmac,
+            webhook_secret=body.webhook_secret)
     except (svc.DomainError, IntegrityError) as exc:
         db.rollback()
         _refuse(exc)

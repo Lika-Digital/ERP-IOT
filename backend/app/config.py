@@ -33,6 +33,23 @@ class Settings(BaseSettings):
     pedestal_api_timeout_seconds: int = 10
     pedestal_api_max_retries: int = 3
 
+    # ── Collector (spec §5.2) — on by default: an ERP that does not collect is broken ──
+    # Tests and one-off tools switch it off; production never does.
+    collector_enabled: bool = True
+
+    # ── Retention, days (spec §4.7) — one number each ─────────────────────────
+    retention_sync_log_days: int = 30
+    retention_session_log_days: int = 90
+    retention_alarm_log_days: int = 400
+    retention_intervals_days: int = 400        # then the monthly aggregate
+    retention_command_audit_days: int = 730
+    retention_audit_log_days: int = 730        # the older control audit, same weight
+    retention_reconciliation_days: int = 90
+    retention_cache_days: int = 30             # cache rows nobody refreshed
+
+    # ── Webhook receiver ──────────────────────────────────────────────────────
+    webhook_max_body_bytes: int = 65536
+
     # ── Service account password encryption ──────────────────────────────────
     # Fernet key — generate with:
     #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"

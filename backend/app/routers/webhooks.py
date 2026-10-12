@@ -1,12 +1,22 @@
 """
-Webhook receiver — receives events from Pedestal SW instances.
+Webhook receivers.
 
-POST /api/webhooks/pedestal/{marina_id}
-- Validates HMAC-SHA256 signature from X-Webhook-Signature header
-- On alarm event → writes to alarm_log
-- On session event → writes to session_log
-- Updates pedestal_cache
-- Broadcasts WebSocket event to connected clients
+POST /api/webhooks/cabinet/{cabinet_id}   (phase 4, spec §5.2) — what the cabinet sends
+  - auth: the X-API-Key this cabinet sends (cabinets.webhook_key_enc), compared in
+    constant time. No key stored, an empty header, a wrong key or an unknown
+    cabinet: the same 401 — the cabinet sends an EMPTY key when none is set on
+    its side (NALAZ 6.1), and an unknown id must not be told apart from a bad key;
+  - ready for HMAC: cabinets.webhook_hmac switches on the X-Webhook-Signature
+    check, per cabinet, without an ERP release (§7.2 R3);
+  - body capped (settings.webhook_max_body_bytes) — a public write path must not
+    grow the database at someone else's pace;
+  - for SPEED only (D7): a session payload updates the ERP session through the
+    same function the reconciler uses, but never marks it reconciled; alarms go
+    to alarm_log once per cabinet alarm id; everything else is counted, not stored.
+
+POST /api/webhooks/pedestal/{marina_id}  (before phase 4) — kept for compatibility,
+  HMAC with marinas.webhook_secret. Since phase 4 it FAILS CLOSED: a marina with
+  no secret refuses everything (it used to accept unsigned writes).
 """
 import hashlib
 import hmac
@@ -18,10 +28,16 @@ from typing import Any, Dict
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
+from sqlalchemy.exc import IntegrityError
+
+from ..config import settings
 from ..database import get_db
+from ..models.cabinet import Cabinet
 from ..models.marina import Marina
 from ..models.cache import AlarmLog, SessionLog, PedestalCache
+from ..services import session_sync
 from ..services.websocket_manager import ws_manager
+from ..utils.encryption import decrypt_password
 from ..utils.time import utcnow
 
 log = logging.getLogger(__name__)
@@ -48,29 +64,32 @@ async def receive_webhook(
     Receive a webhook from a Pedestal SW instance.
     Validates HMAC signature, then persists the event and broadcasts via WebSocket.
     """
-    body = await request.body()
+    body = await _capped_body(request)
 
     # Fetch marina record (needed for webhook_secret)
     marina = db.get(Marina, marina_id)
     if not marina:
         raise HTTPException(status_code=404, detail="Marina not found")
 
-    # Validate signature if the marina has a webhook_secret configured
-    if marina.webhook_secret:
-        if not x_webhook_signature:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Missing X-Webhook-Signature header",
-            )
-        if not _verify_signature(marina.webhook_secret, body, x_webhook_signature):
-            log.warning(
-                f"[WEBHOOK] Invalid signature for marina {marina_id} — "
-                f"signature={x_webhook_signature[:30]}"
-            )
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid webhook signature",
-            )
+    # Fail closed (phase 4): no secret, no writes. Before, a marina without a
+    # secret accepted anything from anyone.
+    if not marina.webhook_secret:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                            detail="Webhook not configured for this marina")
+    if not x_webhook_signature:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing X-Webhook-Signature header",
+        )
+    if not _verify_signature(marina.webhook_secret, body, x_webhook_signature):
+        log.warning(
+            f"[WEBHOOK] Invalid signature for marina {marina_id} — "
+            f"signature={x_webhook_signature[:30]}"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid webhook signature",
+        )
 
     # Parse payload
     try:
@@ -284,3 +303,100 @@ def _write_session_log(
     except Exception as exc:
         log.warning(f"[WEBHOOK] session_log write failed: {exc}")
         db.rollback()
+
+
+# ─── Phase 4: per-cabinet receiver ────────────────────────────────────────────
+
+SESSION_EVENTS = {"session_created", "session_updated", "session_completed", "session_ended",
+                  "session_telemetry"}
+ALARM_EVENTS = {"hardware_alarm", "breaker_alarm", "meter_load_auto_stop",
+                "meter_load_critical", "valve_flow_warning", "marina_door"}
+_REFUSED = "Invalid or missing webhook credentials"
+_NO_KEY = "\x00no-key\x00"     # compared against when nothing is stored: same cost
+
+
+async def _capped_body(request: Request) -> bytes:
+    declared = request.headers.get("content-length")
+    if declared and declared.isdigit() and int(declared) > settings.webhook_max_body_bytes:
+        raise HTTPException(status_code=413, detail="Webhook body too large")
+    body = await request.body()
+    if len(body) > settings.webhook_max_body_bytes:
+        raise HTTPException(status_code=413, detail="Webhook body too large")
+    return body
+
+
+def _cabinet_authenticated(db: Session, cabinet_id: int, api_key: str, signature: str,
+                           body: bytes) -> Cabinet:
+    cab = db.get(Cabinet, cabinet_id)
+    expected = None
+    if cab is not None and cab.webhook_key_enc:
+        try:
+            expected = decrypt_password(cab.webhook_key_enc)
+        except ValueError:
+            expected = None
+    # one comparison whatever happened above, so an unknown cabinet costs the same
+    same = hmac.compare_digest((expected or _NO_KEY).encode(), (api_key or "").encode())
+    if not same or not api_key or expected is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=_REFUSED)
+    if cab.webhook_hmac:
+        try:
+            secret = decrypt_password(cab.webhook_secret_enc)
+        except (ValueError, TypeError):
+            secret = None
+        if not secret or not signature or not _verify_signature(secret, body, signature):
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=_REFUSED)
+    return cab
+
+
+@router.post("/cabinet/{cabinet_id}")
+async def receive_cabinet_webhook(
+    cabinet_id: int,
+    request: Request,
+    x_api_key: str = Header(default=""),
+    x_webhook_signature: str = Header(default=""),
+    db: Session = Depends(get_db),
+):
+    body = await _capped_body(request)
+    cab = _cabinet_authenticated(db, cabinet_id, x_api_key, x_webhook_signature, body)
+    try:
+        payload = json.loads(body)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+    if not isinstance(payload, dict) or not isinstance(payload.get("event"), str):
+        raise HTTPException(status_code=400, detail="Expected {event, data, timestamp}")
+    event = payload["event"]
+    data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+    now = utcnow()
+    stored = "nothing"
+
+    if event in SESSION_EVENTS:
+        db.add(SessionLog(marina_id=cab.marina_id, pedestal_id=cab.pedestal_pk,
+                          session_data=payload, recorded_at=now))
+        # speed only: the same function as the pull, but never "reconciled" (D7)
+        result = (session_sync.apply(db, cab, data, final_by_pull=False, now=now)
+                  if "session_id" in data else "not_a_contract_payload")
+        db.commit()
+        stored = f"session_log; erp session: {result}"
+    elif event in ALARM_EVENTS:
+        alarm_id = data.get("id") if isinstance(data.get("id"), int) else None
+        if alarm_id is not None and db.query(AlarmLog.id).filter(
+                AlarmLog.cabinet_id == cab.id, AlarmLog.cabinet_alarm_id == alarm_id).first():
+            stored = "alarm_log: already known"
+        else:
+            db.add(AlarmLog(marina_id=cab.marina_id, pedestal_id=cab.pedestal_pk,
+                            alarm_data=payload, received_at=now, cabinet_id=cab.id,
+                            cabinet_alarm_id=alarm_id, source="webhook"))
+            try:
+                db.commit()
+                stored = "alarm_log"
+            except IntegrityError:
+                db.rollback()
+                stored = "alarm_log: already known"
+
+    await ws_manager.broadcast_to_marina(cab.marina_id, {
+        "event": "webhook_event",
+        "data": {"marina_id": cab.marina_id, "cabinet_id": cab.id, "event_type": event,
+                 "payload": payload, "timestamp": now.isoformat()},
+    })
+    log.info("[WEBHOOK] cabinet=%s event=%s stored=%s", cab.display_id, event, stored)
+    return {"received": True, "event": event, "stored": stored}

@@ -2,7 +2,7 @@ import { cabinetSentence } from '../api'
 import { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
 import { getPendingSessions, getActiveSessions } from '../api/energy'
-import { allowSession, denySession, stopSession } from '../api/controls'
+import { allowSession, askReason, denySession, NO_REASON, stopSession } from '../api/controls'
 import StaleDataBanner from '../components/ui/StaleDataBanner'
 import ConfirmDialog from '../components/ui/ConfirmDialog'
 
@@ -55,9 +55,11 @@ export default function PedestalControl() {
   }, [fetchData])
 
   const handleAllow = async (sessionId: number, pedestalId: number) => {
+    const reason = askReason(`dopusti sesiju #${sessionId}`)
+    if (!reason) { setError(NO_REASON); return }
     setActionLoading(sessionId)
     try {
-      await allowSession(id, sessionId, pedestalId)
+      await allowSession(id, sessionId, reason, pedestalId)
       await fetchData()
     } catch (err) {
       setError(cabinetSentence(err, 'Failed to allow session.'))
@@ -68,9 +70,10 @@ export default function PedestalControl() {
 
   const handleDeny = async () => {
     if (!denyDialog) return
+    if (denyReason.trim().length < 3) { setError(NO_REASON); return }
     setActionLoading(denyDialog.sessionId)
     try {
-      await denySession(id, denyDialog.sessionId, denyReason || undefined, denyDialog.pedestalId)
+      await denySession(id, denyDialog.sessionId, denyReason.trim(), denyDialog.pedestalId)
       setDenyDialog(null)
       setDenyReason('')
       await fetchData()
@@ -83,9 +86,11 @@ export default function PedestalControl() {
 
   const handleStop = async () => {
     if (!stopDialog) return
+    const reason = askReason(`zaustavi sesiju #${stopDialog.sessionId}`)
+    if (!reason) { setError(NO_REASON); return }
     setActionLoading(stopDialog.sessionId)
     try {
-      await stopSession(id, stopDialog.sessionId, stopDialog.pedestalId)
+      await stopSession(id, stopDialog.sessionId, reason, stopDialog.pedestalId)
       setStopDialog(null)
       await fetchData()
     } catch (err) {

@@ -12,7 +12,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { getDashboard, type PedestalInfo, type PedestalHealth, type SessionInfo } from '../api/dashboard'
 import { getPendingSessions, getActiveSessions } from '../api/energy'
 import { getActiveAlarms, getAlarmLog, acknowledgeAlarm, type AlarmLogEntry } from '../api/alarms'
-import { allowSession, denySession, stopSession } from '../api/controls'
+import { allowSession, askReason, denySession, NO_REASON, stopSession } from '../api/controls'
 import {
   getBerthOccupancy,
   getCameraFrame,
@@ -184,9 +184,11 @@ export default function PedestalDetail() {
   // ── Controls handlers ──────────────────────────────────────────────────────
 
   const handleAllow = async (sessionId: number) => {
+    const reason = askReason(`dopusti sesiju #${sessionId}`)
+    if (!reason) { setControlError(NO_REASON); return }
     setActionLoading(sessionId)
     try {
-      await allowSession(mid, sessionId, pid)
+      await allowSession(mid, sessionId, reason, pid)
       await fetchRealTime()
     } catch (err) { setControlError(cabinetSentence(err, 'Failed to allow session.')) }
     finally { setActionLoading(null) }
@@ -194,9 +196,10 @@ export default function PedestalDetail() {
 
   const handleDeny = async () => {
     if (!denyDialog) return
+    if (denyReason.trim().length < 3) { setControlError(NO_REASON); return }
     setActionLoading(denyDialog.sessionId)
     try {
-      await denySession(mid, denyDialog.sessionId, denyReason || undefined, pid)
+      await denySession(mid, denyDialog.sessionId, denyReason.trim(), pid)
       setDenyDialog(null); setDenyReason('')
       await fetchRealTime()
     } catch (err) { setControlError(cabinetSentence(err, 'Failed to deny session.')) }
@@ -205,9 +208,11 @@ export default function PedestalDetail() {
 
   const handleStop = async () => {
     if (!stopDialog) return
+    const reason = askReason(`zaustavi sesiju #${stopDialog.sessionId}`)
+    if (!reason) { setControlError(NO_REASON); return }
     setActionLoading(stopDialog.sessionId)
     try {
-      await stopSession(mid, stopDialog.sessionId, pid)
+      await stopSession(mid, stopDialog.sessionId, reason, pid)
       setStopDialog(null)
       await fetchRealTime()
     } catch (err) { setControlError(cabinetSentence(err, 'Failed to stop session.')) }

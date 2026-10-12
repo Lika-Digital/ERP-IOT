@@ -4,8 +4,8 @@ There is no price column anywhere here. The cabinet measures; the ERP prices,
 and only in billing_records (D0, D4, §12). A test asserts the absence.
 """
 from sqlalchemy import (
-    BigInteger, Boolean, CheckConstraint, Column, DateTime, ForeignKey, Integer, Numeric,
-    String, Text, UniqueConstraint,
+    BigInteger, Boolean, CheckConstraint, Column, Date, DateTime, ForeignKey, Index, Integer,
+    Numeric, String, Text, UniqueConstraint, false,
 )
 
 from ..database import Base
@@ -37,6 +37,10 @@ class ErpSession(Base):
             "(session_type = 'electricity' AND energy_kwh IS NOT NULL) OR "
             "(session_type = 'water' AND water_liters IS NOT NULL)",
             name="ck_sessions_billed_has_figure"),
+        # D7: the webhook is for speed, billing is reconciled by pull. Only the
+        # reconciler sets reconciled_at, and nothing is billed before it.
+        CheckConstraint("billing_state <> 'billed' OR reconciled_at IS NOT NULL",
+                        name="ck_sessions_billed_is_reconciled"),
     )
 
     id = Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True)
@@ -61,20 +65,100 @@ class ErpSession(Base):
     billing_state = Column(String(20), nullable=False, default="pending",
                            server_default="pending")
     created_at = Column(DateTime, nullable=False, default=utcnow)
+    # set by the pull reconciler when it stored the cabinet's FINAL figure (D7)
+    reconciled_at = Column(DateTime, nullable=True)
+    # R14 c: the ERP confirms explicitly; NULL = not confirmed (or the cabinet has no ack yet)
+    ack_sent_at = Column(DateTime, nullable=True)
 
 
 class ConsumptionInterval(Base):
-    """Register differences. Aggregates sum THESE, never session fields (§4.6, D10)."""
+    """Register differences per OUTLET. Aggregates sum THESE, never session fields (§4.6, D10).
+
+    Phase 4: an interval belongs to an outlet; `session_id` is set only when an
+    ERP session was active on it. Consumption while the cabinet runs on its own
+    (Smart Mode OFF) is stored with standalone = true and NO session: it is
+    shown, never billed (D19). The database refuses both at once.
+
+    energy_kwh = meter_to - meter_from (the cabinet's register, not an estimate
+    from power). An idle stretch is one row whose to_at moves, not a row a minute.
+    """
     __tablename__ = "consumption_intervals"
+    __table_args__ = (
+        CheckConstraint("NOT (standalone AND session_id IS NOT NULL)",
+                        name="ck_intervals_standalone_has_no_session"),
+        CheckConstraint("to_at > from_at", name="ck_intervals_forward"),
+        CheckConstraint("energy_kwh IS NULL OR energy_kwh >= 0",
+                        name="ck_intervals_energy_not_negative"),
+        CheckConstraint("water_liters IS NULL OR water_liters >= 0",
+                        name="ck_intervals_water_not_negative"),
+        CheckConstraint("source IN ('register', 'integrated_legacy', 'unknown')",
+                        name="ck_intervals_source"),
+        Index("ix_consumption_intervals_outlet_to", "outlet_id", "to_at"),
+    )
 
     id = Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True)
+    outlet_id = Column(Integer, ForeignKey("outlets.id", ondelete="CASCADE"), nullable=False)
     session_id = Column(BigInteger, ForeignKey("sessions.id", ondelete="CASCADE"),
-                        nullable=False, index=True)
+                        nullable=True, index=True)
+    standalone = Column(Boolean, nullable=False, default=False, server_default=false())
     from_at = Column(DateTime, nullable=False)
-    to_at = Column(DateTime, nullable=False)
+    to_at = Column(DateTime, nullable=False, index=True)
     energy_kwh = Column(Numeric(12, 4), nullable=True)
     water_liters = Column(Numeric(12, 3), nullable=True)
+    meter_from = Column(Numeric(14, 4), nullable=True)
+    meter_to = Column(Numeric(14, 4), nullable=True)
     source = Column(String(20), nullable=False)
+
+
+class ConsumptionMonthly(Base):
+    """What retention leaves of intervals older than the window (§4.7): one row per
+    outlet, month and standalone flag. Kept for good — it is tiny."""
+    __tablename__ = "consumption_monthly"
+    __table_args__ = (
+        UniqueConstraint("outlet_id", "month", "standalone", name="uq_consumption_monthly"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    outlet_id = Column(Integer, ForeignKey("outlets.id", ondelete="CASCADE"), nullable=False)
+    month = Column(Date, nullable=False)            # first day of the month, UTC
+    standalone = Column(Boolean, nullable=False)
+    energy_kwh = Column(Numeric(14, 4), nullable=True)
+    water_liters = Column(Numeric(14, 3), nullable=True)
+    interval_count = Column(Integer, nullable=False)
+
+
+class OutletMeterState(Base):
+    """The last register reading per outlet — where the next interval starts.
+    One row per outlet, updated in place: it does not grow."""
+    __tablename__ = "outlet_meter_state"
+
+    outlet_id = Column(Integer, ForeignKey("outlets.id", ondelete="CASCADE"), primary_key=True)
+    energy_kwh = Column(Numeric(14, 4), nullable=True)
+    read_at = Column(DateTime, nullable=False)
+    last_interval_id = Column(BigInteger, nullable=True)
+
+
+class ReconciliationRun(Base):
+    """The ERP's own record of "last reconciled", per cabinet (§5.2, §6.3, §7.2 R2)."""
+    __tablename__ = "reconciliation_runs"
+    __table_args__ = (
+        CheckConstraint("mode IN ('range', 'by_user')", name="ck_reconciliation_mode"),
+    )
+
+    id = Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True)
+    cabinet_id = Column(Integer, ForeignKey("cabinets.id", ondelete="CASCADE"), nullable=False,
+                        index=True)
+    mode = Column(String(10), nullable=False)
+    started_at = Column(DateTime, nullable=False, default=utcnow, index=True)
+    finished_at = Column(DateTime, nullable=True)
+    window_from = Column(DateTime, nullable=True)   # range mode: ended_from (inclusive)
+    window_to = Column(DateTime, nullable=True)     # range mode: ended_to (exclusive)
+    ok = Column(Boolean, nullable=False, default=False)
+    sessions_seen = Column(Integer, nullable=False, default=0)
+    sessions_updated = Column(Integer, nullable=False, default=0)
+    sessions_unknown = Column(Integer, nullable=False, default=0)   # not ERP's (D19)
+    sessions_acked = Column(Integer, nullable=False, default=0)
+    error = Column(Text, nullable=True)
 
 
 class CommandAudit(Base):
@@ -105,3 +189,7 @@ class CommandAudit(Base):
     detail = Column(Text, nullable=True)              # the cabinet's text, tells 409s apart
     source_ip = Column(String(64), nullable=True)
     created_at = Column(DateTime, nullable=False, default=utcnow, index=True)
+    # written BEFORE the call and completed after (§5.3): a command that never got
+    # an answer stays visible as outcome NULL
+    outcome = Column(String(40), nullable=True)
+    completed_at = Column(DateTime, nullable=True)

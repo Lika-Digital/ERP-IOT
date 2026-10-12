@@ -49,6 +49,8 @@ EXPECTED_CHECKS = [
     "GET /api/auth/me with token -> 200, same user",
     "GET /api/marinas with token -> 200",
     "GET /api/auth/me without token -> 401",
+    "collector: runs, and is the leader (PostgreSQL: advisory lock)",
+    "POST /api/webhooks/cabinet/1 without the cabinet's key -> 401",
 ]
 
 _passed: list[str] = []
@@ -243,6 +245,28 @@ def main() -> int:
 
             name = EXPECTED_CHECKS[9]
             code, body = http("GET", f"{base}/api/auth/me")
+            if code != 401:
+                fail(name, f"{code} {body[:300]}")
+            ok(name)
+
+            # phase 4: the collector starts with the app (spec §5.2) — not a flag someone
+            # has to remember on the VPS
+            name = EXPECTED_CHECKS[10]
+            deadline = time.monotonic() + 15
+            col = {}
+            while time.monotonic() < deadline:
+                code, body = http("GET", f"{base}/api/health")
+                col = json.loads(body).get("collector", {}) if code == 200 else {}
+                if col.get("running") and col.get("role") == "leader" and col.get("cycles", 0) >= 1:
+                    break
+                time.sleep(0.5)
+            else:
+                fail(name, f"collector state: {col}")
+            ok(name)
+
+            name = EXPECTED_CHECKS[11]
+            code, body = http("POST", f"{base}/api/webhooks/cabinet/1",
+                              {"event": "hardware_alarm", "data": {"id": 1}})
             if code != 401:
                 fail(name, f"{code} {body[:300]}")
             ok(name)

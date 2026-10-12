@@ -74,6 +74,9 @@ class CabinetClient:
         self._token: Optional[str] = None
         self._token_expires: Optional[datetime] = None
         self._not_enabled_until: dict[str, datetime] = {}
+        # sync_log records CHANGES, not a heartbeat (phase 4): with the collector polling,
+        # a row per successful call was 10 400 rows a day of "success" for two cabinets
+        self._last_status: dict[str, str] = {}
 
     # ── plumbing ─────────────────────────────────────────────────────────────
 
@@ -105,6 +108,14 @@ class CabinetClient:
         expires = (exp - TOKEN_MARGIN) if exp else now + FALLBACK_TOKEN_LIFETIME
         self._token, self._token_expires = token, expires
         return token
+
+    def url_for(self, key: str, **path_params) -> str:
+        """The full URL a call would use — for command_audit, written before the call.
+        A path the contract refuses is recorded as such (the call itself will not go)."""
+        try:
+            return f"{self.base_url}{contract.build_path(key, **path_params)}"
+        except contract.ContractError as exc:
+            return f"{self.base_url} <not sent: {exc}>"
 
     def is_known_not_enabled(self, key: str) -> bool:
         until = self._not_enabled_until.get(key)
@@ -143,6 +154,7 @@ class CabinetClient:
             try:
                 token = await self._token_now()
                 if token is None:
+                    self._last_status[key] = "error"
                     _sync_log(db, self.marina_id, key, "error", started, "service-token refused")
                     return Outcome("cabinet_auth_failed", key, http_status=401)
                 async with self._http() as http:
@@ -163,7 +175,9 @@ class CabinetClient:
             status = resp.status_code
             if 200 <= status < 300:
                 data = _json_or_bytes(resp)
-                _sync_log(db, self.marina_id, key, "success", started)
+                if self._last_status.get(key) != "success":
+                    _sync_log(db, self.marina_id, key, "success", started)   # first, or recovered
+                self._last_status[key] = "success"
                 if method == "GET" and db is not None and not isinstance(data, bytes):
                     _cache_put(db, self.marina_id, ckey, data)
                 return Outcome("ok", key, data=data, http_status=status)
@@ -176,10 +190,12 @@ class CabinetClient:
                     continue          # one re-login, does not count as an attempt
                 logger.error("[cabinet] 401 twice for %s %s — wrong service account, or a "
                              "malformed path (doubled ext?)", method, url)
+                self._last_status[key] = "error"
                 _sync_log(db, self.marina_id, key, "error", started, f"401 {detail}")
                 return Outcome("cabinet_auth_failed", key, http_status=401, cabinet_detail=detail)
             if status == 403:
                 self._not_enabled_until[key] = utcnow() + NOT_ENABLED_RETRY
+                self._last_status[key] = "error"
                 _sync_log(db, self.marina_id, key, "error", started, f"403 {detail}")
                 return Outcome("not_enabled", key, http_status=403, cabinet_detail=detail)
             if status == 503:
@@ -200,6 +216,7 @@ class CabinetClient:
                 return Outcome("not_found", key, http_status=404, cabinet_detail=detail)
             if status == 422:
                 logger.error("[cabinet] ERP BUG: 422 from %s %s: %s", method, url, detail)
+                self._last_status[key] = "error"
                 _sync_log(db, self.marina_id, key, "error", started, f"422 {detail}")
                 return Outcome("erp_bug", key, http_status=422, cabinet_detail=detail)
             if status >= 500:
@@ -211,17 +228,23 @@ class CabinetClient:
             logger.error("[cabinet] unexpected HTTP %s from %s %s: %s", status, method, url, detail)
             return Outcome("erp_bug", key, http_status=status, cabinet_detail=detail)
 
+        self._last_status[key] = "error"
         _sync_log(db, self.marina_id, key, "error", started, last_error)
         if method == "GET":
             cached = _cache_get(db, self.marina_id, ckey)
             if cached is not None:
                 data, synced = cached
+                self._last_status[key] = "stale"
                 _sync_log(db, self.marina_id, key, "stale", started)
                 return Outcome("stale", key, data=data, is_stale=True, synced_at=synced,
                                cabinet_detail=last_error)
         return Outcome("no_contact", key, is_stale=True, cabinet_detail=last_error)
 
     # ── channel B — NFC, X-API-Key, direct (§2.4) ────────────────────────────
+
+    @property
+    def has_channel_b(self) -> bool:
+        return bool(self._erp_api_key)
 
     async def _nfc(self, method: str, path: str, key: str, *, body=None, query=None) -> Outcome:
         if not self._erp_api_key:
@@ -286,6 +309,20 @@ class CabinetClient:
                                "nfc.sessions_by_user",
                                query={k: v for k, v in (("status", status), ("limit", limit))
                                       if v is not None})
+
+    async def nfc_sessions_ended_between(self, ended_from: datetime, ended_to: datetime,
+                                         limit: int = 100, offset: int = 0) -> Outcome:
+        """R14 b: sessions by END time, [ended_from, ended_to), one page. Read-only on
+        the cabinet once b is in (that is the point of R14 (4))."""
+        return await self._nfc("GET", contract.NFC_SESSIONS_RANGE, "nfc.sessions_range",
+                               query={"ended_from": _iso_z(ended_from),
+                                      "ended_to": _iso_z(ended_to),
+                                      "limit": limit, "offset": offset})
+
+    async def nfc_ack(self, cabinet_session_ids: list) -> Outcome:
+        """R14 c: the ERP says, explicitly, which sessions it has reconciled."""
+        return await self._nfc("POST", contract.NFC_SESSIONS_ACK, "nfc.ack",
+                               body={"session_ids": list(cabinet_session_ids)})
 
     # ── named reads/commands used by routers ─────────────────────────────────
 
@@ -382,6 +419,17 @@ def _jwt_exp(token: str) -> Optional[datetime]:
     return datetime.fromtimestamp(exp, timezone.utc).replace(tzinfo=None)
 
 
+def _iso_z(dt: datetime) -> str:
+    """Naive UTC -> the cabinet's ISO form with Z."""
+    return dt.replace(microsecond=0).isoformat() + "Z"
+
+
+def is_missing_route(outcome: Outcome) -> bool:
+    """A 404 from FastAPI's router (the route does not exist), not a 404 from a handler
+    ("Session not found"). That is how the ERP learns the cabinet has no R14 b/c yet."""
+    return outcome.code == "not_found" and outcome.cabinet_detail == "Not Found"
+
+
 def _safe_json(resp: httpx.Response):
     try:
         return resp.json()
@@ -424,5 +472,7 @@ def _cache_get(db: Optional[Session], marina_id: int, key: str):
 
 
 def _sync_log(db, marina_id, key, status, started, error=None) -> None:
+    """Errors and stale answers: every time. Success: only the first after a non-success
+    (the caller decides) — when it broke and when it came back, not every poll."""
     from ..services.pedestal_api import _write_sync_log
     _write_sync_log(db, marina_id, key, status, started, utcnow(), error)

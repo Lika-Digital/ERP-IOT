@@ -1,7 +1,7 @@
 # ERP-IOT — dnevnik odluka
 
-**Verzija 2.1 · 2026-10-11** — zamjenjuje verziju od 2026-10-10.
-v2.1 dodaje **D18** (mapiranje na obje strane); prvi isporučeni zip sadržavao je stariju v2 bez njega.
+**Verzija 2.2 · 2026-10-12** — zamjenjuje v2.1 od 2026-10-11.
+v2.2 dodaje **D19** (ventili i utičnice prema Smart Modeu). v2.1 je dodao **D18** (mapiranje na obje strane); prvi isporučeni zip sadržavao je stariju v2 bez njega.
 Ormar (Cloud_IOT) je druga strana ugovora; ovdje se bilježe odluke koje se tiču ERP-a i ono što ERP traži od ormara.
 
 Izvori, redom po težini:
@@ -270,6 +270,12 @@ Cilj (kad se s marinom dogovori proces): Admin unosi u ERP, ERP šalje ormaru pr
 Zahtjev prema ormaru: ext endpoint za čitanje mapiranja (odmah) i za upis (kasnije, bidirectional, s autorom i auditom).
 
 Dok endpoint za čitanje ne postoji, usporedba je **„nije moguće provjeriti"**, ne „usklađeno".
+
+## D19 · Ventili i utičnice prema Smart Modeu
+Ovako ormar radi (odluka 2026-10-12; zatvara pitanje o samostalnom otvaranju ventila):
+- **Smart Mode OFF:** ormar radi samostalno, priključci se otvaraju ručno na ormaru. ERP tu ne upravlja i ne naplaćuje; prikazuje „ormar radi samostalno" (`status_code` `standalone`).
+- **Smart Mode ON:** korisnik može fizički okrenuti ili priklopiti, ali ništa se ne dogodi dok ERP ne pošalje naredbu ili dok se ne pokrene iz UI-a ormara. Nema samostalnog otvaranja.
+- Potrošnja iz Smart Mode OFF razdoblja **nije ERP-ova sesija i ne ide u naplatu.**
 
 ---
 

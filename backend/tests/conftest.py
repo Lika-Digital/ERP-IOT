@@ -16,6 +16,7 @@ os.environ["DEFAULT_ADMIN_EMAIL"] = "admin@test.erp"
 os.environ["DEFAULT_ADMIN_PASSWORD"] = "testadmin1234"
 # Test encryption key — valid Fernet key for testing only
 os.environ["ERP_ENCRYPTION_KEY"] = "ZmDfcTF7_60GrrY167zsiPd67pEvs0aGOv2oasOM1Pg="
+os.environ["COLLECTOR_ENABLED"] = "false"   # tests drive the collector themselves
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -257,12 +258,20 @@ def _clear_cabinets(marina_id):
     from app.models.berth import (Berth, BerthOutlet, BerthOutletCabinet, MappingComparison,
                                   OutletNfcTag)
     from app.models.cabinet import Cabinet, CabinetCapability, Outlet
+    from app.models.cache import AlarmLog
+    from app.models.metering import (CommandAudit, ConsumptionInterval, ErpSession,
+                                     OutletMeterState, ReconciliationRun)
 
     db = TestSession()
     try:
         cab_ids = [c.id for c in db.query(Cabinet).filter(Cabinet.marina_id == marina_id)]
         berth_ids = [b.id for b in db.query(Berth).filter(Berth.marina_id == marina_id)]
         out_ids = [o.id for o in db.query(Outlet).filter(Outlet.cabinet_id.in_(cab_ids))]
+        # phase 4 rows hang off cabinets and outlets too
+        db.query(ConsumptionInterval).filter(ConsumptionInterval.outlet_id.in_(out_ids)).delete()
+        db.query(OutletMeterState).filter(OutletMeterState.outlet_id.in_(out_ids)).delete()
+        for model in (ErpSession, CommandAudit, ReconciliationRun, AlarmLog):
+            db.query(model).filter(model.cabinet_id.in_(cab_ids)).delete()
         db.query(BerthOutlet).filter(BerthOutlet.berth_id.in_(berth_ids)).delete()
         db.query(Berth).filter(Berth.id.in_(berth_ids)).delete()
         db.query(OutletNfcTag).filter(OutletNfcTag.outlet_id.in_(out_ids)).delete()

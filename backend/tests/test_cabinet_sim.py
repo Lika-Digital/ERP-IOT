@@ -139,7 +139,8 @@ def test_sim_00g_state_changing_nfc_reads_are_only_reachable_from_reconciliation
     offenders = []
     for f in app_dir.rglob("*.py"):
         rel = f.relative_to(app_dir).as_posix()
-        if rel == "cabinet/client.py" or rel.startswith("reconciliation/") or "__pycache__" in rel:
+        # the client defines them; the reconciler (phase 4) is the one module that calls them
+        if rel in ("cabinet/client.py", "services/reconciler.py") or "__pycache__" in rel:
             continue
         if "_for_reconciliation" in f.read_text(encoding="utf-8"):
             offenders.append(rel)
@@ -249,10 +250,11 @@ def test_sim_06_smart_mode_off_reads_render_controls_absent(
 
 
 def test_sim_06_and_07_smart_mode_409_is_a_sentence_never_500(client, admin_headers,
-                                                              marina_id, sim):
+                                                              marina_id, sim, cabinet_config):
+    cabinet_config(marina_id, "full", FULL_MAP)
     _switch(sim, "smart_off")
     r = client.post(f"/api/marinas/{marina_id}/pedestals/1/outlets/Q2/cmd",
-                    json={"action": "activate"}, headers=admin_headers)
+                    json={"action": "activate", "reason": "provjera"}, headers=admin_headers)
     assert r.status_code == 409
     assert r.json()["detail"]["code"] == "standalone"
     assert r.json()["detail"]["sentence"]
@@ -260,10 +262,11 @@ def test_sim_06_and_07_smart_mode_409_is_a_sentence_never_500(client, admin_head
 
 # ─── SIM-07  three different 409s ────────────────────────────────────────────
 
-def test_sim_07_no_plug_is_its_own_code(client, admin_headers, marina_id, sim):
+def test_sim_07_no_plug_is_its_own_code(client, admin_headers, marina_id, sim, cabinet_config):
+    cabinet_config(marina_id, "full", FULL_MAP)
     _state(sim).sockets[1].plug_inserted = False
     r = client.post(f"/api/marinas/{marina_id}/pedestals/1/outlets/Q2/cmd",
-                    json={"action": "activate"}, headers=admin_headers)
+                    json={"action": "activate", "reason": "provjera"}, headers=admin_headers)
     assert (r.status_code, r.json()["detail"]["code"]) == (409, "awaiting_plug")
 
 
@@ -295,10 +298,10 @@ def test_sim_08_not_enabled_stops_calling_and_removes_controls(
     cabinet_config(marina_id, "full", FULL_MAP)
     del _state(sim).enabled["controls.socket_cmd"]
     url = f"/api/marinas/{marina_id}/pedestals/1/outlets/Q2/cmd"
-    r1 = client.post(url, json={"action": "activate"}, headers=admin_headers)
+    r1 = client.post(url, json={"action": "activate", "reason": "provjera"}, headers=admin_headers)
     assert (r1.status_code, r1.json()["detail"]["code"]) == (503, "not_enabled")
     n = len([c for c in _state(sim).calls if c[1].endswith("/cmd")])
-    r2 = client.post(url, json={"action": "activate"}, headers=admin_headers)
+    r2 = client.post(url, json={"action": "activate", "reason": "provjera"}, headers=admin_headers)
     assert r2.json()["detail"]["code"] == "not_enabled"
     assert len([c for c in _state(sim).calls if c[1].endswith("/cmd")]) == n, "called again"
     v = _berths(client, admin_headers, marina_id)
@@ -394,7 +397,9 @@ def test_sim_16_socket_the_cabinet_does_not_report_is_absent(
 # ─── §2.5 — no cabinet outcome ever becomes an ERP 500 ───────────────────────
 
 @pytest.mark.parametrize("fault", ["smart_off", "no_plug", "disabled", "down", "unknown_session"])
-def test_no_cabinet_outcome_is_an_erp_500(client, admin_headers, marina_id, sim, fault):
+def test_no_cabinet_outcome_is_an_erp_500(client, admin_headers, marina_id, sim, fault,
+                                         cabinet_config):
+    cabinet_config(marina_id, "full", FULL_MAP)
     st = _state(sim)
     if fault == "smart_off":
         st.smart_mode = False
@@ -405,9 +410,10 @@ def test_no_cabinet_outcome_is_an_erp_500(client, admin_headers, marina_id, sim,
     elif fault == "down":
         st.fail_next = [500] * 50
     urls = [
-        ("post", f"/api/marinas/{marina_id}/pedestals/1/outlets/Q1/cmd", {"action": "activate"}),
-        ("post", f"/api/marinas/{marina_id}/sessions/999/allow", None),
-        ("post", f"/api/marinas/{marina_id}/sessions/999/stop", None),
+        ("post", f"/api/marinas/{marina_id}/pedestals/1/outlets/Q1/cmd",
+         {"action": "activate", "reason": "provjera"}),
+        ("post", f"/api/marinas/{marina_id}/sessions/999/allow", {"reason": "provjera"}),
+        ("post", f"/api/marinas/{marina_id}/sessions/999/stop", {"reason": "provjera"}),
         ("get", f"/api/marinas/{marina_id}/berths", None),
         ("get", f"/api/marinas/{marina_id}/dashboard", None),
         ("get", f"/api/marinas/{marina_id}/energy/daily", None),

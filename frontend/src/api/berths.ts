@@ -56,8 +56,9 @@ export const outletCommand = (
   marinaId: number,
   pedestalPk: number,
   outlet: string,
-  action: 'activate' | 'stop'
+  action: 'activate' | 'stop',
+  reason: string
 ) =>
   api
-    .post(`/marinas/${marinaId}/pedestals/${pedestalPk}/outlets/${outlet}/cmd`, { action })
+    .post(`/marinas/${marinaId}/pedestals/${pedestalPk}/outlets/${outlet}/cmd`, { action, reason })
     .then((r) => r.data)

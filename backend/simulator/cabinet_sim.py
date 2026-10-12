@@ -22,6 +22,14 @@ What it reproduces, deliberately including the cabinet's quirks:
   - valves/config always lists two valves, even on a retrofit cabinet;
   - GET /api/nfc/session/{id} and /sessions/by-user both write last_reconciled_at.
 
+Two contracts for channel B (`SimState.contract`):
+  - "a709cf8" (default) — what the cabinet code does today: no range read, no
+    ack, reads mark sessions reconciled;
+  - "r14" — R14 b and c as accepted 2026-10-12: GET /api/nfc/sessions by END
+    time (ended_from inclusive, ended_to exclusive, limit/offset), POST
+    /api/nfc/sessions/ack, `erp_ref` on the payload, and reads change nothing.
+    The query and body names are the ERP's reading (spec §11 O34).
+
 State is a plain object changed through /__sim/* (test-only routes the real
 cabinet does not have).
 """
@@ -113,6 +121,7 @@ class Socket:
     load_status: str = "normal"
     display_state: str = "idle"
     breaker_state: str = "closed"
+    energy_kwh: float = 1200.0       # the meter REGISTER (monotonic), not a session figure
 
 
 @dataclass
@@ -144,6 +153,8 @@ class SimState:
     fail_next: list = field(default_factory=list)     # e.g. [500, 500] or ["timeout"]
     calls: list = field(default_factory=list)         # (method, path) log for tests
     tokens: dict = field(default_factory=dict)        # token -> expiry
+    contract: str = "a709cf8"                         # channel B: "a709cf8" | "r14"
+    acked: list = field(default_factory=list)         # r14: session ids the ERP confirmed
 
 
 def _all_enabled() -> dict:
@@ -206,6 +217,18 @@ def session_payload(**over) -> dict:
     }
     p.update(over)
     return p
+
+
+def _parse_z(v: str) -> datetime:
+    return datetime.fromisoformat(v.replace("Z", "+00:00")).astimezone(timezone.utc)         .replace(tzinfo=None)
+
+
+def ended_at(p: dict) -> Optional[datetime]:
+    """End of an ended session: activated_at + duration_minutes (the payload has no
+    ended_at key)."""
+    if p.get("status") != "ended" or not p.get("activated_at")             or p.get("duration_minutes") is None:
+        return None
+    return _parse_z(p["activated_at"]) + timedelta(minutes=float(p["duration_minutes"]))
 
 
 def _err(status: int, detail: Any) -> JSONResponse:
@@ -350,13 +373,31 @@ def create_app(state: Optional[SimState] = None) -> FastAPI:
             p = s.nfc_sessions.get(int(m["sid"])) if m["sid"].isdigit() else None
             if p is None:
                 return _err(404, "Session not found")
-            s.reconciled[p["session_id"]] = s.reconciled.get(p["session_id"], 0) + 1  # mark_reconciled
+            if s.contract == "a709cf8":   # mark_reconciled; R14 (4) removes it
+                s.reconciled[p["session_id"]] = s.reconciled.get(p["session_id"], 0) + 1
             return p
         if (m := _match("sessions/by-user/{uid}", rest)) and request.method == "GET":
-            rows = [p for p in s.nfc_sessions.values() if p["customer_id"] == m["uid"]]
-            for p in rows:
-                s.reconciled[p["session_id"]] = s.reconciled.get(p["session_id"], 0) + 1
+            rows = [p for p in s.nfc_sessions.values() if p.get("customer_id") == m["uid"]]
+            if s.contract == "a709cf8":
+                for p in rows:
+                    s.reconciled[p["session_id"]] = s.reconciled.get(p["session_id"], 0) + 1
             return {"user_id": m["uid"], "count": len(rows), "sessions": rows}
+        if s.contract == "r14" and rest == "sessions" and request.method == "GET":
+            q = request.query_params
+            try:
+                frm, to = _parse_z(q["ended_from"]), _parse_z(q["ended_to"])
+            except (KeyError, ValueError):
+                return _err(422, "ended_from and ended_to are required ISO-8601 UTC")
+            limit, offset = int(q.get("limit", 100)), int(q.get("offset", 0))
+            rows = sorted((p for p in s.nfc_sessions.values()
+                           if (e := ended_at(p)) is not None and frm <= e < to),
+                          key=lambda p: (ended_at(p), p["session_id"]))
+            return {"sessions": rows[offset:offset + limit], "total": len(rows),
+                    "limit": limit, "offset": offset}
+        if s.contract == "r14" and rest == "sessions/ack" and request.method == "POST":
+            ids = (await request.json()).get("session_ids") or []
+            s.acked.extend(int(i) for i in ids)
+            return {"acknowledged": len(ids)}
         return _err(404, "Not Found")
 
     # ── /api/ext/* — gateway (A) and direct routes (B) ───────────────────────
@@ -454,7 +495,7 @@ def _load(s: SimState, sock: Socket) -> dict:
         if sock.phases == 3 else "sdm120", "phases": sock.phases, "rated_amps": sock.rated_amps,
         "modbus_address": sock.socket_id, "hw_config_received_at": iso_z(_now()),
         "current_amps": sock.current, "voltage_v": 230.0, "power_kw": sock.power_kw,
-        "power_kw_raw": sock.power_kw, "power_factor": 0.97, "energy_kwh": 1203.75,
+        "power_kw_raw": sock.power_kw, "power_factor": 0.97, "energy_kwh": sock.energy_kwh,
         "frequency_hz": 50.0, "load_pct": round(100 * sock.current / sock.rated_amps, 1),
         "load_status": sock.load_status, "meter_load_updated_at": iso_z(_now()),
         "warning_threshold_pct": 60, "critical_threshold_pct": 80,

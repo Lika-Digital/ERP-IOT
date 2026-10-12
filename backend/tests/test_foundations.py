@@ -259,7 +259,8 @@ def test_tc_erp_auth_02_app_does_not_bind_all_interfaces_by_default():
 _PUBLIC_ROUTES = {
     ("POST", "/api/auth/login"),
     ("POST", "/api/auth/refresh"),
-    ("POST", "/api/webhooks/pedestal/{marina_id}"),  # vlastita provjera X-API-Key
+    ("POST", "/api/webhooks/pedestal/{marina_id}"),  # vlastita provjera HMAC-a
+    ("POST", "/api/webhooks/cabinet/{cabinet_id}"),  # faza 4: vlastita provjera X-API-Key ormara
     ("GET", "/api/health"),
 }
 
@@ -305,10 +306,12 @@ def test_tc_erp_auth_01_protected_count_matches_graph():
     Faza 1: 27 od 31. Faza 2: 28 od 32 — nova zasticena ruta
     POST /api/marinas/{id}/pedestals/{pk}/outlets/{outlet}/cmd (operaterski put, D3).
     Faza 3: 35 od 39 — sedam ruta admina modela (cabinet_admin.py), sve zasticene.
+    Faza 4: 35 od 40 — nova JAVNA ruta POST /api/webhooks/cabinet/{id}, s vlastitom
+    provjerom X-API-Key ormara (test_collection.py tvrdi 401 bez kljuca).
     Broj se mijenja samo svjesno, u istom commitu kao ruta.
     """
     rs = _routes()
-    assert (sum(p for _, _, p in rs), len(rs)) == (35, 39)
+    assert (sum(p for _, _, p in rs), len(rs)) == (35, 40)
 
 
 def test_tc_erp_auth_01_no_credentials_is_strictly_401(client):
@@ -532,7 +535,7 @@ def test_tc_erp_boot_02_boot_check_fails_loudly_when_nothing_comes_up():
         capture_output=True, text=True, env=e, timeout=120,
     )
     assert r.returncode != 0
-    assert "BOOT: 0/10 checks passed" in r.stdout
+    assert "BOOT: 0/12 checks passed" in r.stdout
 
 
 def _junit(tmp_path, tests: int, skipped: int, failures: int = 0) -> Path:
@@ -618,6 +621,14 @@ def test_tc_erp_boot_01b_browser_check_is_a_gate_stage():
     """BOOT-01b (faza 2): pravi preglednik nad pravim bundleom, protiv simulatora."""
     gate = (_REPO / "scripts" / "gate.sh").read_text(encoding="utf-8")
     assert "scripts/browser_check.py" in gate
-    assert 'EXPECTED=6' in gate
+    assert 'EXPECTED=7' in gate
     wf = (_REPO / ".github" / "workflows" / "gate.yml").read_text(encoding="utf-8")
     assert "playwright install" in wf
+
+
+def test_phase4_growth_check_is_a_gate_stage_on_postgres_in_ci():
+    """Faza 4: rast baze izmjeren i ogranicen — u gateu, i u CI-ju na pravom PostgreSQL-u."""
+    gate = (_REPO / "scripts" / "gate.sh").read_text(encoding="utf-8")
+    assert "scripts/growth_check.py --days 7" in gate
+    wf = (_REPO / ".github" / "workflows" / "gate.yml").read_text(encoding="utf-8")
+    assert "GROWTH_DATABASE_URL: postgresql://" in wf

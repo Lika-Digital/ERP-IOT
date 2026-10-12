@@ -51,13 +51,20 @@ def _actor(actor: Optional[str]) -> str:
 def provision_cabinet(db: Session, *, marina_id: int, pedestal_pk: int, display_id: str,
                       device_type: str, base_url: str, service_email: str,
                       service_password: str, erp_api_key: Optional[str] = None,
-                      dock: Optional[str] = None) -> Cabinet:
+                      dock: Optional[str] = None, webhook_key: Optional[str] = None,
+                      webhook_hmac: bool = False,
+                      webhook_secret: Optional[str] = None) -> Cabinet:
     if device_type not in OUTLETS_BY_TYPE:
         raise DomainError(f"device_type must be full|retrofit, got {device_type!r}")
+    if webhook_hmac and not webhook_secret:
+        raise DomainError("webhook_hmac needs webhook_secret")
     cab = Cabinet(marina_id=marina_id, pedestal_pk=pedestal_pk, display_id=display_id,
                   device_type=device_type, base_url=base_url.rstrip("/"),
                   service_email=service_email, service_pw_enc=encrypt_password(service_password),
                   erp_api_key_enc=encrypt_password(erp_api_key) if erp_api_key else None,
+                  webhook_key_enc=encrypt_password(webhook_key) if webhook_key else None,
+                  webhook_hmac=bool(webhook_hmac),
+                  webhook_secret_enc=encrypt_password(webhook_secret) if webhook_secret else None,
                   dock=dock)
     db.add(cab)
     db.flush()

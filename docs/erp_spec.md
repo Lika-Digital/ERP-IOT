@@ -8,7 +8,7 @@ košta jedan redak, a ne razgovor.
     Status faze 1, 2 i 3 ZAVRŠENE, gate i CI zeleni (§10.1–§10.3); faza 4 čeka odobrenje;
            §1 je prazan; O28 (ventili na ormaru 1) čeka nekoga s pristupom ormaru
 
-Čita se uz `docs/inputs/odluke.md` **v2.1** (odluke, obvezujuće — v2.1 dodaje **D18**),
+Čita se uz `docs/inputs/odluke.md` **v2.2** (odluke, obvezujuće — v2.1 dodaje **D18**, v2.2 **D19**),
 `docs/inputs/ormar_gateway_izvjestaj.md` (ugovor s ormarom, file:line),
 `docs/inputs/erp_inventar.md` (stanje repoa 2026-10-10) i
 `docs/inputs/ormar_ui_v2_spec.txt` (specifikacija ormara — uzor forme i izvor rječnika stanja).
@@ -719,8 +719,8 @@ Veza ormar↔ERP, zasebno od veza-stanja: `online | stale | offline | auth_faile
 
 ## §4 Model podataka
 
-PostgreSQL, Alembic. Migracije idu do **`008`**: `005` (faza 1, §4.8), `006` i `008` (O17),
-`007` (model faze 3). Nove počinju od `009`.
+PostgreSQL, Alembic. Migracije idu do **`009`**: `005` (faza 1, §4.8), `006` i `008` (O17),
+`007` (model faze 3), `009` (prikupljanje, faza 4 — §4.0b). Nove počinju od `010`.
 Postojećih tablica je osam (mjereno: `grep -c "__tablename__" backend/app/models/*.py` → 8):
 `users`, `user_marina_access`, `marinas`, `pedestal_cache`, `alarm_log`, `session_log`,
 `sync_log`, `audit_log`.
@@ -739,13 +739,26 @@ Postojećih tablica je osam (mjereno: `grep -c "__tablename__" backend/app/model
 Nacrt tablica u §4.1–§4.7 pisan je prije koda. Gdje se izvedba razlikuje, ovdje je zašto.
 
 > **Odlučeno** · **Vrijeme je naivni UTC** (`DateTime`), kao u cijeloj postojećoj shemi, a ne
-> `TIMESTAMPTZ` iz nacrta.
+> `TIMESTAMPTZ` iz nacrta — **prihvaćeno uz pravilo: svako spremljeno vrijeme je UTC** (tvoja
+> odluka 2026-10-12).
 >
 > **Zašto** · O18 je odlučio da je ugovor sheme naivni UTC (`app/utils/time.utcnow`). Novi stupci
 > s vremenskom zonom uz stare bez nje vratili bi točno onaj `TypeError` (svjestan − naivan) koji
 > je O18 izbjegao.
 >
 > **Ako griješim** · Prijelaz na `timestamptz` je jedna migracija za **sve** tablice odjednom (O30).
+
+**Pravilo „svako spremljeno vrijeme je UTC" drže tri stvari, jer se naivni UTC i naivno lokalno
+vrijeme u bazi ne razlikuju:**
+
+| Gdje | Što odbija |
+|---|---|
+| izvor — ruff `DTZ` (O18) | `datetime.now()` bez zone, `utcnow()`, `today()`, `fromtimestamp()` bez zone; jedini sat je `app/utils/time.utcnow()` |
+| baza — `refuse_aware_datetimes` (`before_flush`, `app/database.py`) | vrijeme **sa zonom** na spremanju. PostgreSQL bi u `timestamp without time zone` **tiho odbacio pomak** — 12:00+02:00 postao bi 12:00. Vrijeme ormara (`…Z`) ulazi kroz `parse_utc`, koji pomak **pretvara**, ne odbacuje |
+| test — `tests/test_utc_storage.py` | pokreće stvarne putanje upisa (rute, servisi, poller, usklađivanje, webhook, retencija) **u procesu čija je lokalna zona UTC+14**, zatim čita **svako** nenulto vrijeme u **svakoj** tablici. Lokalno vrijeme bi bilo 14 h daleko; test dopušta 2 h. Pada i ako proces nije stvarno na +14 (ne može dokazati ništa), i ako je provjereno manje stupaca od popisa koji mora biti napisan |
+
+Usput nađeno i popravljeno: `berth_view.parse_iso` je pomak **odbacivao** (`replace(tzinfo=None)`)
+umjesto da ga pretvori — bezopasno dok ormar piše `Z`, krivo za 2 h čim ne bi.
 
 > **Odlučeno** · `berth_outlets` nosi **kopiju `medium`**, vezanu složenim FK-om
 > `(outlet_id, medium) → outlets(id, medium)`.
@@ -780,6 +793,110 @@ Nacrt tablica u §4.1–§4.7 pisan je prije koda. Gdje se izvedba razlikuje, ov
 > Bez sondi bi „knjiga je append-only" bila tvrdnja iz komentara.
 >
 > **Ako griješim** · Sonda više je jedna funkcija.
+
+### §4.0b · Odluke faze 4 — prikupljanje, usklađivanje, retencija
+
+Migracija `009`. Tablica je 28 (+3: `consumption_monthly`, `outlet_meter_state`,
+`reconciliation_runs`); `consumption_intervals` je **ponovno stvorena** (nitko u nju nije
+pisao), ostale su dobile stupce.
+
+> **Odlučeno** · Interval potrošnje pripada **priključku**, ne sesiji: `outlet_id` obvezan,
+> `session_id` neobavezan, `standalone` (D19). Brojka je **razlika registra brojila**
+> (`meter_to − meter_from`, iz `load.*`), nikad procjena iz snage. Nula se **ne ponavlja**:
+> prazan hod produžuje prethodni nulti interval umjesto da dodaje redak. Registar koji ide
+> unatrag (zamjena brojila) **ne daje negativan interval** — mjerenje kreće ispočetka.
+>
+> **Zašto** · §5.2 traži `load.*` i za ormare bez sesije („povijest za energetskog agenta"),
+> a ta potrošnja nema sesiju; D19 traži da se Smart Mode OFF potrošnja vidi i ne naplati.
+> Sažimanje nule je razlika između 288 redaka na dan po praznom priključku i jednog.
+>
+> **Ako griješim** · Stupac `session_id` je već neobavezan; vratiti obvezu je jedan `CHECK`.
+
+> **Odlučeno** · **Naplata čeka pull** (D7) i to drži baza: `sessions.reconciled_at` postavlja
+> **samo** usklađivač, a `CHECK` odbija `billing_state='billed'` bez njega (sonda). Webhook i
+> pull idu kroz **istu** funkciju (`session_sync.apply`); razlika je jedino tko smije reći
+> „usklađeno".
+>
+> **Zašto** · Webhook nema potpis ni retry (§5.2). Da ista funkcija nije jedna, prva razlika
+> između „brzo" i „mjerodavno" bila bi greška u kodu, ne odluka.
+>
+> **Ako griješim** · Jedan `CHECK`.
+
+> **Odlučeno** · Usklađivač **pita ormar**, ne konfiguraciju: ako `GET /api/nfc/sessions`
+> (R14 b) odgovori 404 „Not Found", ERP prelazi na `by-user` (danas, `a709cf8`) — samo iz
+> usklađivača, za korisnike s otvorenom ili neusklađenom sesijom, noću za sve iz zadnjih 30
+> dana. S R14 b čita po vremenu završetka, nastavlja gdje je stao (preklop 10 min), sa
+> stranicama, i potvrđuje (R14 c, `POST /api/nfc/sessions/ack`) samo sesije čiju je konačnu
+> brojku spremio. Svaki prolaz je redak u `reconciliation_runs` — ERP-ovo „zadnje usklađeno"
+> (§6.3), ne ormarov detektor.
+>
+> **Zašto** · Ormar je R14 prihvatio, ali na Krku još nije. Zastavica bi se morala sjetiti
+> nekoga; 404 zna sam. Imena parametara su ERP-ovo čitanje odgovora ormara (O34).
+>
+> **Ako griješim** · Jedna funkcija (`reconciler._range`).
+
+> **Odlučeno** · Sesija s ormara **koju ERP nije otvorio** (ne pogađa ni `erp_ref`, ni
+> `cabinet_session_id`, ni korisnik + priključak otvorene ERP-ove sesije) **ne uvozi se** —
+> broji se kao `sessions_unknown`.
+>
+> **Zašto** · D19: potrošnja iz Smart Mode OFF razdoblja nije ERP-ova sesija.
+>
+> **Ako griješim** · Uvoz kao `not_billable` je jedna grana.
+
+> **Odlučeno** · `sync_log` bilježi **promjene, ne puls**: greške i keš (`stale`) svaki put,
+> uspjeh samo prvi put i nakon greške.
+>
+> **Zašto** · Izmjereno (`scripts/growth_check.py`): s pollerom, redak po uspješnom pozivu bio
+> je **10 416 redaka na dan** za dva ormara — 312 000 u prozoru od 30 dana, 90 % cijele baze,
+> i to samo riječ „success". Nitko ih ne čita (ni zaslon ni test); vrijeme zadnjeg uspjeha
+> je u `pedestal_cache.last_synced_at`. Poslije: **0 na dan** u mirnom radu.
+>
+> **Ako griješim** · Jedan `if` u `client.call`.
+
+> **Odlučeno** · Prijemnik webhooka je **po ormaru**, `POST /api/webhooks/cabinet/{id}`:
+> ključ koji taj ormar šalje (`cabinets.webhook_key_enc`) uspoređen u konstantnom vremenu;
+> nepoznat ormar, nepostavljen ključ, prazan ključ i krivi ključ daju **isti** 401; HMAC je
+> zastavica po ormaru (`webhook_hmac`), spreman za R3 bez izdanja ERP-a; tijelo do 64 KiB
+> (413). Stari `POST /api/webhooks/pedestal/{marina}` ostaje, ali **odbija sve** kad marina
+> nema tajnu — prije je primao nepotpisane upise od bilo koga.
+>
+> **Zašto** · Ormar šalje **prazan** `X-API-Key` kad ključ nije postavljen (NALAZ 6.1), pa
+> „nema ključa" mora biti odbijanje, ne propust. Javna ruta koja piše u bazu bez gornje
+> granice tijela bila bi rast baze tuđim tempom.
+>
+> **Ako griješim** · Stara ruta se briše kad Krk šalje na novu (O37).
+
+> **Odlučeno** · **Svaka naredba** piše `command_audit` **prije** poziva i dopunjuje ga
+> ishodom (§5.3), s punim URL-om. **Razlog je obvezan za svaku operatersku naredbu** (allow,
+> deny, stop, priključak, dijagnostika) — 422 bez njega, ništa se ne šalje; zaslon ga traži u
+> upitu prije slanja. Ručno paljenje šalje tag iz ERP-ova mapiranja i bilježi
+> `tag_source='mapping'`. Marina **bez ormara u ERP-u ne dobiva naredbu** (409): nema retka
+> uz koji bi se zapisala.
+>
+> **Zašto** · `CHECK` iz faze 3 već odbija operatersku naredbu bez razloga; bez obveznog
+> polja u API-ju svaka bi naredba pala tek u bazi. Redak prije poziva je jedini način da
+> naredba bez odgovora ostane vidljiva.
+>
+> **Ako griješim** · Upit za razlog je `window.prompt` — pravi dijalog i uloge `admin` /
+> `operator` (§5.3 ograda 1) dolaze sa zaslonima (O38).
+
+> **Odlučeno** · Klijent ormara gradi se iz retka **`cabinets`** (`base_url`, servisni račun,
+> ključ kanala B); ormari na istom poslužitelju dijele klijenta i token. Marina bez ormara u
+> ERP-u i dalje čita preko svog URL-a, bez kanala B i bez prikupljanja. (O31 zatvoren.)
+>
+> **Zašto** · Poller iterira ormare; dva izvora istog URL-a bila bi dva tokena i dva keša.
+>
+> **Ako griješim** · `PedestalAPIClientFactory.get_client`.
+
+> **Odlučeno** · Poller se **pali s aplikacijom** (`COLLECTOR_ENABLED`, zadano `true`; testovi
+> ga gase). Skuplja **jedan** proces: na PostgreSQL-u drži savjetodavni lock, drugi proces
+> čeka kao `standby`. Stanje je u `/api/health` (`collector.running`, `role`, `cycles`), a boot
+> provjera traži `leader` — u CI-ju na pravom PostgreSQL-u.
+>
+> **Zašto** · ERP koji ne skuplja je pokvaren, a zastavica koju treba upaliti na VPS-u je
+> zastavica koju će netko zaboraviti. Dva procesa koja skupljaju dala bi dvostruke intervale.
+>
+> **Ako griješim** · Jedna postavka.
 
 ### §4.1 · Uređaji i mogućnosti (D3)
 
@@ -1199,13 +1316,23 @@ command_audit                    -- SVAKA upravljačka naredba (D13 sloj 1)
 
 | Tablica | Prozor | Zašto taj |
 |---|---|---|
-| `sync_log` | **30 dana** | dijagnostika integracije; starije od mjesec nikad nije pogledano |
+| `sync_log` | **30 dana** | dijagnostika integracije; starije od mjesec nikad nije pogledano. Od faze 4 bilježi **promjene**, ne svaki uspješan poziv (§4.0b) |
 | `session_log` (sirovi webhook) | **90 dana** | trag za otklanjanje; mjerodavan zapis je `sessions` |
 | `alarm_log` | **400 dana** | sezona na sezonu, s preklopom |
 | `consumption_intervals` | **400 dana** sirovo, zatim mjesečni agregat | energetski agent (D14) traži povijest |
 | `command_audit` | **2 godine** | sigurnosni dokaz (D13); kraće od toga nije dokaz |
+| `audit_log` (stariji audit upravljanja) | **2 godine** | ista težina kao `command_audit` (faza 4) |
+| `reconciliation_runs` | **90 dana** | ERP-ovo „zadnje usklađeno"; ~194 retka na dan za dva ormara (faza 4) |
+| `pedestal_cache` | **30 dana bez osvježavanja** | ključ uključuje parametre (O20), pa ad-hoc rasponi analitike inače rastu bez kraja (faza 4) |
+| `consumption_monthly`, `outlet_meter_state` | **trajno** | agregat je sitan; stanje brojila je redak po priključku (faza 4) |
 | `sessions`, `credit_ledger`, `billing_records` | **trajno** | računovodstvo |
 | slike kamere | **ne spremaju se** | već je tako: `pedestal_ext.py:114-118` proslijedi bajtove, `pedestal_api.py:397-399` izrijekom ne kešira |
+
+**Izvedeno u fazi 4:** `app/services/retention.py`, dnevno iz pollera; prozori su brojevi u
+`app/config.py` (`RETENTION_*_DAYS`). Intervali stariji od prozora se **u istoj transakciji**
+zbrajaju u `consumption_monthly` i brišu, u komadima od 5000 — prekid ne gubi ni ne broji
+dvaput. Test `test_every_growing_table_has_a_window_or_is_named_as_kept` pada kad se pojavi
+tablica koja nije ni u retenciji ni izrijekom na popisu trajnih.
 
 ### §4.8 · Popravci postojećeg modela (faza 1)
 
@@ -1307,6 +1434,21 @@ funkcija s zastavicom po ormaru, da uključenje ne traži izdanje ERP-a. Današn
 ormar ga još ne koristi.
 
 ### §5.3 · Upravljanje (D5)
+
+> **Odlučeno · D19** (`odluke.md` v2.2, 2026-10-12) · **Ventili i utičnice prema Smart Modeu.**
+> **Smart Mode OFF:** ormar radi samostalno, priključci se otvaraju ručno na ormaru; ERP ne
+> upravlja i ne naplaćuje, prikazuje „ormar radi samostalno" (`status_code` `standalone`).
+> **Smart Mode ON:** korisnik može fizički okrenuti ili priklopiti, ali **ništa se ne dogodi** dok
+> ERP ne pošalje naredbu ili dok se ne pokrene iz UI-a ormara — nema samostalnog otvaranja.
+> **Potrošnja iz Smart Mode OFF razdoblja nije ERP-ova sesija i ne ide u naplatu.**
+>
+> **Zašto** · Tako ormar radi; ovime je zatvoren O28 (auto-otvaranje ventila) bez upita u bazu
+> ormara.
+>
+> **Kako ERP to drži (faza 4)** · Interval potrošnje izmjeren dok je ormar u Smart Mode OFF
+> sprema se s `standalone = true` i **bez sesije** (`session_id` NULL) — vidi se, ne naplaćuje
+> se; baza odbija interval koji je i samostalan i pripisan sesiji (sonda). Sesija s ormara koju
+> ERP nije otvorio (nema `erp_ref` koji ERP zna) **ne uvozi se** kao ERP-ova sesija.
 
 Jedini preduvjet: **Smart Mode ON**. ERP ga čita iz `pedestals.health`
 (`Cloud_IOT/backend/app/routers/pedestal_config.py:419`) — `pedestals.status_ext` ga **ne
@@ -1635,7 +1777,7 @@ na dan čitanja i služi prioritizaciji — **ugovorna provjera je TC-ERP-LIVE-0
 |---|---|---|---|---|
 | ~~R9~~ | ~~NFC payload po ugovoru sa 16 ključeva~~ — **ZATVOREN u v3**: ormar je popravljen prema specifikaciji, ne naplaćuje i ne računa cijenu, vraća stanje brojila. Provjerava se **živim odgovorom** pri spajanju (TC-ERP-LIVE-01), ne commitom | — | — | ništa; BLOK-3 je zatvoren |
 | **R2** | **`GET /api/nfc/sessions/by-user` ne smije mijenjati stanje** — ili, ako mora, to mora biti dokumentirano i idempotentno, a `/reconciliation` i `/divergence` dostupni s `X-API-Key` | vidi okvir ispod | **djelomično** — na Krku ne piše; na `develop` piše | bolji pull u fazi 4; iteracija po korisnicima radi bez toga |
-| **R15** | **Voda u ERP načinu** — ERP šalje `POST /api/nfc/scan`, zatim `water/{V}/cmd activate`; ormarov `OutletActivated` preuzima rezervaciju i upisuje `erp_ref`. **U ERP načinu ormar odbija otvoriti ventil bez važeće rezervacije.** Auto-otvaranje (`valve_configs.auto_activate`) se u smart modu + ERP načinu gasi u kodu | odgovor ormara 2026-10-12; `a709cf8:…/pedestal_config.py:551-572` (zadano `auto_activate = true`) | **provjeriti** — O28 | NFC tok za vodu (§5.1, faza 7) |
+| **R15** | **Voda u ERP načinu** — ERP šalje `POST /api/nfc/scan`, zatim `water/{V}/cmd activate`; ormarov `OutletActivated` preuzima rezervaciju i upisuje `erp_ref`. **U ERP načinu ormar odbija otvoriti ventil bez važeće rezervacije.** Auto-otvaranje (`valve_configs.auto_activate`) se u smart modu + ERP načinu gasi u kodu | odgovor ormara 2026-10-12; `a709cf8:…/pedestal_config.py:551-572` (zadano `auto_activate = true`) | **zatvoreno odlukom D19** (§5.3) — u Smart Mode ON ništa se ne otvara bez naredbe | NFC tok za vodu (§5.1, faza 7) |
 | **R14** | **Pojednostavljenje kanala B po D6.2** — (1) **zakomentirati u kodu, ne brisati** registar naljepnica (`/api/nfc/tags`, `/tags/bulk`) i MODE 2 (`nfc_direct_client_mode`, korisnički tokeni na `/api/nfc/*`), uz oznaku `D6.2 / R14` na svakom mjestu; (2) `POST /api/nfc/scan` prima `{cabinet_id, outlet: "Q1".."V2", erp_ref}` umjesto `{nfc_tag_id, user_id}` — priprema i 5-min čekanje na priklop ostaju; (3) sesija nosi `erp_ref` umjesto `customer_id`/`nfc_user_id`, sve ostalo u ugovoru ostaje; (4) **čitanje bez nuspojava** — `GET /session/{id}` ne upisuje `last_reconciled_at`; ERP potvrđuje obračun izričito, npr. `POST /api/nfc/sessions/ack {session_ids}`, i tek tada detektor `erp_reconciliation_silent` mjeri pravu stvar; (5) `by-user` se zamjenjuje čitanjem po `erp_ref` ili po vremenskom rasponu; (6) ugovor sa 16 ključeva, `test_tc_six_13g` i testovi koji pokrivaju zakomentirani kod usklađuju se u istom commitu, da suite ormara ostane zelen. **Zakomentirati, ne brisati** — tvoja odluka 2026-10-12: kod ostaje u repou ormara za slučaj da zatreba | `a709cf8:…/nfc.py` (11 ruta), `nfc.py:543-685` (`/scan` razrješava tag), `nfc.py:688-759` + `erp_reconciliation.py:112-124` (`mark_reconciled`) | **PRIHVAĆEN 2026-10-12** — redoslijed na ormaru: **a0** gašenje auto-otvaranja ventila (zaseban commit, prvi) → **a** popravak vode (R15), uključujući test za stop sa `socket_id=None` → **b** pojednostavljenje D6.2 s ugovorom i testovima → **c** `ack`. `erp_ref` je **novi stupac uz stare**, povijest se ne prepisuje. Raspon za usklađivanje: **po vremenu završetka**, `ended_from` uključivo, `ended_to` isključivo, **sa stranicama** | ništa danas; kad prođu b i c, otpadaju R2, R2b, O21, O23, §0.7 #1 i iteracija po korisnicima u §5.2 |
 | **R2b** | **`GET /api/nfc/session/{id}` ne smije mijenjati stanje** — isto kao R2 (§0.7 #1) | `a709cf8:…/nfc.py:688-708` → `erp_reconciliation.py:112-124` | nije provjereno | bez toga ERP nema read-only put do pojedine sesije |
 | **R12** | **`GET /api/berths` ne smije stvarati vezove** (O22) | `a709cf8:…/berths.py:213-223` | nije provjereno | ništa |
@@ -2074,14 +2216,19 @@ Nađeno usput. Nije u izvedbi gore; tvoje je da odlučiš prioritet.
 | O23 | TC-ERP-LIVE-01 čita `GET /api/nfc/session/{id}`, koji označi sesiju usklađenom | pri spajanju koristiti probnu sesiju; ili R2b |
 | O24 | `outlet_silent` (rang 2.5) nema izvor na ext API-ju | zahtjev prema ormaru ako zatreba; do tada nikad istinit |
 | O25 | tijela `camera.stream_ext` i `analytics.*` u simulatoru nisu izvađena iz koda | ERP ih prosljeđuje bez čitanja ključeva; LIVE-01 ih može dodati |
-| O26 | `faza/1-temelji` na originu sadrži i dva commita faze 2 | vratiti granu na `ab87e8b` traži force-push — **tvoja odluka**; ništa ne ovisi o tome |
+| O26 | ~~`faza/1-temelji` na originu sadrži i dva commita faze 2~~ — **odlučeno 2026-10-12:** grana ostaje kakva jest, bez force-pusha | zatvoreno |
 | O27 | ~~R14 poslan ormaru?~~ — **odgovoreno 2026-10-12, prihvaćen** (§7.2 R14, R15); što ERP mijenja i kada: O29 | zatvoreno |
-| O28 | ⚠ **Ventili na ormaru 1 možda se otvaraju sami.** Zadano `valve_configs.auto_activate = true` (`a709cf8:…/pedestal_config.py:551-572`); ormar traži da se odmah pokrene `SELECT pedestal_id, valve_id, auto_activate FROM valve_configs;` na ormaru 1. Ako je `1`, voda može teći bez rezervacije i bez naplate | **netko s pristupom bazi ormara** — ERP nema pristup; rezultat upisati ovdje. Ormarov korak a0 to gasi u kodu |
-| O29 | Kad ERP prelazi na novi ugovor kanala B | b (`erp_ref`, raspon) → klijent kanala B, simulator, parser i usklađivanje po rasponu (faza 4); `/scan` po priključku (faza 7). c (`ack`) → `ack` nakon obračuna (faza 4/7). a (voda) → NFC tok za vodu (faza 7). Faze 3 i 4 ne čekaju ormar; faza 4 privremeno koristi `by-user` samo iz usklađivača ako b i c još nisu na Krku |
+| O28 | ~~Ventili na ormaru 1 možda se otvaraju sami (`valve_configs.auto_activate = true`)~~ — **zatvoreno odlukom D19** (§5.3, 2026-10-12), `SELECT` se ne pokreće: u Smart Mode ON ništa se ne otvara bez naredbe ERP-a ili UI-a ormara; u Smart Mode OFF ormar radi samostalno i ERP ne naplaćuje | zatvoreno |
+| O29 | Kad ERP prelazi na novi ugovor kanala B | **faza 4 (gotovo na strani ERP-a):** b (`erp_ref`, raspon po završetku sa stranicama) i c (`ack`) — klijent, simulator (profil `r14`), parser i usklađivač; ERP ih **sam otkriva** (404 → `by-user`). Ostaje: `/scan` po priključku s `erp_ref` (faza 7), a (voda) → NFC tok za vodu (faza 7) |
 | O30 | Vrijeme je naivni UTC u cijeloj shemi (§4.0); `TIMESTAMPTZ` iz nacrta nije primijenjen | jedna migracija za **sve** tablice odjednom, kad se odluči; nikad djelomično |
-| O31 | Klijent ormara spaja se po `marinas.pedestal_api_base_url`, ne po `cabinets.base_url` | faza 4: poller iterira `cabinets`; tada se i tvornica klijenata prebacuje |
+| O31 | ~~Klijent ormara spaja se po `marinas.pedestal_api_base_url`~~ — **zatvoreno u fazi 4**: klijent iz retka `cabinets` (§4.0b); marina bez ormara čita po starom, bez kanala B i prikupljanja | zatvoreno |
 | O32 | Admin modela ima API, nema zaslona (ormari, registar vezova, mapiranje, NFC uvoz) | prvi zaslon kad zatreba instalacija; do tada API + CSV |
 | O33 | Zaslon Vezovi prikazuje imena vezova s ormara, ne `berths.berth_number` iz ERP-a | faza 6 (zauzeće + 2D karta) gradi zaslon na ERP-ovim vezovima |
+| O34 | Imena parametara i oblik odgovora R14 b/c su **ERP-ovo čitanje** ormarova odgovora: `GET /api/nfc/sessions?ended_from&ended_to&limit&offset` → `{sessions, total}`, `POST /api/nfc/sessions/ack {session_ids}` | potvrditi kad ormar objavi b i c; razlika je jedna funkcija (`client.nfc_sessions_ended_between`, `nfc_ack`) i simulator |
+| O35 | Rast baze izmjeren je **simulacijom** (stvarni kod, simulirani ormari i sat, modelirani Krk dan) — ne tjednom na pravom ormaru | prava brojka prije i poslije 7 dana mjeri se na VPS-u nakon faze 5, istim `scripts/growth_check.py` brojanjem po tablici |
+| O36 | Voda nema registar na ext API-ju (`/water` `total_l` je brojač sesije, §0.7) — intervali vode se ne pišu; voda ulazi samo kroz konačnu brojku sesije | zahtjev prema ormaru ako energetskom agentu (D14) zatreba povijest vode |
+| O37 | Stari `POST /api/webhooks/pedestal/{marina}` (HMAC po marini) ostaje uz novi po ormaru, sada zatvoren bez tajne | obrisati kad Krk šalje na `/api/webhooks/cabinet/{id}` |
+| O38 | Razlog naredbe traži se `window.prompt`-om; uloge `admin`/`operator` iz §5.3 (ograda 1) još ne postoje — naredbe smiju `super_admin` i `marina_manager` kao prije | pravi dijalog i uloge dolaze sa zaslonima naplate (faza 7) |
 | O6 | 11 događaja se emitira na ormaru a nije u `EVENT_CATALOG`, među njima **`meter_telemetry_received`** (telemetrija brojila) i **`direct_cmd_sent`** (jedina push-potvrda da je naredba otišla) — NALAZ 6.3 | ERP ih **ne može pretplatiti**; pull ih pokriva. Zahtjev prema ormaru ako ikad zatrebaju |
 | O7 | `usage.*`, `mobile.*`, `qr.*` rute: usmjeravanje je isto na `773bca6` i `main`, ali `usage_history.py` (+30/−7), `mobile.py` (+168/−28) i `qr.py` (+7/−2) su mijenjani — **oblik odgovora se može razlikovati** | izvještaj ormara to nije provjeravao polje po polje; ERP koristi samo `usage.history`, i to za usklađivanje |
 | O8 | Postoji li brojilo na glavnom priključku marine (za vršnu snagu, D14) | energetski agent, faza 9 |

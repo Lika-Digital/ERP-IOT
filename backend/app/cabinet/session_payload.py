@@ -29,6 +29,10 @@ CONTRACT_KEYS = frozenset({
     "consumption_source", "power_kw_current",
 })
 
+# R14 (3): the cabinet adds `erp_ref` — the ERP's own reference, sent in /scan.
+# Known, so not an "unknown key"; when present it may replace customer_id.
+OPTIONAL_KEYS = frozenset({"erp_ref"})
+
 # Dropped at parse time and never stored (spec §2.4, §12). Absence, not ignoring.
 PRICE_KEYS = frozenset({"estimated_cost", "cost", "price", "amount"})
 
@@ -64,6 +68,7 @@ class ParsedSession:
     power_kw_current: Optional[float]   # live only; None = reading refused, NOT 0
     manual_review: bool
     findings: tuple[Finding, ...] = field(default_factory=tuple)
+    erp_ref: Optional[str] = None       # R14: the ERP's reference, when the cabinet has b
 
     @property
     def billable(self) -> bool:
@@ -107,10 +112,11 @@ def parse_session(raw: dict) -> ParsedSession:
         # not even in a finding — whoever reads it later would take it as real.
         findings.append(Finding("price_field_dropped", f"{dropped} field(s)"))
 
-    missing = sorted(CONTRACT_KEYS - payload.keys())
+    required = CONTRACT_KEYS - ({"customer_id"} if payload.get("erp_ref") else set())
+    missing = sorted(required - payload.keys())
     if missing:
         raise PayloadError(f"payload is missing contract keys: {', '.join(missing)}")
-    extra = sorted(payload.keys() - CONTRACT_KEYS)
+    extra = sorted(payload.keys() - CONTRACT_KEYS - OPTIONAL_KEYS)
     if extra:
         findings.append(Finding("unknown_keys", ", ".join(extra)))
 
@@ -181,7 +187,7 @@ def parse_session(raw: dict) -> ParsedSession:
         cabinet_display_id=payload["cabinet_id"],
         outlet_name=outlet,
         session_type=session_type,
-        customer_id=payload["customer_id"],
+        customer_id=payload.get("customer_id"),
         status=status,
         activated_at=payload["activated_at"],
         duration_minutes=_num(payload["duration_minutes"], "duration_minutes"),
@@ -193,4 +199,5 @@ def parse_session(raw: dict) -> ParsedSession:
         power_kw_current=_num(payload["power_kw_current"], "power_kw_current"),
         manual_review=review,
         findings=tuple(findings),
+        erp_ref=payload.get("erp_ref") or None,
     )

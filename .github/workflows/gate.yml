@@ -37,8 +37,12 @@ jobs:
       - name: Frontend from the lock
         run: npm ci
         working-directory: frontend
+      - name: A second database for the growth check
+        run: PGPASSWORD=erp-ci-only psql -h localhost -U erp -d erp_boot -c "CREATE DATABASE erp_growth"
       - name: Gate
         env:
           # boot check migrates and boots against real Postgres here, SQLite locally
           BOOT_DATABASE_URL: postgresql://erp:erp-ci-only@localhost:5432/erp_boot
+          # growth check measures bytes per table on real Postgres (pg_total_relation_size)
+          GROWTH_DATABASE_URL: postgresql://erp:erp-ci-only@localhost:5432/erp_growth
         run: bash scripts/gate.sh

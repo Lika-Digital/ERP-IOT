@@ -2,7 +2,7 @@
 
 The client itself is app/cabinet/client.py (spec §2). What stays here is the
 storage it uses: the last-known response per (marina, cache_key) for the stale
-fallback, and one sync_log row per call.
+fallback, and the sync_log rows (errors, stale, and recoveries — client.py).
 """
 import logging
 from datetime import datetime

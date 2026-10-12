@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
 import { getBerths, outletCommand, BerthView, BerthsResponse, Outlet, BerthColour } from '../api/berths'
+import { askReason, NO_REASON } from '../api/controls'
 import { cabinetSentence } from '../api'
 import StaleDataBanner from '../components/ui/StaleDataBanner'
 import { useWebSocket } from '../hooks/useWebSocket'
@@ -97,10 +98,12 @@ export default function Berths() {
 
   const onCommand = async (berth: BerthView, outlet: Outlet, action: 'activate' | 'stop') => {
     if (berth.pedestal.pk === null) return
+    const reason = askReason(`${outlet.name} ${action === 'activate' ? 'uključi' : 'isključi'}`)
+    if (!reason) { setMessage(NO_REASON); return }
     setBusy(true)
     setMessage(null)
     try {
-      await outletCommand(id, berth.pedestal.pk, outlet.name, action)
+      await outletCommand(id, berth.pedestal.pk, outlet.name, action, reason)
       await fetchData()
     } catch (err) {
       setMessage(cabinetSentence(err, 'Naredba nije izvršena.'))

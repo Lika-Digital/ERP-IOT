@@ -32,8 +32,15 @@ class PedestalCache(Base):
 
 
 class AlarmLog(Base):
-    """Persistent log of all alarm events received via webhook or polled."""
+    """Persistent log of all alarm events received via webhook or polled.
+
+    Phase 4: the poller and the webhook both write here; (cabinet_id,
+    cabinet_alarm_id) makes the second sighting of one alarm a no-op.
+    """
     __tablename__ = "alarm_log"
+    __table_args__ = (
+        UniqueConstraint("cabinet_id", "cabinet_alarm_id", name="uq_alarm_log_cabinet_alarm"),
+    )
 
     id = Column(Integer, primary_key=True)  # the PK is already indexed (spec §11 O17)
     marina_id = Column(Integer, ForeignKey("marinas.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -42,6 +49,9 @@ class AlarmLog(Base):
     received_at = Column(DateTime, nullable=False, default=utcnow, index=True)
     acknowledged_at = Column(DateTime, nullable=True)
     acknowledged_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    cabinet_id = Column(Integer, ForeignKey("cabinets.id", ondelete="CASCADE"), nullable=True)
+    cabinet_alarm_id = Column(Integer, nullable=True)
+    source = Column(String(10), nullable=True)      # 'webhook' | 'poll'
 
 
 class SessionLog(Base):

@@ -1,4 +1,4 @@
-"""Probes that the DATABASE enforces the phase-3 rules (spec §4) — not just the code.
+"""Probes that the DATABASE enforces the rules of spec §4 (phases 3 and 4) — not just the code.
 
 `alembic check` compares tables, columns and indexes, but not CHECK
 constraints or triggers. These probes try to break each rule on a migrated
@@ -115,6 +115,53 @@ def _p_consumption_without_session(c, i):
     _ledger(c, i["customer"], -1, -1, reason="consumption", session=None)
 
 
+def _session(c, i, ref="r1", billing="pending", reconciled=None, energy=None):
+    return c.execute(text(
+        "INSERT INTO sessions (erp_ref, cabinet_id, outlet_id, session_type, status, energy_kwh, "
+        "billing_state, reconciled_at, created_at) VALUES (:r, :c, :o, 'electricity', 'ended', "
+        ":e, :b, :rec, :t) RETURNING id"),
+        dict(r=ref, c=i["cabinet"], o=i["Q1"], e=energy, b=billing, rec=reconciled, t=NOW)
+    ).scalar_one()
+
+
+def _interval(c, i, session=None, standalone=False, frm=NOW, to=None, kwh=0.5):
+    from datetime import timedelta
+    c.execute(text("INSERT INTO consumption_intervals (outlet_id, session_id, standalone, from_at, "
+                   "to_at, energy_kwh, source) VALUES (:o, :s, :st, :f, :t, :e, 'register')"),
+              dict(o=i["Q1"], s=session, st=standalone, f=frm,
+                   t=to or frm + timedelta(minutes=1), e=kwh))
+
+
+def _p_billed_not_reconciled(c, i):
+    # D7: a figure from the webhook alone is never billed
+    _session(c, i, billing="billed", energy=3.25, reconciled=None)
+
+
+def _p_standalone_with_session(c, i):
+    # D19: consumption while the cabinet runs on its own is never an ERP session
+    _interval(c, i, session=_session(c, i), standalone=True)
+
+
+def _p_interval_backwards(c, i):
+    _interval(c, i, to=NOW)
+
+
+def _p_interval_negative(c, i):
+    _interval(c, i, kwh=-0.1)
+
+
+def _p_hmac_without_secret(c, i):
+    c.execute(text("UPDATE cabinets SET webhook_hmac = :t WHERE id = :c"),
+              dict(t=True, c=i["cabinet"]))
+
+
+def _p_alarm_twice(c, i):
+    for _ in range(2):
+        c.execute(text("INSERT INTO alarm_log (marina_id, pedestal_id, alarm_data, received_at, "
+                       "cabinet_id, cabinet_alarm_id, source) VALUES (:m, 1, '{}', :t, :c, 7, "
+                       "'poll')"), dict(m=i["marina"], t=NOW, c=i["cabinet"]))
+
+
 MUST_REFUSE: list[tuple[str, Callable]] = [
     ("credit_ledger: UPDATE is refused (append-only)", _p_ledger_update),
     ("credit_ledger: DELETE is refused (append-only)", _p_ledger_delete),
@@ -127,6 +174,12 @@ MUST_REFUSE: list[tuple[str, Callable]] = [
     ("outlets: water on a Q outlet", _p_water_on_q),
     ("command_audit: operator command without a reason", _p_operator_without_reason),
     ("sessions: billed without a figure (NULL is not 0)", _p_billed_without_figure),
+    ("sessions: billed before the pull reconciled it (D7)", _p_billed_not_reconciled),
+    ("consumption_intervals: standalone AND on an ERP session (D19)", _p_standalone_with_session),
+    ("consumption_intervals: to_at not after from_at", _p_interval_backwards),
+    ("consumption_intervals: a negative register difference", _p_interval_negative),
+    ("cabinets: HMAC switched on without a secret", _p_hmac_without_secret),
+    ("alarm_log: the same cabinet alarm stored twice", _p_alarm_twice),
 ]
 
 
@@ -149,10 +202,21 @@ def _p_policy_defaults(c, i):
     assert (float(row[0]), float(row[1]), int(row[2])) == (1.0, -2.0, 20), row
 
 
+def _p_interval_standalone(c, i):
+    _interval(c, i, standalone=True)
+
+
+def _p_billed_reconciled(c, i):
+    _session(c, i, billing="billed", energy=3.25, reconciled=NOW)
+
+
 MUST_ALLOW: list[tuple[str, Callable]] = [
     ("berth_outlets: a valve MAY be shared between berths (D1)", _p_valve_shared),
     ("contracts: billing_mode defaults to prepaid in the database (D9)", _p_contract_default_prepaid),
     ("marina_billing_policy: defaults 1.00 / -2.00 / 20 %", _p_policy_defaults),
+    ("consumption_intervals: standalone consumption WITHOUT a session is kept (D19)",
+     _p_interval_standalone),
+    ("sessions: billed once reconciled, with a figure", _p_billed_reconciled),
 ]
 
 

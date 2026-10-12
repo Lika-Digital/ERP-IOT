@@ -5,7 +5,7 @@ spec §11 O18); the spec's TIMESTAMPTZ is a later, all-tables migration.
 """
 from sqlalchemy import (
     Boolean, CheckConstraint, Column, DateTime, ForeignKey, Integer, String, Text,
-    UniqueConstraint,
+    UniqueConstraint, false,
 )
 
 from ..database import Base
@@ -21,6 +21,9 @@ class Cabinet(Base):
         UniqueConstraint("marina_id", "display_id", name="uq_cabinets_marina_display"),
         UniqueConstraint("marina_id", "pedestal_pk", name="uq_cabinets_marina_pk"),
         CheckConstraint("device_type IN ('full', 'retrofit')", name="ck_cabinets_device_type"),
+        # HMAC on: there must be a secret to check against (§5.2)
+        CheckConstraint("NOT webhook_hmac OR webhook_secret_enc IS NOT NULL",
+                        name="ck_cabinets_hmac_has_secret"),
     )
 
     id = Column(Integer, primary_key=True)
@@ -34,6 +37,16 @@ class Cabinet(Base):
     erp_api_key_enc = Column(Text, nullable=True)      # channel B; rotation is O9
     dock = Column(String(100), nullable=True)
     created_at = Column(DateTime, nullable=False, default=utcnow)
+    # webhook receiver (§5.2): the X-API-Key THIS cabinet sends, and the HMAC switch.
+    # No key stored -> every webhook from it is refused (the cabinet sends an EMPTY
+    # key when none is set, NALAZ 6.1).
+    webhook_key_enc = Column(Text, nullable=True)
+    webhook_hmac = Column(Boolean, nullable=False, default=False, server_default=false())
+    webhook_secret_enc = Column(Text, nullable=True)
+    # collector state (§5.2): what health said last time
+    smart_mode = Column(Boolean, nullable=True)        # NULL = never read
+    last_heartbeat_at = Column(DateTime, nullable=True)
+    last_polled_at = Column(DateTime, nullable=True)
 
 
 class CabinetCapability(Base):

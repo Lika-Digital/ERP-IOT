@@ -314,6 +314,13 @@ def main() -> int:
             http("PATCH", f"{sim_url}/__sim/credentials", {"email": SIM_EMAIL, "password": SIM_PASSWORD})
             http("PATCH", f"{sim_url}/__sim/socket/2", {"plug_inserted": False})
             load()
+            # phase 4: every operator command asks for a reason first (§5.3, command_audit)
+            asked = []
+
+            def answer(d):
+                asked.append(d.type)
+                d.accept("provjera iz preglednika") if d.type == "prompt" else d.dismiss()
+            page.on("dialog", answer)
             page.click("[data-control='Q2:activate']")
             try:
                 page.wait_for_selector("[data-message]", timeout=10000)
@@ -322,6 +329,8 @@ def main() -> int:
             text = page.inner_text("[data-message]")
             if "kabel" not in text.lower():
                 fail(10, f"expected the no-plug sentence, got {text!r}")
+            if asked != ["prompt"]:
+                fail(10, f"the command was not preceded by a reason prompt: {asked}")
             ok(10)
 
             browser.close()

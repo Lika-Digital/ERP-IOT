@@ -12,7 +12,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from ..utils.time import utcnow
+from ..utils.time import parse_utc, utcnow
 from . import berth_status as bs
 from .cabinet_config import CabinetConfig
 from .outcomes import Outcome
@@ -22,10 +22,10 @@ def parse_iso(v: Optional[str]) -> Optional[datetime]:
     if not v:
         return None
     try:
-        dt = datetime.fromisoformat(v.replace("Z", "+00:00"))
+        # an offset is CONVERTED, not dropped: +02:00 dropped would be 2 h wrong
+        return parse_utc(v)
     except ValueError:
         return None
-    return dt.replace(tzinfo=None) if dt.tzinfo else dt   # naive UTC throughout
 
 
 def parse_occupancy(body: dict) -> list:

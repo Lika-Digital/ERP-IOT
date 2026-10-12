@@ -1,4 +1,5 @@
 """ERP-IOT FastAPI application entry point."""
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -8,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
 from .database import init_db
 from .middleware.security import SecurityMiddleware
+from .services.collector import collector
 from .services.websocket_manager import ws_manager
 from .routers import (auth, marinas, dashboard, controls, energy, alarms, webhooks, pedestal_ext,
                       cabinet_admin)
@@ -24,7 +26,17 @@ log = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     log.info("ERP-IOT starting up...")
     init_db()
+    stop = asyncio.Event()
+    task = None
+    if settings.collector_enabled:
+        # spec §5.2: an ERP that does not collect is broken, so it starts with the app
+        task = asyncio.create_task(collector.run_forever(stop), name="collector")
+    else:
+        log.warning("COLLECTOR_ENABLED is false: nothing is collected from the cabinets")
     yield
+    stop.set()
+    if task is not None:
+        await task
     log.info("ERP-IOT shutting down.")
 
 
@@ -68,6 +80,7 @@ def health():
         "service": "erp-iot",
         "version": "1.0.0",
         "ws_connections": ws_manager.connection_count,
+        "collector": collector.status.public(),
     }
 
 

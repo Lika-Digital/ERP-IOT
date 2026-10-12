@@ -135,6 +135,13 @@ NFC_SESSION = "/api/nfc/session/{session_id}"
 NFC_SESSION_STOP = "/api/nfc/session/{session_id}/stop"
 # Writes last_reconciled_at on the cabinet (§7.2 R2): reconciliation only, never display.
 NFC_SESSIONS_BY_USER = "/api/nfc/sessions/by-user/{user_id}"
+# R14 b and c (accepted 2026-10-12, not on Krk yet). Range by END time: ended_from
+# inclusive, ended_to exclusive, paged. The query and body names are the ERP's
+# reading of the cabinet's answer (spec §11 O34); the reconciler finds out whether
+# the cabinet has them — a 404 "Not Found" means "not yet", and it falls back to
+# by-user.
+NFC_SESSIONS_RANGE = "/api/nfc/sessions"            # GET ?ended_from&ended_to&limit&offset
+NFC_SESSIONS_ACK = "/api/nfc/sessions/ack"          # POST {"session_ids": [...]}
 
 _PARAM = re.compile(r"\{(\w+)\}")
 _OUTLET = re.compile(r"^(Q[1-4]|V[1-2])$")
