@@ -3,7 +3,7 @@
 Što se gradi, u kojem redoslijedu, i svaka odluka izrečena tako da ispravak
 košta jedan redak, a ne razgovor.
 
-    Verzija 5.1 — dopuna v5 istog dana (odluka D6.2, zahtjev R14)
+    Verzija 5.2 — dopuna v5: odgovor ormara na R14 (2026-10-12)
     Datum 2026-10-12
     Status faze 1 i 2 ZAVRŠENE, gate i CI zeleni (§10.1, §10.2); faza 3 čeka odobrenje;
            §1 je prazan, ali §0.7 donosi točke koje traže tvoju potvrdu
@@ -14,6 +14,16 @@ košta jedan redak, a ne razgovor.
 `docs/inputs/ormar_ui_v2_spec.txt` (specifikacija ormara — uzor forme i izvor rječnika stanja).
 
 **Sve u ovom dokumentu je ODLUČENO. §1 je prazan — nema otvorenih blokatora.**
+
+### Što se promijenilo u verziji 5.2
+
+| | |
+|---|---|
+| **R14 prihvaćen** | ormar je odgovorio i prihvatio pojednostavljenje D6.2, s redoslijedom **a0 → a → b → c** (§7.2) |
+| **R15 · NOVO — voda** | `/scan` pa izričito `water/{V}/cmd activate`; u ERP načinu ormar **odbija otvoriti ventil bez važeće rezervacije** |
+| **Auto-otvaranje ventila** | ormar ga gasi u kodu (korak a0). Do tada: **provjera stanja na ormaru 1** — O28 |
+| **`erp_ref`** | novi stupac na ormaru uz stare; povijest se ne prepisuje. ERP ga generira (§4.6) |
+| **Usklađivanje po rasponu** | `ended_from` uključivo, `ended_to` isključivo, sa stranicama — zamjenjuje iteriranje po korisnicima (§5.2) |
 
 ### Što se promijenilo u verziji 5.1
 
@@ -1568,7 +1578,8 @@ na dan čitanja i služi prioritizaciji — **ugovorna provjera je TC-ERP-LIVE-0
 |---|---|---|---|---|
 | ~~R9~~ | ~~NFC payload po ugovoru sa 16 ključeva~~ — **ZATVOREN u v3**: ormar je popravljen prema specifikaciji, ne naplaćuje i ne računa cijenu, vraća stanje brojila. Provjerava se **živim odgovorom** pri spajanju (TC-ERP-LIVE-01), ne commitom | — | — | ništa; BLOK-3 je zatvoren |
 | **R2** | **`GET /api/nfc/sessions/by-user` ne smije mijenjati stanje** — ili, ako mora, to mora biti dokumentirano i idempotentno, a `/reconciliation` i `/divergence` dostupni s `X-API-Key` | vidi okvir ispod | **djelomično** — na Krku ne piše; na `develop` piše | bolji pull u fazi 4; iteracija po korisnicima radi bez toga |
-| **R14** | **Pojednostavljenje kanala B po D6.2** — (1) **zakomentirati u kodu, ne brisati** registar naljepnica (`/api/nfc/tags`, `/tags/bulk`) i MODE 2 (`nfc_direct_client_mode`, korisnički tokeni na `/api/nfc/*`), uz oznaku `D6.2 / R14` na svakom mjestu; (2) `POST /api/nfc/scan` prima `{cabinet_id, outlet: "Q1".."V2", erp_ref}` umjesto `{nfc_tag_id, user_id}` — priprema i 5-min čekanje na priklop ostaju; (3) sesija nosi `erp_ref` umjesto `customer_id`/`nfc_user_id`, sve ostalo u ugovoru ostaje; (4) **čitanje bez nuspojava** — `GET /session/{id}` ne upisuje `last_reconciled_at`; ERP potvrđuje obračun izričito, npr. `POST /api/nfc/sessions/ack {session_ids}`, i tek tada detektor `erp_reconciliation_silent` mjeri pravu stvar; (5) `by-user` se zamjenjuje čitanjem po `erp_ref` ili po vremenskom rasponu; (6) ugovor sa 16 ključeva, `test_tc_six_13g` i testovi koji pokrivaju zakomentirani kod usklađuju se u istom commitu, da suite ormara ostane zelen. **Zakomentirati, ne brisati** — tvoja odluka 2026-10-12: kod ostaje u repou ormara za slučaj da zatreba | `a709cf8:…/nfc.py` (11 ruta), `nfc.py:543-685` (`/scan` razrješava tag), `nfc.py:688-759` + `erp_reconciliation.py:112-124` (`mark_reconciled`) | nije provjereno | ništa danas; kad prođe, otpadaju R2, R2b, O21, O23, §0.7 #1 i iteracija po korisnicima u §5.2 |
+| **R15** | **Voda u ERP načinu** — ERP šalje `POST /api/nfc/scan`, zatim `water/{V}/cmd activate`; ormarov `OutletActivated` preuzima rezervaciju i upisuje `erp_ref`. **U ERP načinu ormar odbija otvoriti ventil bez važeće rezervacije.** Auto-otvaranje (`valve_configs.auto_activate`) se u smart modu + ERP načinu gasi u kodu | odgovor ormara 2026-10-12; `a709cf8:…/pedestal_config.py:551-572` (zadano `auto_activate = true`) | **provjeriti** — O28 | NFC tok za vodu (§5.1, faza 7) |
+| **R14** | **Pojednostavljenje kanala B po D6.2** — (1) **zakomentirati u kodu, ne brisati** registar naljepnica (`/api/nfc/tags`, `/tags/bulk`) i MODE 2 (`nfc_direct_client_mode`, korisnički tokeni na `/api/nfc/*`), uz oznaku `D6.2 / R14` na svakom mjestu; (2) `POST /api/nfc/scan` prima `{cabinet_id, outlet: "Q1".."V2", erp_ref}` umjesto `{nfc_tag_id, user_id}` — priprema i 5-min čekanje na priklop ostaju; (3) sesija nosi `erp_ref` umjesto `customer_id`/`nfc_user_id`, sve ostalo u ugovoru ostaje; (4) **čitanje bez nuspojava** — `GET /session/{id}` ne upisuje `last_reconciled_at`; ERP potvrđuje obračun izričito, npr. `POST /api/nfc/sessions/ack {session_ids}`, i tek tada detektor `erp_reconciliation_silent` mjeri pravu stvar; (5) `by-user` se zamjenjuje čitanjem po `erp_ref` ili po vremenskom rasponu; (6) ugovor sa 16 ključeva, `test_tc_six_13g` i testovi koji pokrivaju zakomentirani kod usklađuju se u istom commitu, da suite ormara ostane zelen. **Zakomentirati, ne brisati** — tvoja odluka 2026-10-12: kod ostaje u repou ormara za slučaj da zatreba | `a709cf8:…/nfc.py` (11 ruta), `nfc.py:543-685` (`/scan` razrješava tag), `nfc.py:688-759` + `erp_reconciliation.py:112-124` (`mark_reconciled`) | **PRIHVAĆEN 2026-10-12** — redoslijed na ormaru: **a0** gašenje auto-otvaranja ventila (zaseban commit, prvi) → **a** popravak vode (R15), uključujući test za stop sa `socket_id=None` → **b** pojednostavljenje D6.2 s ugovorom i testovima → **c** `ack`. `erp_ref` je **novi stupac uz stare**, povijest se ne prepisuje. Raspon za usklađivanje: **po vremenu završetka**, `ended_from` uključivo, `ended_to` isključivo, **sa stranicama** | ništa danas; kad prođu b i c, otpadaju R2, R2b, O21, O23, §0.7 #1 i iteracija po korisnicima u §5.2 |
 | **R2b** | **`GET /api/nfc/session/{id}` ne smije mijenjati stanje** — isto kao R2 (§0.7 #1) | `a709cf8:…/nfc.py:688-708` → `erp_reconciliation.py:112-124` | nije provjereno | bez toga ERP nema read-only put do pojedine sesije |
 | **R12** | **`GET /api/berths` ne smije stvarati vezove** (O22) | `a709cf8:…/berths.py:213-223` | nije provjereno | ništa |
 | **R13** | **`valves/config` neka kaže koliko ventila ormar STVARNO ima** (ili `available`) | `a709cf8:…/pedestal_config.py:551-572` | nije provjereno | ništa — ERP ima `device_type` |
@@ -1970,7 +1981,9 @@ Nađeno usput. Nije u izvedbi gore; tvoje je da odlučiš prioritet.
 | O24 | `outlet_silent` (rang 2.5) nema izvor na ext API-ju | zahtjev prema ormaru ako zatreba; do tada nikad istinit |
 | O25 | tijela `camera.stream_ext` i `analytics.*` u simulatoru nisu izvađena iz koda | ERP ih prosljeđuje bez čitanja ključeva; LIVE-01 ih može dodati |
 | O26 | `faza/1-temelji` na originu sadrži i dva commita faze 2 | vratiti granu na `ab87e8b` traži force-push — **tvoja odluka**; ništa ne ovisi o tome |
-| O27 | **R14 poslan ormaru?** Pojednostavljenje kanala B po D6.2 (§2.4, §7.2) | kad ormar odgovori: u ERP-u se mijenjaju §2.4 (tijelo `/scan`, `customer_id` → `erp_ref`, `ack`), §5.2 (usklađivanje po referenci/vremenu), klijent kanala B i simulator; zatvaraju se O21, O23 |
+| O27 | ~~R14 poslan ormaru?~~ — **odgovoreno 2026-10-12, prihvaćen** (§7.2 R14, R15); što ERP mijenja i kada: O29 | zatvoreno |
+| O28 | ⚠ **Ventili na ormaru 1 možda se otvaraju sami.** Zadano `valve_configs.auto_activate = true` (`a709cf8:…/pedestal_config.py:551-572`); ormar traži da se odmah pokrene `SELECT pedestal_id, valve_id, auto_activate FROM valve_configs;` na ormaru 1. Ako je `1`, voda može teći bez rezervacije i bez naplate | **netko s pristupom bazi ormara** — ERP nema pristup; rezultat upisati ovdje. Ormarov korak a0 to gasi u kodu |
+| O29 | Kad ERP prelazi na novi ugovor kanala B | b (`erp_ref`, raspon) → klijent kanala B, simulator, parser i usklađivanje po rasponu (faza 4); `/scan` po priključku (faza 7). c (`ack`) → `ack` nakon obračuna (faza 4/7). a (voda) → NFC tok za vodu (faza 7). Faze 3 i 4 ne čekaju ormar; faza 4 privremeno koristi `by-user` samo iz usklađivača ako b i c još nisu na Krku |
 | O6 | 11 događaja se emitira na ormaru a nije u `EVENT_CATALOG`, među njima **`meter_telemetry_received`** (telemetrija brojila) i **`direct_cmd_sent`** (jedina push-potvrda da je naredba otišla) — NALAZ 6.3 | ERP ih **ne može pretplatiti**; pull ih pokriva. Zahtjev prema ormaru ako ikad zatrebaju |
 | O7 | `usage.*`, `mobile.*`, `qr.*` rute: usmjeravanje je isto na `773bca6` i `main`, ali `usage_history.py` (+30/−7), `mobile.py` (+168/−28) i `qr.py` (+7/−2) su mijenjani — **oblik odgovora se može razlikovati** | izvještaj ormara to nije provjeravao polje po polje; ERP koristi samo `usage.history`, i to za usklađivanje |
 | O8 | Postoji li brojilo na glavnom priključku marine (za vršnu snagu, D14) | energetski agent, faza 9 |
@@ -2015,7 +2028,7 @@ Nađeno usput. Nije u izvedbi gore; tvoje je da odlučiš prioritet.
 
 ---
 
-`docs/erp_spec.md` · verzija 5.1 · 2026-10-12 · dopuna v5 istog dana (D6.2, R14)
+`docs/erp_spec.md` · verzija 5.2 · 2026-10-12 · dopuna v5: odgovor ormara (R14, R15)
 
 **§1 je prazan — nema otvorenih blokatora.** Šest odluka iz v1 i v2 je odlučeno i primijenjeno
 (§1.0). Referenca za ormar je **ugovor**, a provjerava se **živim odgovorom pri spajanju**
