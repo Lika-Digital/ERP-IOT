@@ -8,7 +8,7 @@ from ..utils.time import utcnow
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)  # the PK is already indexed (spec §11 O17)
     email = Column(String(320), unique=True, nullable=False, index=True)
     password_hash = Column(String(500), nullable=False)
     full_name = Column(String(200), nullable=True)

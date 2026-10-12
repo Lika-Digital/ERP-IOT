@@ -531,7 +531,7 @@ def test_tc_erp_boot_02_boot_check_fails_loudly_when_nothing_comes_up():
         capture_output=True, text=True, env=e, timeout=120,
     )
     assert r.returncode != 0
-    assert "BOOT: 0/8 checks passed" in r.stdout
+    assert "BOOT: 0/9 checks passed" in r.stdout
 
 
 def _junit(tmp_path, tests: int, skipped: int, failures: int = 0) -> Path:

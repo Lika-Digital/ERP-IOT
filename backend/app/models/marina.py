@@ -7,7 +7,7 @@ from ..utils.time import utcnow
 class Marina(Base):
     __tablename__ = "marinas"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)  # the PK is already indexed (spec §11 O17)
     name = Column(String(200), nullable=False)
     location = Column(String(500), nullable=True)
     timezone = Column(String(100), nullable=False, default="UTC")

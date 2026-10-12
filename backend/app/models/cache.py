@@ -16,7 +16,7 @@ class PedestalCache(Base):
         UniqueConstraint("marina_id", "cache_key", name="uq_pedestal_cache_marina_key"),
     )
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)  # the PK is already indexed (spec §11 O17)
     marina_id = Column(Integer, ForeignKey("marinas.id", ondelete="CASCADE"), nullable=False, index=True)
     pedestal_id = Column(Integer, nullable=True, index=True)
     cache_key = Column(String(255), nullable=True)
@@ -35,7 +35,7 @@ class AlarmLog(Base):
     """Persistent log of all alarm events received via webhook or polled."""
     __tablename__ = "alarm_log"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)  # the PK is already indexed (spec §11 O17)
     marina_id = Column(Integer, ForeignKey("marinas.id", ondelete="CASCADE"), nullable=False, index=True)
     pedestal_id = Column(Integer, nullable=False, index=True)
     alarm_data = Column(JSON, nullable=False)  # Raw alarm payload from Pedestal SW
@@ -48,7 +48,7 @@ class SessionLog(Base):
     """Log of all session events forwarded from Pedestal SW via webhooks."""
     __tablename__ = "session_log"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)  # the PK is already indexed (spec §11 O17)
     marina_id = Column(Integer, ForeignKey("marinas.id", ondelete="CASCADE"), nullable=False, index=True)
     pedestal_id = Column(Integer, nullable=False, index=True)
     session_data = Column(JSON, nullable=False)  # Raw session payload
@@ -59,7 +59,7 @@ class SyncLog(Base):
     """Tracks every API call made to each marina's Pedestal SW."""
     __tablename__ = "sync_log"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)  # the PK is already indexed (spec §11 O17)
     marina_id = Column(Integer, ForeignKey("marinas.id", ondelete="CASCADE"), nullable=False, index=True)
     sync_type = Column(String(100), nullable=False)  # e.g. 'list_pedestals', 'get_health'
     status = Column(String(50), nullable=False)  # 'success' | 'error' | 'stale'
@@ -72,7 +72,7 @@ class AuditLog(Base):
     """Audit trail for all control actions (allow/deny/stop) performed by users."""
     __tablename__ = "audit_log"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)  # the PK is already indexed (spec §11 O17)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     marina_id = Column(Integer, ForeignKey("marinas.id", ondelete="CASCADE"), nullable=False, index=True)
     pedestal_id = Column(Integer, nullable=True)

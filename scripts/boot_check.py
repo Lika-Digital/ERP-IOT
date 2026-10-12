@@ -40,6 +40,7 @@ STARTUP_TIMEOUT_S = 40
 
 EXPECTED_CHECKS = [
     "migration: alembic upgrade head on empty database",
+    "migration: alembic check - models and migrations agree (O17)",
     "negative: without JWT_SECRET the server does not come up",
     "server: uvicorn comes up",
     "GET /api/health -> 200, status ok",
@@ -124,8 +125,21 @@ def main() -> int:
             fail(name, r.stderr.strip()[-2000:])
         ok(name)
 
-        # ── 2. negative: no JWT_SECRET -> must not come up ───────────────────
+        # ── 1b. the models describe exactly what the migrations built ──────
+        # A model column no migration creates passes create_all-based tests and
+        # breaks the first real deployment. (spec §11 O17)
         name = EXPECTED_CHECKS[1]
+        r = subprocess.run(
+            [sys.executable, "-m", "alembic", "check"],
+            cwd=str(BACKEND), capture_output=True, text=True,
+            env={**base_env(db_url), "JWT_SECRET": "boot-migration-only"},
+        )
+        if r.returncode != 0:
+            fail(name, (r.stdout + r.stderr).strip()[-2000:])
+        ok(name)
+
+        # ── 2. negative: no JWT_SECRET -> must not come up ───────────────────
+        name = EXPECTED_CHECKS[2]
         port = free_port()
         p = subprocess.Popen(uvicorn_cmd(port), cwd=tmp, env=base_env(db_url),
                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
@@ -154,7 +168,7 @@ def main() -> int:
         srv = subprocess.Popen(uvicorn_cmd(port), cwd=tmp, env=env,
                                stdout=log_f, stderr=subprocess.STDOUT)
         try:
-            name = EXPECTED_CHECKS[2]
+            name = EXPECTED_CHECKS[3]
             deadline = time.monotonic() + STARTUP_TIMEOUT_S
             up = False
             while time.monotonic() < deadline:
@@ -172,13 +186,13 @@ def main() -> int:
                            + log_path.read_text(encoding="utf-8")[-2000:])
             ok(name)
 
-            name = EXPECTED_CHECKS[3]
+            name = EXPECTED_CHECKS[4]
             code, body = http("GET", f"{base}/api/health")
             if code != 200 or json.loads(body).get("status") != "ok":
                 fail(name, f"{code} {body[:300]}")
             ok(name)
 
-            name = EXPECTED_CHECKS[4]
+            name = EXPECTED_CHECKS[5]
             code, body = http("POST", f"{base}/api/auth/login",
                               {"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD})
             token = json.loads(body).get("access_token") if code == 200 else None
@@ -186,19 +200,19 @@ def main() -> int:
                 fail(name, f"{code} {body[:300]}")
             ok(name)
 
-            name = EXPECTED_CHECKS[5]
+            name = EXPECTED_CHECKS[6]
             code, body = http("GET", f"{base}/api/auth/me", token=token)
             if code != 200 or json.loads(body).get("email") != ADMIN_EMAIL:
                 fail(name, f"{code} {body[:300]}")
             ok(name)
 
-            name = EXPECTED_CHECKS[6]
+            name = EXPECTED_CHECKS[7]
             code, body = http("GET", f"{base}/api/marinas", token=token)
             if code != 200:
                 fail(name, f"{code} {body[:300]}")
             ok(name)
 
-            name = EXPECTED_CHECKS[7]
+            name = EXPECTED_CHECKS[8]
             code, body = http("GET", f"{base}/api/auth/me")
             if code != 401:
                 fail(name, f"{code} {body[:300]}")
