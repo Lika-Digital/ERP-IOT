@@ -3,18 +3,30 @@
 Što se gradi, u kojem redoslijedu, i svaka odluka izrečena tako da ispravak
 košta jedan redak, a ne razgovor.
 
-    Verzija 8 — zamjenjuje v7 od 2026-10-12
+    Verzija 9 — zamjenjuje v8 od 2026-10-12
     Datum 2026-10-12
-    Status faze 1–4 ZAVRŠENE i PRIHVAĆENE (§10.1–§10.4); sljedeća je faza 4.5 · LIVE lokalno
-           (§10.5) — čeka tvoju potvrdu plana; §1 je prazan
+    Status faze 1–4 ZAVRŠENE i PRIHVAĆENE (§10.1–§10.4); plan v8 POTVRĐEN; faza 4.5 · LIVE
+           lokalno (§10.5) čeka tvoju potvrdu da je priprema (a) gotova; §1 je prazan
 
-Čita se uz `docs/inputs/odluke.md` **v2.3** (odluke, obvezujuće — v2.1 dodaje **D18**, v2.2 **D19**,
-v2.3 ispravak mreže u **D13**),
+Čita se uz `docs/inputs/odluke.md` **v2.4** (odluke, obvezujuće — v2.1 dodaje **D18**, v2.2 **D19**,
+v2.3 ispravak mreže u **D13**, v2.4 **D20**),
 `docs/inputs/ormar_gateway_izvjestaj.md` (ugovor s ormarom, file:line),
 `docs/inputs/erp_inventar.md` (stanje repoa 2026-10-10) i
 `docs/inputs/ormar_ui_v2_spec.txt` (specifikacija ormara — uzor forme i izvor rječnika stanja).
 
 **Sve u ovom dokumentu je ODLUČENO. §1 je prazan — nema otvorenih blokatora.**
+
+### Što se promijenilo u verziji 9
+
+| | |
+|---|---|
+| **Plan v8 potvrđen** | 4.5 s oba odstupanja (webhook tek s VPS-om, poller preko noći); VPS potvrđen (frontend iz CI-ja, swap 1 GB); oba prijedloga redoslijeda prihvaćena |
+| **D20 · NOVO** (`odluke.md` v2.4) | dvije uloge (Admin, Marina Manager), lozinka + **obavezan TOTP 2FA**, prvi admin preko jednokratnog linka, Postgres bez lozinke (Unix socket, peer), samo ljudske lozinke su lozinke — §4.9, §5.3, §7.1, §8.3, §8.4, §10 |
+| **O38 zatvoren** | uloge iz §5.3 su D20: ručno paljenje uz razlog smiju Admin i Marina Manager |
+| **O36 / R16** | voda je **za naplatu riješena** (registar stiže u sesiji); R16 ostaje kao zahtjev **za prikaz, nizak prioritet, ne blokira fazu 7** |
+| **O16** | lokalni Postgres: lozinka promijenjena, sluša samo na localhostu — zatvoreno; `Admin1234!` maknut s popisa blokatora (admin račun zamjenjuje D20) |
+| **Gate** | ostaje: pre-commit brz, rast u pre-pushu (2 dana) i CI-ju (7 dana) |
+| **§10.6** | raspored s D20: javno izlaganje tek kad je D20 u gateu |
 
 ### Što se promijenilo u verziji 8
 
@@ -1368,6 +1380,38 @@ zbrajaju u `consumption_monthly` i brišu, u komadima od 5000 — prekid ne gubi
 dvaput. Test `test_every_growing_table_has_a_window_or_is_named_as_kept` pada kad se pojavi
 tablica koja nije ni u retenciji ni izrijekom na popisu trajnih.
 
+### §4.9 · Korisnici, 2FA i prvi admin (D20) — model za fazu 5
+
+```
+users                          -- postojeća; dodaje se:
+  role            TEXT NOT NULL      -- 'admin' | 'marina_manager'   (CHECK; mapiranje §5.3)
+  totp_secret_enc TEXT               -- Fernet; NULL dok 2FA nije povezan
+  totp_confirmed_at TIMESTAMP        -- NULL = korisnik se NE MOŽE prijaviti do kraja (samo
+                                     --        ekran povezivanja 2FA)
+  totp_last_step  BIGINT             -- zadnji iskorišteni 30-s korak: isti kod ne vrijedi dvaput
+  failed_count    INT NOT NULL 0     -- uzastopni neuspjesi (lozinka ILI 2FA)
+  locked_until    TIMESTAMP          -- privremeno zaključavanje
+  password_hash   TEXT               -- NULL dok prvi admin ne postavi lozinku
+
+user_backup_codes              -- jednokratni rezervni kodovi
+  user_id, code_hash (bcrypt), used_at          -- prikazani JEDNOM, pri generiranju
+
+setup_tokens                   -- jednokratni link za prvog admina (i za nove korisnike)
+  token_hash (sha256), user_id, expires_at, used_at   -- token se nikad ne sprema u čistom
+
+auth_audit                     -- svaka prijava, neuspjeh, zaključavanje, reset 2FA
+  user_id NULL, email_tried, event, source_ip, created_at   -- retencija 2 godine (§4.7)
+```
+
+> **Odlučeno** · TOTP po **RFC 6238** izveden u kodu (HMAC-SHA1, 30 s, 6 znamenki, prozor ±1
+> korak), provjeren **testnim vektorima iz RFC-a**; ne nova ovisnost.
+>
+> **Zašto** · To je dvadesetak redaka i `hmac` iz standardne biblioteke; svaka ovisnost je
+> pinana stvar više za pratiti (D13 sloj 4). Testni vektori RFC-a su bolji dokaz od
+> „biblioteka je popularna".
+>
+> **Ako griješim** · `pyotp`, pinan u locku, iza iste funkcije.
+
 ### §4.8 · Popravci postojećeg modela (faza 1)
 
 > **Odlučeno** · `pedestal_cache` prestaje ključati redove hashem; dobiva pravi stupac
@@ -1501,12 +1545,23 @@ vraća** (NALAZ 2.2), pa je `health` jedini izvor.
 Svaka naredba piše redak u `command_audit` **prije** poziva i dopunjuje ga ishodom — da
 naredba koja nikad nije dobila odgovor ostane vidljiva.
 
+#### Uloge (D20) — mapiranje postojećih
+
+| Uloga po D20 | Danas u kodu | Smije | Ne smije |
+|---|---|---|---|
+| **Admin** | `super_admin` | sve: ormari, vezovi, mapiranje, NFC uvoz, tarife, servisni računi ormara, korisnici, reset 2FA drugima — i sve što smije Marina Manager, u svim marinama | — |
+| **Marina Manager** | `marina_manager` | vezovi, sesije, kredit (dopuna), upravljanje utičnicama i ventilima, ručno paljenje uz razlog (§5.3, 1.1) — **samo u marinama koje mu je Admin dodijelio** (`user_marina_access`) | vidjeti ili mijenjati konfiguraciju i korisnike |
+
+`operator` u `command_audit.actor_type` **nije uloga** nego vrsta aktera („naredbu je zadao
+čovjek u ERP-u", nasuprot `customer_nfc` i `erp_auto`) i ostaje. Migracija faze 5 preimenuje
+`super_admin` → `admin` i doda `CHECK (role IN ('admin','marina_manager'))`. **O38 zatvoren.**
+
 #### Ručno paljenje iz ERP-a — odlučeno kao (a), uz tri ograde
 
 > **Odlučeno** · Operater smije upaliti priključak bez skeniranja. ERP tada šalje
 > `nfc_tag_id` **iz vlastitog mapiranja** (`outlet_nfc_tags`), i vrijede tri ograde:
-> **(1)** samo uloge **`admin`** i **`operator`** — `marina_manager` bez te uloge tu kontrolu
-> **ne vidi**; **(2)** **razlog je obvezan** i unosi se u dijalogu, bez njega se naredba ne
+> **(1)** samo prijavljeni korisnik s ulogom **Admin** ili **Marina Manager** (D20 — Marina
+> Manager smije ručno paljenje uz razlog; ispravak v9, prije „admin i operator"); **(2)** **razlog je obvezan** i unosi se u dijalogu, bez njega se naredba ne
 > šalje (`command_audit.reason` ima `CHECK` za `actor_type='operator'`); **(3)** audit zapisuje
 > **`tag_source='mapping'`**, nikad `'scan'`.
 >
@@ -1766,7 +1821,7 @@ TLS je na Cloudflareu za javni UI. ACL prijedlog (JSON) i nftables pravila su ar
 ### §7.1 · ERP strana — slojevi 0–2 (D13)
 
 **Sloj 0 · higijena** — dio postavljanja VPS-a, prije javnog izlaganja (§8):
-MFA na ERP adminu, Tailscale i Teltonika RMS računu; Tailscale odobravanje uređaja + tailnet
+**obavezan TOTP 2FA za svakog korisnika ERP-a (D20)**, MFA na Tailscale i Teltonika RMS računu; Tailscale odobravanje uređaja + tailnet
 lock; **Tailscale ACL po §7.0** — ERP → ormar samo nginx `:80`, ormar → ERP **samo port
 webhooka** (ispravak: do v7 „ormar ↛ ERP", ali webhook ide upravo tim smjerom), ormar ↛ ormar;
 servisni račun **po ormaru** s minimalnim Gateway pravima (§2.3); **pinane verzije
@@ -1790,6 +1845,18 @@ jedinstvene po ormaru**.
 >
 > **Ako griješim** · Jedan `raise` manje; razvoj dobiva `.env.example` s praznom vrijednošću
 > i jednu naredbu za generiranje.
+
+**Prijava (D20)** — korisnik + lozinka, zatim TOTP ili jednokratni rezervni kod:
+
+| Pravilo | Kako |
+|---|---|
+| isti odgovor za svaki neuspjeh | 401 „Invalid email or password" za nepoznat e-mail, krivu lozinku, ugašen račun **i** zaključan račun; u 2FA koraku jedna poruka za krivi, istekli, već iskorišteni kod — razlog samo u `auth_audit` (O14, O15) |
+| ograničenje pokušaja | 5 uzastopnih neuspjeha (lozinka i 2FA se zbrajaju) → zaključano 15 min; brojač po računu u bazi, uz to po IP-u u nginxu/CrowdSecu |
+| 2FA korak | lozinka daje samo kratki token **s opsegom `mfa`** (5 min) koji ne otvara nijednu drugu rutu; pravi token tek nakon koda |
+| ponovljeni kod | isti 30-s korak ne vrijedi dvaput (`totp_last_step`) |
+| rezervni kodovi | 10 kodova, prikazani jednom, spremljeni kao bcrypt hash, svaki jednokratan |
+| reset 2FA | samo Admin, za drugog korisnika, uz razlog i `auth_audit`; korisnik pri sljedećoj prijavi povezuje novi |
+| bez 2FA nema rada | korisnik s nepovezanim 2FA vidi samo ekran povezivanja — test prolazi sve zaštićene rute s takvim tokenom i traži 401/403 |
 
 **Sloj 1 · klasična obrana:** `nftables` default-deny; SSH samo ključevi; CrowdSec (engine +
 bouncer); Cloudflare ispred ERP UI-a (WAF, Access za admin); rate limiting; **audit log svake
@@ -1836,7 +1903,7 @@ na dan čitanja i služi prioritizaciji — **ugovorna provjera je TC-ERP-LIVE-0
 | **R2** | **`GET /api/nfc/sessions/by-user` ne smije mijenjati stanje** — ili, ako mora, to mora biti dokumentirano i idempotentno, a `/reconciliation` i `/divergence` dostupni s `X-API-Key` | vidi okvir ispod | **djelomično** — na Krku ne piše; na `develop` piše | bolji pull u fazi 4; iteracija po korisnicima radi bez toga |
 | **R15** | **Voda u ERP načinu** — ERP šalje `POST /api/nfc/scan`, zatim `water/{V}/cmd activate`; ormarov `OutletActivated` preuzima rezervaciju i upisuje `erp_ref`. **U ERP načinu ormar odbija otvoriti ventil bez važeće rezervacije.** Auto-otvaranje (`valve_configs.auto_activate`) se u smart modu + ERP načinu gasi u kodu | odgovor ormara 2026-10-12; `a709cf8:…/pedestal_config.py:551-572` (zadano `auto_activate = true`) | **zatvoreno odlukom D19** (§5.3) — u Smart Mode ON ništa se ne otvara bez naredbe | NFC tok za vodu (§5.1, faza 7) |
 | **R14** | **Pojednostavljenje kanala B po D6.2** — (1) **zakomentirati u kodu, ne brisati** registar naljepnica (`/api/nfc/tags`, `/tags/bulk`) i MODE 2 (`nfc_direct_client_mode`, korisnički tokeni na `/api/nfc/*`), uz oznaku `D6.2 / R14` na svakom mjestu; (2) `POST /api/nfc/scan` prima `{cabinet_id, outlet: "Q1".."V2", erp_ref}` umjesto `{nfc_tag_id, user_id}` — priprema i 5-min čekanje na priklop ostaju; (3) sesija nosi `erp_ref` umjesto `customer_id`/`nfc_user_id`, sve ostalo u ugovoru ostaje; (4) **čitanje bez nuspojava** — `GET /session/{id}` ne upisuje `last_reconciled_at`; ERP potvrđuje obračun izričito, npr. `POST /api/nfc/sessions/ack {session_ids}`, i tek tada detektor `erp_reconciliation_silent` mjeri pravu stvar; (5) `by-user` se zamjenjuje čitanjem po `erp_ref` ili po vremenskom rasponu; (6) ugovor sa 16 ključeva, `test_tc_six_13g` i testovi koji pokrivaju zakomentirani kod usklađuju se u istom commitu, da suite ormara ostane zelen. **Zakomentirati, ne brisati** — tvoja odluka 2026-10-12: kod ostaje u repou ormara za slučaj da zatreba | `a709cf8:…/nfc.py` (11 ruta), `nfc.py:543-685` (`/scan` razrješava tag), `nfc.py:688-759` + `erp_reconciliation.py:112-124` (`mark_reconciled`) | **PRIHVAĆEN 2026-10-12** — redoslijed na ormaru: **a0** gašenje auto-otvaranja ventila (zaseban commit, prvi) → **a** popravak vode (R15), uključujući test za stop sa `socket_id=None` → **b** pojednostavljenje D6.2 s ugovorom i testovima → **c** `ack`. `erp_ref` je **novi stupac uz stare**, povijest se ne prepisuje. Raspon za usklađivanje: **po vremenu završetka**, `ended_from` uključivo, `ended_to` isključivo, **sa stranicama** | **OBJAVLJENO na `main` `eac7aa2`** (2026-10-12): a0 `8770cd9`, a `bad32e4`, b `dadb48c`, c `beab47b`. Na Krku: **nepoznato** — LIVE-01 (§10.5) | ništa danas; kad je b i c na Krku, otpadaju R2, R2b, O21, O23, §0.7 #1 i iteracija po korisnicima u §5.2 |
-| **R16** | **Kumulativni registar vode po V1/V2 na ext API-ju** — kao `meter_energy_kwh` za struju (`meter_load.py:87`): `valve_configs.meter_total_l` + `meter_updated_at` u `GET /api/ext/pedestals/{id}/water` | `eac7aa2:…/models/valve_config.py:34-40` (registar postoji), `mqtt_handlers.py:3880-3897` (u `total_liters` očitanje ide **brojač sesije**), `ext_pedestal_endpoints.py:326-372` (`/water` čita to očitanje, ne registar) | **provjeriti živim odgovorom** (§10.5 b) | povijest vode po priključku (intervali, D14); naplata vode **ne** čeka — sesija nosi `meter_water_start_l/end_l` iz registra |
+| **R16** *(nizak prioritet — prikaz, ne naplata)* | **Kumulativni registar vode po V1/V2 na ext API-ju** — kao `meter_energy_kwh` za struju (`meter_load.py:87`): `valve_configs.meter_total_l` + `meter_updated_at` u `GET /api/ext/pedestals/{id}/water` | `eac7aa2:…/models/valve_config.py:34-40` (registar postoji), `mqtt_handlers.py:3880-3897` (u `total_liters` očitanje ide **brojač sesije**), `ext_pedestal_endpoints.py:326-372` (`/water` čita to očitanje, ne registar) | **provjeriti živim odgovorom** (§10.5 b) | povijest vode po priključku (intervali, D14); naplata vode **ne** čeka — sesija nosi `meter_water_start_l/end_l` iz registra |
 | **R2b** | **`GET /api/nfc/session/{id}` ne smije mijenjati stanje** — isto kao R2 (§0.7 #1) | `a709cf8:…/nfc.py:688-708` → `erp_reconciliation.py:112-124` | nije provjereno | bez toga ERP nema read-only put do pojedine sesije |
 | **R12** | **`GET /api/berths` ne smije stvarati vezove** (O22) | `a709cf8:…/berths.py:213-223` | nije provjereno | ništa |
 | **R13** | **`valves/config` neka kaže koliko ventila ormar STVARNO ima** (ili `available`) | `a709cf8:…/pedestal_config.py:551-572` | nije provjereno | ništa — ERP ima `device_type` |
@@ -2021,6 +2088,24 @@ je gore odlučeno.
 `systemd` credentials (`LoadCredential=`), ne iz datoteke uz aplikaciju (§7.1).
 Jedinstvene **po ormaru**: servisni račun, `X-API-Key`, webhook secret.
 
+> **Odlučeno · D20** · **Ljudske lozinke postoje samo za prijavu u UI.** Sve ostalo je
+> **strojna tajna**:
+>
+> | Tajna | Nastaje | Gdje živi | Vidi se natrag? |
+> |---|---|---|---|
+> | `JWT_SECRET`, `ERP_ENCRYPTION_KEY` | generira instalacija (`secrets.token_hex`, Fernet) | `systemd` credentials, izvan diska aplikacije | **nikad** |
+> | lozinka baze | **ne postoji** — Postgres samo na Unix socketu, peer auth za sistemskog korisnika `erp` (`DATABASE_URL=postgresql:///erp?host=/run/postgresql`) | — | — |
+> | servisni račun ormara, `X-API-Key`, webhook ključ/tajna | Admin unosi kroz UI | Fernet u bazi | **nikad** — UI pokazuje samo „postavljeno" (već tako, `cabinet_admin._cabinet_out`) |
+> | `DEFAULT_ADMIN_PASSWORD` | **ukida se** (D20.3) | — | — |
+>
+> Lokalni razvoj i CI smiju imati testnu lozinku baze, **nikad u repou** (CI je ima u
+> workflowu kao lozinku jednokratnog servisnog kontejnera).
+>
+> **Zašto** · Tvoja odluka. Lozinka koju nitko ne mora znati ne može procuriti iz glave,
+> chata ni `.env`-a; peer auth veže pristup bazi uz korisnika procesa, ne uz niz znakova.
+>
+> **Ako griješim** · TCP + lozinka iz credentials je jedan redak `DATABASE_URL`.
+
 ### §8.4 · Backup i runbook
 
 `pg_dump` dnevno, šifrirano, **izvan VPS-a**; mjesečna probna obnova — backup koji nikad nije
@@ -2033,8 +2118,9 @@ završetak faze 5:
 1  OS, korisnik, SSH samo ključevi, nftables default-deny
 2  Tailscale + ACL po §7.0; provjeri: ormar → ERP SAMO :8081 webhook, ormar ↛ ormar,
    javno sučelje bez ijednog otvorenog ulaznog porta (nmap izvana), SSH samo preko Tailscalea
-3  PostgreSQL, baza, korisnik
-4  systemd credentials: JWT_SECRET, ERP_ENCRYPTION_KEY, DATABASE_URL
+3  PostgreSQL samo na Unix socketu (listen_addresses = ''), sistemski korisnik erp, peer auth;
+   provjera: `ss -ltn` ne pokazuje :5432
+4  systemd credentials GENERIRANE na stroju: JWT_SECRET, ERP_ENCRYPTION_KEY (nitko ih ne upisuje)
 5  venv iz LOCK datoteke (ne iz requirements.txt)
 6  alembic upgrade head
 7  dist/ iz artefakta CI runa koji je prošao gate (ne build na VPS-u, §8.2); swap 1 GB
@@ -2042,7 +2128,10 @@ završetak faze 5:
 9  CrowdSec engine + bouncer
 10 unattended-upgrades
 11 backup cron + JEDNA probna obnova
-12 bash scripts/verify_system.sh   → sve prolazi
+11a prvi admin (D20): `erp-setup-admin` ispiše jednokratni link (30 min); admin postavlja
+    lozinku i povezuje 2FA — preko Tailscalea, PRIJE javnog izlaganja
+12 bash scripts/verify_system.sh   → sve prolazi, uključujući: prijava bez 2FA ne daje pristup,
+   6. kriva lozinka zaključava, nema DEFAULT_ADMIN_PASSWORD u okruženju
 13 TEK TADA javno izlaganje
 ```
 
@@ -2174,7 +2263,7 @@ završava zelenim gateom i ažuriranom ovom specifikacijom (verzija +1, što se 
 | **3** | **Model podataka** — §4 u cijelosti, mapiranje **po D18** (obje strane + usporedba), NFC tagovi s dva zapisa + **CSV uvoz za Krk**, tip uređaja i mogućnosti, korisnici, ugovori, `billing_mode` default `prepaid`, knjiga kredita, `consumption_source` | migracije `006+`; **uvoz Krk CSV-a pogađa točan priključak** (ne samo „prepoznato") |
 | **4** | **Prikupljanje + retencija u istom commitu** — poller po §5.2, pull-usklađivanje `by-user`, prijemnik webhooka (danas `X-API-Key`, spreman za HMAC), `command_audit` | podaci teku; **rast baze izmjeren i ograničen** — brojka prije i poslije 7 dana |
 | **4.5** | **LIVE lokalno** (v8) — ERP na tvom PC-u, spojen na pravi Krk preko Tailscalea: LIVE-01 samo čitanje, simulator ispravljen prema živom odgovoru, poller i retencija preko noći, kontrole tek na izričit OK (§10.5) | **simulator se slaže sa živim ormarom** ili je svaka razlika zapisana i ispravljena; stvarni rast izmjeren i uspoređen sa simuliranim |
-| **5** | **VPS** — systemd (§8), 2 GB / 40 GB, Postgres, nginx, `cloudflared` samo za UI, Tailscale prema ormarima, **slojevi 0 i 1 PRIJE javnog izlaganja**, backup + probna obnova, runbook; `docker-compose.yml` obrisan | ERP javno dostupan iza Cloudflare Accessa; **runbook proveden na čistom VPS-u** |
+| **5** | **VPS + D20** — korisnici, 2FA, prvi admin, baza bez lozinke (§4.9, §7.1, §8.3) **u gateu prije javnog izlaganja**; systemd (§8), 2 GB / 40 GB, Postgres, nginx, `cloudflared` samo za UI, Tailscale prema ormarima, **slojevi 0 i 1 PRIJE javnog izlaganja**, backup + probna obnova, runbook; `docker-compose.yml` obrisan | ERP javno dostupan iza Cloudflare Accessa; **runbook proveden na čistom VPS-u** |
 | **6** | **Zauzeće vezova + 2D SVG** — četiri signala iz §3.1, tablica stanja §3.2, statični SVG s `svg_id` po vezu | **Krk na karti, četiri signala, sivo za tiho** |
 | **7** | **Poslovna logika i NFC tok** — §5.1, §5.4, tarifa (§4.5), `billing_records`, izvoz za blagajnu, knjiga kredita u iznosima | **TC-ERP-ACC-01..06 prolaze na pravom ormaru**; potrošnja se slaže na obje strane |
 | **8** | **Sigurnosni modul v1** — mamci, domenske detekcije, signali vrata i novog uređaja, servisni prozori, CVE/KEV prema **pinanim** verzijama, zaslon §6.5 | prvi stvarni nalazi na VPS-u i Krku |
@@ -2245,7 +2334,7 @@ ispravak simulatora; nađena na VPS-u košta ispravak plus ponovni deploy.
 | 1 | **Tailscale adresa ormara** (100.x.y.z) i provjera s PC-a: `curl -s -o NUL -w "%{http_code}" http://100.x.y.z/` | ide na nginx `:80`, nikad `:8000` (§7.0) |
 | 2 | **`api_client` servisni račun** na ormaru, **novi, samo za ERP** (ne admin), e-mail + lozinka | lozinku mi ne šalješ u chat — upisuješ je sam u korak 4 |
 | 3 | **Gateway UI ormara → uključi kao `monitor`** (samo čitanje), ovim redom: `pedestals.health`, `pedestals.list`, `pedestals.status_ext`, `berths.list`, `sessions.active`, `sessions.pending`, `alarms.active`, `load.pedestal_get_ext`, `load.socket_get_ext`, `load.pedestal_alarms_ext`, `breakers.pedestal_list_ext`, `breakers.socket_get_ext`, `water.status_ext`, `sockets.config_list`, `valves.config_list`, `analytics.daily`, `analytics.summary` | **ne uključivati**: sve iz §2.3 „nikad" (`breakers.socket_reset_ext`, `load.auto_stop_ack_ext`, `berths.push_image_ext`, …), sve `bidirectional`, i `camera.*` dok se ne odluči R8 (GDPR) |
-| 4 | **Lokalno okruženje, ODVOJENO od `backend/.env`** — ERP čita `.env` iz radne mape, pa se pokreće iz zasebne mape `live45\` s varijablama u PowerShell sesiji: `DATABASE_URL=sqlite:///C:/…/live45/live45.db`, `JWT_SECRET` (novi), `ERP_ENCRYPTION_KEY` (novi Fernet), `DEFAULT_ADMIN_EMAIL` + **nova** `DEFAULT_ADMIN_PASSWORD` (ne `Admin1234!`), `COLLECTOR_ENABLED=false` za korak b, `true` za c | SQLite, ne tvoj lokalni Postgres (njegova lozinka je javna, O16); rast se uspoređuje u recima, bajtove daje VPS |
+| 4 | **Lokalno okruženje, ODVOJENO od `backend/.env`** — ERP čita `.env` iz radne mape, pa se pokreće iz zasebne mape `live45\` s varijablama u PowerShell sesiji: `DATABASE_URL=sqlite:///C:/…/live45/live45.db`, `JWT_SECRET` (novi), `ERP_ENCRYPTION_KEY` (novi Fernet), `DEFAULT_ADMIN_EMAIL` + **nova** `DEFAULT_ADMIN_PASSWORD` **samo za ovu lokalnu instancu** (kod D20 još ne postoji; nestaje s fazom 5), `COLLECTOR_ENABLED=false` za korak b, `true` za c | SQLite, zasebno od tvog lokalnog Postgresa; rast se uspoređuje u recima, bajtove daje VPS |
 | 5 | Koja verzija vrti na Krku, ako znaš (commit/tag) | ako ne, LIVE-01 to zaključuje iz odgovora (`/api/nfc/sessions` postoji → `main` ≥ `dadb48c`) |
 
 Webhook u 4.5 **nije** potreban: pull je izvor istine (D7), a webhook bi tražio promjenu
@@ -2319,13 +2408,20 @@ simuliranim; d1–d4 prošli na tvoj OK. Spec v9 s izvještajem §10.7.
 | Korak | Što radim ja | Što trebaš ti | Trajanje | Blokira |
 |---|---|---|---|---|
 | **4.5 LIVE lokalno** | `live_check.py`, usporedba, ispravci simulatora, noćno mjerenje, kontrolni testovi s tobom | a1–a5; biti dostupan za d (netko fizički na Krku za d1–d3) | **2–3 dana** kalendarski: ~½ dana moj rad za b, 1 noć za c, ~1 h zajedno za d | servisni račun + Gateway UI; osoba na Krku za d |
-| **5 VPS** | systemd unit, nginx (UI na loopbacku, webhook samo na Tailscale adresi `:8081`), nftables, Tailscale ACL prijedlog (JSON), `cloudflared` konfiguracija, CrowdSec, systemd credentials, backup + skripta probne obnove, `verify_system.sh`, CI artefakt `dist/`, brisanje `docker-compose.yml` | kupiti VPS; domena u Cloudflareu + Access politika; Tailscale admin (dodati VPS, primijeniti ACL); **odredište backupa izvan VPS-a**; SSH ključ; **rotirati `Admin1234!`** gdje god je bio | **2–3 dana** moj rad + **½ dana zajedno** za runbook na čistom VPS-u | domena/Cloudflare račun; odluka o odredištu backupa |
+| **5a D20** (piše se dok teče 4.5 c) | uloge Admin / Marina Manager + migracija, prijava s TOTP 2FA (RFC 6238, testni vektori), rezervni kodovi, ograničenje pokušaja i zaključavanje, `auth_audit`, reset 2FA, jednokratni link prvog admina, ukidanje `DEFAULT_ADMIN_PASSWORD`, frontend: ekran 2FA, povezivanje (QR), zaslon korisnika; testovi + mutacije; boot i browser provjera prijave s 2FA | aplikacija za autentifikaciju na telefonu | **2–3 dana** moj rad | ništa |
+| **5b VPS** (piše se dok teče 4.5 c) | systemd unit, nginx (UI na loopbacku, webhook samo na Tailscale adresi `:8081`), nftables, Tailscale ACL prijedlog (JSON), `cloudflared` konfiguracija, CrowdSec, Postgres na Unix socketu + peer, credentials generirane na stroju, backup + skripta probne obnove, `verify_system.sh`, CI artefakt `dist/`, brisanje `docker-compose.yml` | kupiti VPS; domena u Cloudflareu + Access politika; Tailscale admin (dodati VPS, primijeniti ACL); **odredište backupa izvan VPS-a**; SSH ključ | **2–3 dana** moj rad + **½ dana zajedno** za runbook na čistom VPS-u | domena/Cloudflare račun; odluka o odredištu backupa |
+| **Javno izlaganje** | uključiti `cloudflared` tek kad je **D20 u gateu zelen** i runbook prošao | OK | minute | **D20 u gateu** |
 | **Spajanje VPS → Krk** | provisioning ormara u ERP-u na VPS-u (`base_url` = Tailscale adresa), LIVE-01 ponovno **s VPS-a**, provjera ACL-a u oba smjera | OK za: webhook URL + ključ u Gateway UI-u ormara (Tailscale adresa VPS-a `:8081`), `X-API-Key` za kanal B | **1–2 h** | tvoj OK za konfiguraciju ormara |
 | **Tjedan stvarnog rada** | dnevno: `/api/health`, `reconciliation_runs`, greške u `sync_log`, rast po tablici; na kraju izvještaj: **stvarni** rast prije/poslije 7 dana (zatvara O35) i usporedba sa simulacijom | ništa osim javiti neobičnosti na ormaru | **7 dana** kalendarski | ništa |
 
-**Najranije:** ERP na VPS-u spojen na Krk za ~**1 tjedan** od potvrde plana (4.5 ~3 dana + VPS
-~3 dana + spajanje), stvarni tjedan rada završava ~**2 tjedna** od potvrde. Uz pretpostavku da
+**Najranije (v9, s D20):** ERP na VPS-u spojen na Krk za ~**8–10 radnih dana** od tvoje
+potvrde da je priprema 4.5 gotova (4.5 ~3 dana, uz to 5a + 5b ~4–6 dana, dijelom u istom
+vremenu), stvarni tjedan rada završava ~**2,5 tjedna** od te potvrde. Spajanje VPS-a na Krk
+**smije** prije javnog izlaganja (Tailscale nije javan); javni UI čeka D20. Uz pretpostavku da
 domena i Tailscale admin nisu blokada.
+
+**Potvrđeno (v9):** oba prijedloga ispod; tijekom tjedna stvarnog rada faza 6 lokalno protiv
+simulatora; faza 7 poslije tog tjedna.
 
 **Predlažem dvije promjene redoslijeda/pristupa:**
 
@@ -2500,7 +2596,7 @@ Nađeno usput. Nije u izvedbi gore; tvoje je da odlučiš prioritet.
 | O14 | ~~Prijava ugašenog računa s točnom lozinkom vraćala je 403 `Account is disabled`, a kriva lozinka 401 — razlika je otkrivala da račun postoji i da je lozinka točna~~ — **odlučeno i primijenjeno u fazi 1:** nepoznat e-mail, kriva lozinka i ugašen račun daju **isti 401 s istom porukom**; razlog ide samo u log (`backend/app/routers/auth.py`, test `test_inactive_user_login_is_indistinguishable_from_wrong_password`) | zatvoreno |
 | O15 | ~~Nepoznat e-mail odgovarao je brže od krive lozinke~~ — **popravljeno nakon faze 1**: lažna bcrypt provjera istog cost faktora; test broji provjere (1 po odbijanju). Izmjereno: prije 2,6 ms / 220 ms, poslije 173 / 190 ms | zatvoreno |
 | O12 | **`GET /api/nfc/sessions/by-user` na `develop` piše u bazu** (`erp_reconciliation.py:112-124`) | §7.2 R2 — zahtjev je podnesen; ERP se dotad samoograničava |
-| O16 | ~~`backend/alembic.ini` nosio je lozinku baze u čistom tekstu~~ — **odlučeno i primijenjeno:** `alembic.ini` nema URL, `alembic/env.py` ga uzima iz `app.config`, `DATABASE_URL` je obvezan (fail-fast, bez zadanog URL-a — zadani je nosio drugu lozinku), `.env.example` prazan. Test: nijedna konfiguracijska datoteka ne sadrži URL s lozinkom. **Gdje se lozinka koristila:** `alembic.ini` od commita `b534175` (21 verzija u povijesti, repo je **javan**), spec v4 (citirana), lokalni `backend/.env` kao `DEFAULT_ADMIN_PASSWORD`, i **lokalni Postgres je prihvaća** za `erp_user` — mora se rotirati | zatvoreno u kodu; rotacija je na vlasniku baze |
+| O16 | ~~`backend/alembic.ini` nosio je lozinku baze u čistom tekstu~~ — **odlučeno i primijenjeno:** `alembic.ini` nema URL, `alembic/env.py` ga uzima iz `app.config`, `DATABASE_URL` je obvezan (fail-fast, bez zadanog URL-a — zadani je nosio drugu lozinku), `.env.example` prazan. Test: nijedna konfiguracijska datoteka ne sadrži URL s lozinkom. **Gdje se lozinka koristila:** `alembic.ini` od commita `b534175` (21 verzija u povijesti, repo je **javan**), spec v4 (citirana), lokalni `backend/.env` kao `DEFAULT_ADMIN_PASSWORD`, i **lokalni Postgres je prihvaća** za `erp_user` — mora se rotirati | **zatvoreno** — 2026-10-12: lozinka lokalnog Postgresa promijenjena, sluša samo na localhostu; `Admin1234!` kao admin lozinku zamjenjuje D20 (nema `DEFAULT_ADMIN_PASSWORD`) |
 | O17 | ~~Modeli i migracije se razilaze~~ — **zatvoren**: `006` (9 indeksa, SQLite) i `008` (dvostruka jedinstvenost `users.email`, samo PostgreSQL); `alembic check` je provjera u bootu, i u CI-ju ide protiv PG-a | zatvoreno |
 | O18 | ~~ruff s defaultima prijavljuje 327 nalaza~~ — **odlučeno:** uključena samo **DTZ** pravila; svih 36 `datetime.utcnow()` poziva i 8 `default=` stupaca ide kroz `app/utils/time.utcnow()` (naivan UTC, isti ugovor kao stupci). Ostala pravila (BLE001 ×18, UP…) kasnije | DTZ zatvoren; ostalo odgođeno |
 | O19 | ~~`npm run lint` zove eslint koji nije instaliran~~ — **odlučeno i primijenjeno:** skripta `lint` uklonjena iz `frontend/package.json`; frontend gate je `tsc --noEmit` + `vite build` | zatvoreno |
@@ -2520,9 +2616,9 @@ Nađeno usput. Nije u izvedbi gore; tvoje je da odlučiš prioritet.
 | O33 | Zaslon Vezovi prikazuje imena vezova s ormara, ne `berths.berth_number` iz ERP-a | faza 6 (zauzeće + 2D karta) gradi zaslon na ERP-ovim vezovima |
 | O34 | ~~Imena parametara R14 b/c su ERP-ovo čitanje~~ — **potvrđeno u kodu ormara** `eac7aa2`, `backend/app/routers/nfc.py:880-968`: `GET /api/nfc/sessions?ended_from&ended_to&limit&offset` → `{sessions, total, count, next_offset, …}`, `POST /api/nfc/sessions/ack {session_ids}` → `{acked, unknown, not_final, not_attributed}`. **Jedna razlika ispravljena:** `ack` tek nakon obračuna (§4.0b). Payload nosi `erp_ref` umjesto `customer_id` (null = sesija koju ERP nije otvorio) — parser to sada prima kao „tuđu" sesiju | zatvoreno; živi odgovor u §10.5 b7 |
 | O35 | Rast baze izmjeren je **simulacijom** (stvarni kod, simulirani ormari i sat, modelirani Krk dan) — ne tjednom na pravom ormaru | prava brojka prije i poslije 7 dana mjeri se na VPS-u nakon faze 5, istim `scripts/growth_check.py` brojanjem po tablici |
-| O36 | Voda nema **registar na ext API-ju**. Provjereno u kodu ormara (`eac7aa2`): registar **postoji** (`valve_configs.meter_total_l`, `models/valve_config.py:34-40`, puni ga `mqtt_handlers.py:3880-3890`) i **dolazi ERP-u u sesiji** (`meter_water_start_l/end_l`, `nfc_service.py:406-407, 467-470`) — naplata vode je dakle po registru. Ali `GET /api/ext/pedestals/{id}/water` vraća `total_l` = zadnje očitanje `total_liters` (`ext_pedestal_endpoints.py:358-367`), a u to očitanje ventilni put upisuje **brojač sesije** (`mqtt_handlers.py:3897`, `liters_for_session`); docstring kaže „cumulative", kod ne. Intervali vode se zato ne pišu | **ostaje otvoreno** → **R16**; živi odgovor u §10.5 b6w (tri očitanja) pokazuje ponašanje na Krku |
+| O36 | Voda **za naplatu riješena**: registar (`valve_configs.meter_total_l`) stiže ERP-u uz svaku sesiju (`meter_water_start_l/end_l`, `nfc_service.py:406-407, 467-470`), pa ERP naplaćuje po brojilu. Za **prikaz** (intervali vode, povijest) ext ruta registar ne vraća: `/water` `total_l` je zadnje očitanje (`ext_pedestal_endpoints.py:358-367`), a ventilni put u njega upisuje brojač sesije (`mqtt_handlers.py:3897`) | **R16 — nizak prioritet, ne blokira fazu 7**; test u tri poziva radiš na Krku (§10.5 b6w) |
 | O37 | Stari `POST /api/webhooks/pedestal/{marina}` (HMAC po marini) ostaje uz novi po ormaru, sada zatvoren bez tajne | obrisati kad Krk šalje na `/api/webhooks/cabinet/{id}` |
-| O38 | Razlog naredbe traži se `window.prompt`-om; uloge `admin`/`operator` iz §5.3 (ograda 1) još ne postoje — naredbe smiju `super_admin` i `marina_manager` kao prije | pravi dijalog i uloge dolaze sa zaslonima naplate (faza 7) |
+| O38 | ~~uloge `admin`/`operator` iz §5.3 ne postoje~~ — **zatvoreno odlukom D20** (§5.3: Admin i Marina Manager). Razlog naredbe se i dalje traži `window.prompt`-om — pravi dijalog dolazi s D20 zaslonima | uloge zatvorene; dijalog u fazi 5a |
 | O39 | Koja verzija ormara vrti na Krku — R14 b/c i loopback backend objavljeni su na `main` `eac7aa2`, Krk nepoznat | LIVE-01 (§10.5 b1, b7) |
 | O40 | Faza 4 tjedan stvarnog rada ne mjeri naplatu (ERP-ove sesije nastaju tek u fazi 7) | §10.6, prijedlog 2 |
 | O6 | 11 događaja se emitira na ormaru a nije u `EVENT_CATALOG`, među njima **`meter_telemetry_received`** (telemetrija brojila) i **`direct_cmd_sent`** (jedina push-potvrda da je naredba otišla) — NALAZ 6.3 | ERP ih **ne može pretplatiti**; pull ih pokriva. Zahtjev prema ormaru ako ikad zatrebaju |

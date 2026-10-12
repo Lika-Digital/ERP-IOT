@@ -1,7 +1,7 @@
 # ERP-IOT — dnevnik odluka
 
-**Verzija 2.3 · 2026-10-12** — zamjenjuje v2.2.
-v2.3 ispravlja mrežna pravila u **D13** (ormar → ERP samo webhook; bez statične IP). v2.2 dodaje **D19** (ventili i utičnice prema Smart Modeu). v2.1 je dodao **D18** (mapiranje na obje strane); prvi isporučeni zip sadržavao je stariju v2 bez njega.
+**Verzija 2.4 · 2026-10-12** — zamjenjuje v2.3.
+v2.4 dodaje **D20** (korisnici, prijava i tajne). v2.3 ispravlja mrežna pravila u **D13** (ormar → ERP samo webhook; bez statične IP). v2.2 dodaje **D19** (ventili i utičnice prema Smart Modeu). v2.1 je dodao **D18** (mapiranje na obje strane); prvi isporučeni zip sadržavao je stariju v2 bez njega.
 Ormar (Cloud_IOT) je druga strana ugovora; ovdje se bilježe odluke koje se tiču ERP-a i ono što ERP traži od ormara.
 
 Izvori, redom po težini:
@@ -278,6 +278,24 @@ Ovako ormar radi (odluka 2026-10-12; zatvara pitanje o samostalnom otvaranju ven
 - **Smart Mode OFF:** ormar radi samostalno, priključci se otvaraju ručno na ormaru. ERP tu ne upravlja i ne naplaćuje; prikazuje „ormar radi samostalno" (`status_code` `standalone`).
 - **Smart Mode ON:** korisnik može fizički okrenuti ili priklopiti, ali ništa se ne dogodi dok ERP ne pošalje naredbu ili dok se ne pokrene iz UI-a ormara. Nema samostalnog otvaranja.
 - Potrošnja iz Smart Mode OFF razdoblja **nije ERP-ova sesija i ne ide u naplatu.**
+
+## D20 · Korisnici, prijava i tajne
+Odluka 2026-10-12. Mora biti gotovo i u gateu **prije** nego je ERP UI javno dostupan preko Cloudflarea.
+
+1. **Dvije uloge.**
+   - **Admin** — sve konfiguracije u ERP-u: ormari, vezovi, mapiranje, NFC uvoz, tarife, servisni računi ormara, korisnici.
+   - **Marina Manager** — svakodnevni rad: vezovi, sesije, kredit (dopuna), upravljanje utičnicama i ventilima, ručno paljenje uz razlog (1.1). Ne vidi i ne mijenja konfiguraciju ni korisnike.
+   - Postojeće uloge se mapiraju na ove dvije (mapiranje u specifikaciji §5.3). Zatvara O38.
+2. **Prijava:** korisnik + lozinka, zatim **obavezan 2FA** (TOTP, RFC 6238, aplikacija za autentifikaciju), za obje uloge.
+   - ograničenje pokušaja za lozinku i za 2FA kod, privremeno zaključavanje, zapis u audit;
+   - jednokratni rezervni kodovi, spremljeni kao hash;
+   - Admin može resetirati 2FA drugom korisniku, uz audit;
+   - isti odgovor za sve neuspjele prijave (O14), i u 2FA koraku.
+3. **Prvi admin:** nema `DEFAULT_ADMIN_PASSWORD`. Instalacija ispiše jednokratni, vremenski ograničen link za postavljanje; prvi admin postavlja lozinku i povezuje 2FA prije ičega drugog.
+4. **Baza bez lozinke:** na VPS-u Postgres sluša samo Unix socket (bez TCP porta), backend radi kao sistemski korisnik `erp`, peer autentifikacija. Nema lozinke baze ni u `.env` ni igdje. Lokalni razvoj i CI smiju imati testnu lozinku, nikad u repou.
+5. **Ljudske lozinke postoje samo za prijavu u UI.** Sve ostale tajne (servisni računi ormara, ključ šifriranja, JWT tajna) su strojne: generiraju se pri instalaciji ili ih Admin unosi kroz UI, spremaju se šifrirano, nikad se ne prikazuju natrag.
+
+Redoslijed: D20 se radi zajedno s kodom faze 5, dok traje noćno mjerenje faze 4.5.
 
 ---
 
