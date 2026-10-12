@@ -64,7 +64,10 @@ def _annotate(name: str, detail: str) -> None:
     """In GitHub Actions a failed check is also a public annotation: the raw log
     needs a login, an annotation does not."""
     if os.environ.get("GITHUB_ACTIONS") == "true":
-        one_line = " | ".join(x.strip() for x in detail.splitlines() if x.strip())[:1500]
+        # drop alembic/uvicorn INFO noise; the reason is at the END, so keep the tail
+        lines = [x.strip() for x in detail.splitlines()
+                 if x.strip() and not x.lstrip().startswith("INFO")]
+        one_line = " | ".join(lines)[-1500:]
         print(f"::error title={name[:80]}::{one_line}", flush=True)
 
 
