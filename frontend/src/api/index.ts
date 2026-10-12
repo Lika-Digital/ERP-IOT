@@ -23,3 +23,17 @@ api.interceptors.response.use(
 )
 
 export default api
+
+/**
+ * The sentence the server attached to a refused cabinet command (spec §2.5):
+ * standalone, no plug, busy, not enabled… Each outcome has its own sentence;
+ * a generic "failed" would hide which one it was.
+ */
+export function cabinetSentence(err: unknown, fallback: string): string {
+  const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
+  if (detail && typeof detail === 'object' && 'sentence' in detail) {
+    const s = (detail as { sentence?: unknown }).sentence
+    if (typeof s === 'string' && s) return s
+  }
+  return fallback
+}

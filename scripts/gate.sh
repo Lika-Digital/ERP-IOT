@@ -2,7 +2,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 #  ERP-IOT gate — ONE script for pre-commit, pre-push and CI (spec §9, §10 faza 1).
 #
-#    bash scripts/gate.sh          full gate: lint, pytest, bandit, frontend, boot
+#    bash scripts/gate.sh          full gate: lint, pytest, bandit, frontend, boot, browser
 #    bash scripts/gate.sh --fast   pre-commit: lint, pytest, bandit
 #
 #  Rule: a missing tool, a missing venv, missing node_modules, a skipped test,
@@ -25,6 +25,7 @@ RED='\033[0;31m'; GREEN='\033[0;32m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\03
 STAGES_RUN=0
 PYTEST_LINE="PYTEST: not run"
 BOOT_LINE="BOOT: not run"
+BROWSER_LINE="BROWSER: not run"
 STAGES_OK=0
 FAILED=()
 
@@ -127,20 +128,30 @@ if [ "${PIPESTATUS[0]}" -eq 0 ]; then
 else
     fail "boot"
 fi
+
+# ═════════════════════════════════════════════════════════════════════════════
+stage "browser" "TC-ERP-BOOT-01b - real Chromium, real bundle, against the cabinet simulator"
+"$PY" scripts/browser_check.py | tee "$WORK/browser.log"
+if [ "${PIPESTATUS[0]}" -eq 0 ]; then
+    pass "browser"
+else
+    fail "browser"
+fi
 fi
 
 [ -f "$WORK/boot.log" ] && BOOT_LINE="$(grep -o 'BOOT: .*' "$WORK/boot.log" | tail -1)"
+[ -f "$WORK/browser.log" ] && BROWSER_LINE="$(grep -o 'BROWSER: .*' "$WORK/browser.log" | tail -1)"
 
 # ═════════════════════════════════════════════════════════════════════════════
 EXPECTED=3
-[ "$MODE" = "full" ] && EXPECTED=5
+[ "$MODE" = "full" ] && EXPECTED=6
 echo ""
 echo "──────────────────────────────────────────────────────────"
 echo "GATE ($MODE): $STAGES_OK/$EXPECTED stages passed"
 # In GitHub Actions the summary also becomes an annotation: readable on the
 # public run page and through the API without a login, unlike the raw log.
 if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
-    echo "::notice title=gate::GATE ($MODE): $STAGES_OK/$EXPECTED stages passed; $PYTEST_LINE; $BOOT_LINE"
+    echo "::notice title=gate::GATE ($MODE): $STAGES_OK/$EXPECTED stages passed; $PYTEST_LINE; $BOOT_LINE; $BROWSER_LINE"
 fi
 if [ ${#FAILED[@]} -eq 0 ] && [ "$STAGES_RUN" -eq "$EXPECTED" ] && [ "$STAGES_OK" -eq "$EXPECTED" ]; then
     echo -e "${GREEN}${BOLD}GREEN${NC}"

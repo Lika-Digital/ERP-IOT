@@ -1,40 +1,26 @@
 """
-test_controls.py — Session control tests with audit logging.
+test_controls.py — session and outlet controls, with audit, against the simulator.
 
 Verifies:
-- allow/deny/stop log user_id, marina_id, pedestal_id, action, timestamp to audit_log
+- allow/deny/stop/outlet commands log user, marina, pedestal, action AND the
+  cabinet's outcome code to audit_log — including refused commands
 - marina_manager blocked from controlling sessions in other marinas
+- (since phase 2) no mocks of the cabinet client: the real client talks to the
+  simulator, so the request the ERP sends is the request the cabinet would get
 """
-from unittest.mock import AsyncMock, MagicMock, patch
+import pytest
+
+from app.utils.time import utcnow
 
 
-def _mock_factory(return_value):
-    """Return a factory mock whose get_client() returns a client mock."""
-    mock_client = MagicMock()
-    mock_client.allow_session = AsyncMock(return_value=return_value)
-    mock_client.deny_session = AsyncMock(return_value=return_value)
-    mock_client.stop_session = AsyncMock(return_value=return_value)
-    mock_factory = MagicMock()
-    mock_factory.get_client.return_value = mock_client
-    return mock_factory, mock_client
+def _session(sid, status):
+    return {"id": sid, "pedestal_id": 1, "socket_id": 1, "type": "electricity",
+            "status": status, "started_at": utcnow().isoformat(), "ended_at": None,
+            "energy_kwh": None, "water_liters": None, "customer_id": None,
+            "nfc_user_id": None, "deny_reason": None, "customer_name": None}
 
 
-def test_allow_session_logs_audit(client, admin_headers, marina_id, setup_test_database):
-    mock_factory, _ = _mock_factory({"status": "allowed", "session_id": 1})
-    with patch("app.routers.controls.get_pedestal_factory", return_value=lambda: mock_factory):
-        from app.services.pedestal_api_factory import get_pedestal_factory as real_dep
-        from app.main import app
-        app.dependency_overrides[real_dep] = lambda: mock_factory
-
-        r = client.post(
-            f"/api/marinas/{marina_id}/sessions/1/allow",
-            headers=admin_headers,
-            params={"pedestal_id": 1},
-        )
-        app.dependency_overrides.clear()
-
-    assert r.status_code == 200
-
+def _audit(marina_id, action, target_id=None):
     from tests.conftest import TestSession
     from app.models.cache import AuditLog
     from app.models.user import User
@@ -42,126 +28,67 @@ def test_allow_session_logs_audit(client, admin_headers, marina_id, setup_test_d
     db = TestSession()
     try:
         user = db.query(User).filter(User.email == "superadmin@test.erp").first()
-        entry = (
-            db.query(AuditLog)
-            .filter(
-                AuditLog.marina_id == marina_id,
-                AuditLog.action == "allow_session",
-                AuditLog.target_id == 1,
-                AuditLog.user_id == user.id,
-            )
-            .order_by(AuditLog.performed_at.desc())
-            .first()
-        )
-        assert entry is not None
-        assert entry.marina_id == marina_id
-        assert entry.pedestal_id == 1
-        assert entry.performed_at is not None
+        q = db.query(AuditLog).filter(AuditLog.marina_id == marina_id,
+                                      AuditLog.action == action, AuditLog.user_id == user.id)
+        if target_id is not None:
+            q = q.filter(AuditLog.target_id == target_id)
+        return q.order_by(AuditLog.id.desc()).first()
     finally:
         db.close()
 
 
-def test_deny_session_logs_audit_with_reason(client, admin_headers, marina_id, setup_test_database):
-    mock_factory, _ = _mock_factory({"status": "denied", "session_id": 2})
-    from app.services.pedestal_api_factory import get_pedestal_factory as real_dep
-    from app.main import app
-    app.dependency_overrides[real_dep] = lambda: mock_factory
-
-    r = client.post(
-        f"/api/marinas/{marina_id}/sessions/2/deny",
-        headers=admin_headers,
-        json={"reason": "No capacity"},
-        params={"pedestal_id": 2},
-    )
-    app.dependency_overrides.clear()
-
-    assert r.status_code == 200
-
-    from tests.conftest import TestSession
-    from app.models.cache import AuditLog
-
-    db = TestSession()
-    try:
-        entry = (
-            db.query(AuditLog)
-            .filter(
-                AuditLog.marina_id == marina_id,
-                AuditLog.action == "deny_session",
-                AuditLog.target_id == 2,
-            )
-            .order_by(AuditLog.performed_at.desc())
-            .first()
-        )
-        assert entry is not None
+@pytest.mark.parametrize("action,status", [("allow", "pending"), ("deny", "pending"),
+                                           ("stop", "active")])
+def test_session_command_logs_audit_with_outcome(client, admin_headers, marina_id, sim,
+                                                 action, status):
+    sim.state.sim.sessions = [_session(41, status)]
+    kw = {"json": {"reason": "No capacity"}} if action == "deny" else {}
+    r = client.post(f"/api/marinas/{marina_id}/sessions/41/{action}",
+                    headers=admin_headers, params={"pedestal_id": 1}, **kw)
+    assert r.status_code == 200, r.text
+    assert r.json()["outcome"]["code"] == "ok"
+    entry = _audit(marina_id, f"{action}_session", 41)
+    assert entry is not None and entry.pedestal_id == 1 and entry.performed_at is not None
+    assert entry.details["outcome"] == "ok"
+    if action == "deny":
         assert entry.details["reason"] == "No capacity"
-    finally:
-        db.close()
 
 
-def test_stop_session_logs_audit(client, admin_headers, marina_id, setup_test_database):
-    mock_factory, _ = _mock_factory({"status": "stopped", "session_id": 3})
-    from app.services.pedestal_api_factory import get_pedestal_factory as real_dep
-    from app.main import app
-    app.dependency_overrides[real_dep] = lambda: mock_factory
+def test_refused_command_is_audited_too(client, admin_headers, marina_id, sim):
+    sim.state.sim.sessions = [_session(42, "active")]
+    r = client.post(f"/api/marinas/{marina_id}/sessions/42/allow", headers=admin_headers)
+    assert r.status_code == 409
+    assert r.json()["detail"]["code"] == "session_state_changed"
+    assert _audit(marina_id, "allow_session", 42).details["outcome"] == "session_state_changed"
 
-    r = client.post(
-        f"/api/marinas/{marina_id}/sessions/3/stop",
-        headers=admin_headers,
-        params={"pedestal_id": 3},
-    )
-    app.dependency_overrides.clear()
 
-    assert r.status_code == 200
+def test_outlet_command_reaches_the_cabinet_by_real_name(client, admin_headers, marina_id, sim):
+    r = client.post(f"/api/marinas/{marina_id}/pedestals/1/outlets/Q3/cmd",
+                    json={"action": "activate"}, headers=admin_headers)
+    assert r.status_code == 200, r.text
+    assert ("POST", "/api/ext/controls/pedestal/1/socket/Q3/cmd") in sim.state.sim.calls
+    assert _audit(marina_id, "outlet_activate").details["outlet"] == "Q3"
 
-    from tests.conftest import TestSession
-    from app.models.cache import AuditLog
 
-    db = TestSession()
-    try:
-        entry = (
-            db.query(AuditLog)
-            .filter(
-                AuditLog.marina_id == marina_id,
-                AuditLog.action == "stop_session",
-                AuditLog.target_id == 3,
-            )
-            .order_by(AuditLog.performed_at.desc())
-            .first()
-        )
-        assert entry is not None
-    finally:
-        db.close()
+def test_outlet_command_rejects_unknown_actions(client, admin_headers, marina_id, sim):
+    r = client.post(f"/api/marinas/{marina_id}/pedestals/1/outlets/Q3/cmd",
+                    json={"action": "maintenance"}, headers=admin_headers)
+    assert r.status_code == 422          # ERP validation; never sent to the cabinet
+    assert not [c for c in sim.state.sim.calls if c[1].endswith("/cmd")]
 
 
 def test_marina_manager_blocked_from_restricted_marina_controls(
-    client, manager_headers, restricted_marina_id
+    client, manager_headers, restricted_marina_id, sim
 ):
-    mock_factory, _ = _mock_factory({"status": "allowed"})
-    from app.services.pedestal_api_factory import get_pedestal_factory as real_dep
-    from app.main import app
-    app.dependency_overrides[real_dep] = lambda: mock_factory
-
-    r = client.post(
-        f"/api/marinas/{restricted_marina_id}/sessions/1/allow",
-        headers=manager_headers,
-    )
-    app.dependency_overrides.clear()
-
+    r = client.post(f"/api/marinas/{restricted_marina_id}/sessions/1/allow",
+                    headers=manager_headers)
     assert r.status_code == 403
+    assert sim.state.sim.calls == []
 
 
-def test_marina_manager_can_control_own_marina(client, manager_headers, marina_id):
-    mock_factory, _ = _mock_factory({"status": "allowed", "session_id": 10})
-    from app.services.pedestal_api_factory import get_pedestal_factory as real_dep
-    from app.main import app
-    app.dependency_overrides[real_dep] = lambda: mock_factory
-
-    r = client.post(
-        f"/api/marinas/{marina_id}/sessions/10/allow",
-        headers=manager_headers,
-    )
-    app.dependency_overrides.clear()
-
+def test_marina_manager_can_control_own_marina(client, manager_headers, marina_id, sim):
+    sim.state.sim.sessions = [_session(10, "pending")]
+    r = client.post(f"/api/marinas/{marina_id}/sessions/10/allow", headers=manager_headers)
     assert r.status_code == 200
 
 

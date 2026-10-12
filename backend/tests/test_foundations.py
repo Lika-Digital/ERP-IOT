@@ -300,9 +300,14 @@ def test_tc_erp_auth_01_public_set_is_exactly_known():
 
 
 def test_tc_erp_auth_01_protected_count_matches_graph():
-    """27 zasticenih od 31 — izmjereno iz grafa ovisnosti, ne grepom."""
+    """Zasticenih od ukupno — izmjereno iz grafa ovisnosti, ne grepom.
+
+    Faza 1: 27 od 31. Faza 2: 28 od 32 — nova zasticena ruta
+    POST /api/marinas/{id}/pedestals/{pk}/outlets/{outlet}/cmd (operaterski put, D3).
+    Broj se mijenja samo svjesno, u istom commitu kao ruta.
+    """
     rs = _routes()
-    assert (sum(p for _, _, p in rs), len(rs)) == (27, 31)
+    assert (sum(p for _, _, p in rs), len(rs)) == (28, 32)
 
 
 def test_tc_erp_auth_01_no_credentials_is_strictly_401(client):
@@ -456,11 +461,13 @@ def test_no_call_to_nonexistent_camera_detections_route():
     Metoda koja je zove imala je nula pozivatelja. Ostavljena, prvi bi je
     netko pozvao i dobio 404 kao "ormar ne radi".
     """
-    from app.services.pedestal_api import PedestalAPIClient
+    from app.cabinet import contract
+    from app.cabinet.client import CabinetClient
 
-    assert not hasattr(PedestalAPIClient, "get_camera_detections")
-    src = (_BACKEND / "app" / "services" / "pedestal_api.py").read_text(encoding="utf-8")
-    assert "/detections" not in src
+    assert not hasattr(CabinetClient, "get_camera_detections")
+    assert not any("detections" in ep.path for ep in contract.ENDPOINTS.values())
+    for f in (_BACKEND / "app").rglob("*.py"):
+        assert "/detections" not in f.read_text(encoding="utf-8"), f
 
 
 # ─── TC-ERP-GATE-01 ───────────────────────────────────────────────────────────
@@ -604,3 +611,12 @@ def test_o18_ruff_enforces_dtz():
     """DTZ je u pinanim pravilima — novi datetime.utcnow() ruši lint stage."""
     text = (_BACKEND / "ruff.toml").read_text(encoding="utf-8")
     assert re.search(r'^select = \[.*"DTZ".*\]', text, re.M)
+
+
+def test_tc_erp_boot_01b_browser_check_is_a_gate_stage():
+    """BOOT-01b (faza 2): pravi preglednik nad pravim bundleom, protiv simulatora."""
+    gate = (_REPO / "scripts" / "gate.sh").read_text(encoding="utf-8")
+    assert "scripts/browser_check.py" in gate
+    assert 'EXPECTED=6' in gate
+    wf = (_REPO / ".github" / "workflows" / "gate.yml").read_text(encoding="utf-8")
+    assert "playwright install" in wf

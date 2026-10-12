@@ -73,5 +73,4 @@ export const getMarinaHealth = (marinaId: number) =>
 export const listPedestals = (marinaId: number) =>
   api.get<PedestalListResponse>(`/marinas/${marinaId}/pedestals`).then((r) => r.data)
 
-export const listBerths = (marinaId: number) =>
-  api.get(`/marinas/${marinaId}/berths`).then((r) => r.data)
+// Berths: see api/berths.ts (server-computed status, spec §3)

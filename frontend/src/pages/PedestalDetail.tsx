@@ -6,6 +6,7 @@
  * Tab 3 — Controls:  allow/deny/stop sessions + acknowledge alarms
  *                    (mirrors PedestalControl look and feel, scoped to this pedestal)
  */
+import { cabinetSentence } from '../api'
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { getDashboard, type PedestalInfo, type PedestalHealth, type SessionInfo } from '../api/dashboard'
@@ -187,7 +188,7 @@ export default function PedestalDetail() {
     try {
       await allowSession(mid, sessionId, pid)
       await fetchRealTime()
-    } catch { setControlError('Failed to allow session.') }
+    } catch (err) { setControlError(cabinetSentence(err, 'Failed to allow session.')) }
     finally { setActionLoading(null) }
   }
 
@@ -198,7 +199,7 @@ export default function PedestalDetail() {
       await denySession(mid, denyDialog.sessionId, denyReason || undefined, pid)
       setDenyDialog(null); setDenyReason('')
       await fetchRealTime()
-    } catch { setControlError('Failed to deny session.') }
+    } catch (err) { setControlError(cabinetSentence(err, 'Failed to deny session.')) }
     finally { setActionLoading(null) }
   }
 
@@ -209,7 +210,7 @@ export default function PedestalDetail() {
       await stopSession(mid, stopDialog.sessionId, pid)
       setStopDialog(null)
       await fetchRealTime()
-    } catch { setControlError('Failed to stop session.') }
+    } catch (err) { setControlError(cabinetSentence(err, 'Failed to stop session.')) }
     finally { setActionLoading(null) }
   }
 
@@ -220,7 +221,7 @@ export default function PedestalDetail() {
       await acknowledgeAlarm(mid, ackDialog.alarmId, pid)
       setAckDialog(null)
       await fetchRealTime()
-    } catch { setControlError('Failed to acknowledge alarm.') }
+    } catch (err) { setControlError(cabinetSentence(err, 'Failed to acknowledge alarm.')) }
     finally { setActionLoading(null) }
   }
 

@@ -1,0 +1,333 @@
+"""TC-ERP-BOOT-01b — the screens render, in a real browser, against the simulator.
+
+Three real processes and a real browser:
+  - the cabinet simulator (backend/simulator/cabinet_sim.py) on its own port,
+  - the ERP backend after a real migration, pointed at the simulator,
+  - the real production bundle (frontend/dist) behind a small proxy that does
+    for /api and /ws what nginx does in production,
+  - Chromium through Playwright.
+
+Then the DOM checks the spec asks to be made in the DOM, not in JSON:
+  SIM-01 full cabinet: outlets and controls present
+  SIM-06 Smart Mode OFF: readings rendered, ZERO control elements
+  SIM-02 retrofit: no water element anywhere
+  SIM-05 silent cabinet: every berth grey
+  SIM-07 no plug: the cabinet's sentence is shown, no error page
+
+Like boot_check.py it cannot pass empty: every check is counted and the exit
+code is 0 only when all of them ran and passed. A page error or console error
+anywhere fails it.
+
+Usage:  backend/.venv/Scripts/python.exe scripts/browser_check.py
+Needs:  frontend/dist (the gate builds it first), Chromium for Playwright.
+"""
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from boot_check import BACKEND, ROOT, free_port, http  # noqa: E402
+
+DIST = ROOT / "frontend" / "dist"
+ADMIN_EMAIL = "browser@check.erp"
+ADMIN_PASSWORD = "browser-check-password"  # noqa: S105 — throwaway, temp DB only
+SIM_EMAIL, SIM_PASSWORD = "erp@sim.local", "sim-password"  # noqa: S105
+
+EXPECTED = [
+    "sim: cabinet simulator comes up",
+    "erp: migration + backend come up",
+    "erp: marina pointed at the simulator",
+    "spa: the real bundle is served",
+    "BOOT-01b: login in a real browser",
+    "BOOT-01b: /marinas/:id/berths renders berth rows from the simulator",
+    "SIM-01: full cabinet - outlets and controls in the DOM",
+    "SIM-06: Smart Mode OFF - readings shown, zero controls in the DOM",
+    "SIM-02: retrofit - no water element anywhere",
+    "SIM-05: silent cabinet - every berth grey",
+    "SIM-07: no plug - the cabinet's sentence is shown",
+    "BOOT-01b: no page errors and no console errors in any scenario",
+]
+_passed: list[str] = []
+
+
+def ok(i: int) -> None:
+    _passed.append(EXPECTED[i])
+    print(f"  [ok]   {EXPECTED[i]}", flush=True)
+
+
+def fail(i: int, detail: str) -> None:
+    print(f"  [FAIL] {EXPECTED[i]}\n         {detail}", flush=True)
+    summary()
+    raise SystemExit(1)
+
+
+def summary() -> None:
+    print(f"\n  BROWSER: {len(_passed)}/{len(EXPECTED)} checks passed", flush=True)
+    for c in EXPECTED:
+        if c not in _passed:
+            print(f"         not passed: {c}", flush=True)
+
+
+def wait_port(port: int, proc: subprocess.Popen, what: str, timeout=40) -> bool:
+    import socket
+    end = time.monotonic() + timeout
+    while time.monotonic() < end:
+        if proc is not None and proc.poll() is not None:
+            return False
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=1):
+                return True
+        except OSError:
+            time.sleep(0.3)
+    return False
+
+
+def spa_app(backend: str):
+    """What nginx does in production: static bundle, /api and /ws to the backend."""
+    import httpx
+    import websockets
+    from starlette.applications import Starlette
+    from starlette.requests import Request
+    from starlette.responses import FileResponse, Response
+    from starlette.routing import Mount, Route, WebSocketRoute
+    from starlette.staticfiles import StaticFiles
+    from starlette.websockets import WebSocket
+
+    async def api(request: Request):
+        async with httpx.AsyncClient(base_url=backend, timeout=30) as c:
+            r = await c.request(request.method, request.url.path,
+                                params=request.query_params, content=await request.body(),
+                                headers={k: v for k, v in request.headers.items()
+                                         if k.lower() not in ("host", "content-length")})
+        return Response(r.content, r.status_code, media_type=r.headers.get("content-type"))
+
+    async def ws(socket: WebSocket):
+        await socket.accept()
+        url = backend.replace("http", "ws") + "/ws?" + socket.url.query
+        import asyncio
+        try:
+            async with websockets.connect(url) as upstream:
+                async def up():
+                    while True:
+                        await upstream.send(await socket.receive_text())
+
+                async def down():
+                    async for msg in upstream:
+                        await socket.send_text(msg)
+                await asyncio.gather(up(), down())
+        except Exception:  # noqa: BLE001 — either side closing ends the bridge
+            pass
+
+    async def index(_request: Request):
+        return FileResponse(DIST / "index.html")
+
+    return Starlette(routes=[
+        Route("/api/{path:path}", api, methods=["GET", "POST", "PATCH", "PUT", "DELETE"]),
+        WebSocketRoute("/ws", ws),
+        Mount("/assets", StaticFiles(directory=DIST / "assets")),
+        Route("/{path:path}", index),
+    ])
+
+
+def serve_in_thread(app, port: int):
+    import uvicorn
+    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
+    t = threading.Thread(target=server.run, daemon=True)
+    t.start()
+    return server
+
+
+def main() -> int:
+    print("TC-ERP-BOOT-01b - screens render in a real browser\n", flush=True)
+    if not (DIST / "index.html").is_file():
+        fail(3, "frontend/dist missing - build it first (the gate does)")
+
+    procs: list[subprocess.Popen] = []
+    tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+    t = Path(tmp.name)
+    try:
+        # ── simulator ──────────────────────────────────────────────────────
+        sim_port = free_port()
+        sim_url = f"http://127.0.0.1:{sim_port}"
+        env = {**os.environ, "PYTHONPATH": str(BACKEND)}
+        procs.append(subprocess.Popen(
+            [sys.executable, "-m", "uvicorn", "simulator.cabinet_sim:app", "--host", "127.0.0.1",
+             "--port", str(sim_port), "--log-level", "warning"],
+            cwd=str(BACKEND), env=env, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT))
+        if not wait_port(sim_port, procs[-1], "sim"):
+            fail(0, "simulator did not come up")
+        ok(0)
+
+        # ── ERP backend, real migration ────────────────────────────────────
+        db_url = f"sqlite:///{t / 'browser.db'}"
+        cfg = t / "cabinets.json"
+        erp_env = {k: v for k, v in os.environ.items()
+                   if k not in ("JWT_SECRET", "DATABASE_URL", "DEFAULT_ADMIN_PASSWORD")}
+        erp_env.update({
+            "PYTHONPATH": str(BACKEND), "DATABASE_URL": db_url,
+            "JWT_SECRET": "browser-check-" + os.urandom(8).hex(),
+            "DEFAULT_ADMIN_EMAIL": ADMIN_EMAIL, "DEFAULT_ADMIN_PASSWORD": ADMIN_PASSWORD,
+            "ERP_ENCRYPTION_KEY": "ZmDfcTF7_60GrrY167zsiPd67pEvs0aGOv2oasOM1Pg=",
+            "ERP_CABINETS_FILE": str(cfg),
+        })
+        r = subprocess.run([sys.executable, "-m", "alembic", "upgrade", "head"],
+                           cwd=str(BACKEND), env=erp_env, capture_output=True, text=True)
+        if r.returncode != 0:
+            fail(1, r.stderr[-1500:])
+        erp_port = free_port()
+        erp_url = f"http://127.0.0.1:{erp_port}"
+        log = open(t / "erp.log", "w", encoding="utf-8")
+        procs.append(subprocess.Popen(
+            [sys.executable, "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1",
+             "--port", str(erp_port), "--log-level", "warning"],
+            cwd=tmp.name, env=erp_env, stdout=log, stderr=subprocess.STDOUT))
+        if not wait_port(erp_port, procs[-1], "erp"):
+            log.flush()
+            fail(1, (t / "erp.log").read_text(encoding="utf-8")[-1500:])
+        ok(1)
+
+        code, body = http("POST", f"{erp_url}/api/auth/login",
+                          {"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD})
+        token = json.loads(body)["access_token"] if code == 200 else fail(2, body)
+        code, body = http("POST", f"{erp_url}/api/marinas", {
+            "name": "Krk (sim)", "pedestal_api_base_url": sim_url,
+            "pedestal_service_email": SIM_EMAIL, "pedestal_service_password": SIM_PASSWORD,
+        }, token=token)
+        if code not in (200, 201):
+            fail(2, f"{code} {body[:300]}")
+        marina_id = json.loads(body)["id"]
+
+        def config(device_type, berths):
+            cfg.write_text(json.dumps({"marinas": {str(marina_id): {
+                "device_type": device_type, "berths": berths}}}), encoding="utf-8")
+
+        def profile(name):
+            http("POST", f"{sim_url}/__sim/profile/{name}")
+
+        config("full", {"1": ["Q1"], "2": ["Q2"], "3": ["Q3", "V1"], "4": ["Q4", "V1"]})
+        ok(2)
+
+        # ── the real bundle ────────────────────────────────────────────────
+        spa_port = free_port()
+        spa_url = f"http://127.0.0.1:{spa_port}"
+        server = serve_in_thread(spa_app(erp_url), spa_port)
+        if not wait_port(spa_port, None, "spa"):
+            fail(3, "spa proxy did not come up")
+        code, body = http("GET", spa_url + "/")
+        if code != 200 or "<div id=\"root\"" not in body:
+            fail(3, f"{code} {body[:200]}")
+        ok(3)
+
+        # ── browser ────────────────────────────────────────────────────────
+        from playwright.sync_api import sync_playwright
+
+        problems: list[str] = []
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch()
+            page = browser.new_page()
+            page.on("pageerror", lambda e: problems.append(f"pageerror: {e}"))
+            # A refused command answers 409 on purpose (SIM-07); the browser logs
+            # every non-2xx as "Failed to load resource". That is the network,
+            # not the app — anything else on the console is a failure.
+            page.on("console", lambda m: m.type == "error"
+                    and "Failed to load resource" not in m.text
+                    and problems.append(f"console: {m.text}"))
+
+            page.goto(spa_url + "/login")
+            page.fill("input[type=email]", ADMIN_EMAIL)
+            page.fill("input[type=password]", ADMIN_PASSWORD)
+            page.click("button[type=submit]")
+            try:
+                page.wait_for_url("**/marinas", timeout=15000)
+            except Exception as exc:  # noqa: BLE001
+                fail(4, f"no redirect after login: {exc}")
+            ok(4)
+
+            berths_url = f"{spa_url}/marinas/{marina_id}/berths"
+
+            def load():
+                page.goto(berths_url)
+                page.wait_for_selector("[data-berth]", timeout=15000)
+
+            try:
+                load()
+            except Exception as exc:  # noqa: BLE001
+                fail(5, f"no berth rows: {exc}")
+            n = page.locator("[data-berth]").count()
+            if n != 4:
+                fail(5, f"expected 4 berth rows from the simulator, got {n}")
+            ok(5)
+
+            if page.locator("[data-outlet]").count() < 5 or page.locator("[data-control]").count() == 0:
+                fail(6, "full cabinet: outlets or controls missing")
+            ok(6)
+
+            profile("smart_off")
+            http("PATCH", f"{sim_url}/__sim/credentials", {"email": SIM_EMAIL, "password": SIM_PASSWORD})
+            load()
+            if page.locator("[data-outlet]").count() == 0:
+                fail(7, "Smart Mode OFF: readings must still render")
+            if page.locator("[data-control]").count() != 0 or page.locator("button:has-text('Upali')").count():
+                fail(7, "Smart Mode OFF: a control element exists in the DOM")
+            ok(7)
+
+            profile("retrofit")
+            http("PATCH", f"{sim_url}/__sim/credentials", {"email": SIM_EMAIL, "password": SIM_PASSWORD})
+            config("retrofit", {"1": ["Q1"], "2": ["Q2"], "3": ["Q3"], "4": ["Q4"]})
+            load()
+            if page.locator("[data-outlet^='V']").count() or "voda" in page.inner_text("[data-page]"):
+                fail(8, "retrofit: a water element is in the DOM")
+            ok(8)
+
+            profile("silent")
+            http("PATCH", f"{sim_url}/__sim/credentials", {"email": SIM_EMAIL, "password": SIM_PASSWORD})
+            config("full", {"1": ["Q1"], "2": ["Q2"], "3": ["Q3", "V1"], "4": ["Q4", "V1"]})
+            load()
+            colours = set(page.locator("[data-berth]").evaluate_all(
+                "els => els.map(e => e.dataset.colour)"))
+            if colours != {"grey"}:
+                fail(9, f"silent cabinet: colours {colours}")
+            ok(9)
+
+            profile("full")
+            http("PATCH", f"{sim_url}/__sim/credentials", {"email": SIM_EMAIL, "password": SIM_PASSWORD})
+            http("PATCH", f"{sim_url}/__sim/socket/2", {"plug_inserted": False})
+            load()
+            page.click("[data-control='Q2:activate']")
+            try:
+                page.wait_for_selector("[data-message]", timeout=10000)
+            except Exception as exc:  # noqa: BLE001
+                fail(10, f"no sentence shown: {exc}")
+            text = page.inner_text("[data-message]")
+            if "kabel" not in text.lower():
+                fail(10, f"expected the no-plug sentence, got {text!r}")
+            ok(10)
+
+            browser.close()
+
+        if problems:
+            fail(11, "\n         ".join(problems[:10]))
+        ok(11)
+        server.should_exit = True
+    finally:
+        for p in procs:
+            p.terminate()
+            try:
+                p.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                p.kill()
+        tmp.cleanup()
+
+    summary()
+    return 0 if _passed == EXPECTED else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

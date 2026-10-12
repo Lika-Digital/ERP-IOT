@@ -1,40 +1,35 @@
 """
 Pedestal-specific ext endpoints: berth occupancy, camera frame, camera stream URL.
 
-All three endpoints follow the same pattern as controls.py:
 - PREFIX  /api/marinas/{marina_id}/pedestals/{pedestal_id}/...
 - Auth    get_current_user + require_marina_access
 - Audit   record_action for camera frame (operator request logged)
-- Stale   berth_occupancy and camera_stream_url propagate is_stale flag
-- Frame   proxied as raw image/jpeg bytes; raises 503 on failure
+- Data    an Outcome from the cabinet client; no data at all -> 503 with the
+          outcome's code and sentence (spec §2.5), never a 500
 """
 import logging
 
-import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models.marina import Marina
 from ..models.user import User
 from ..services.audit_log import record_action
 from ..services.pedestal_api_factory import PedestalAPIClientFactory, get_pedestal_factory
-from .auth import get_current_user, require_marina_access
+from ._cabinet import marina_client
+from .auth import get_current_user
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/marinas", tags=["pedestal-ext"])
 
 
-def _require_marina(marina_id: int, user: User, db: Session) -> Marina:
-    marina = db.get(Marina, marina_id)
-    if not marina:
-        raise HTTPException(status_code=404, detail="Marina not found")
-    require_marina_access(marina_id, user, db)
-    return marina
+def _data_or_503(outcome, marina_id: int, pedestal_id: int) -> dict:
+    if not outcome.has_data:
+        raise HTTPException(status_code=503, detail=outcome.public())
+    return {"marina_id": marina_id, "pedestal_id": pedestal_id, "is_stale": outcome.is_stale,
+            "outcome": outcome.public(), "data": outcome.data}
 
-
-# ── 1. Berth occupancy ────────────────────────────────────────────────────────
 
 @router.get("/{marina_id}/pedestals/{pedestal_id}/berths/occupancy")
 async def get_berth_occupancy(
@@ -44,35 +39,10 @@ async def get_berth_occupancy(
     db: Session = Depends(get_db),
     factory: PedestalAPIClientFactory = Depends(get_pedestal_factory),
 ):
-    """
-    Return current berth occupancy for a specific pedestal.
-    503 when feature unavailable on the Pedestal SW (data is None after all retries).
-    """
-    _require_marina(marina_id, user, db)
-    client = factory.get_client(marina_id, db)
+    """Fallback occupancy (occupied only). The berth view uses berths.list (§2.2)."""
+    _, client = marina_client(marina_id, user, db, factory)
+    return _data_or_503(await client.berth_occupancy(pedestal_id, db), marina_id, pedestal_id)
 
-    try:
-        data, is_stale = await client.get_berth_occupancy(pedestal_id, marina_id, db)
-    except Exception as exc:
-        log.error(f"[EXT] berth_occupancy pedestal={pedestal_id} error: {exc}")
-        raise HTTPException(status_code=503, detail="Berth occupancy unavailable") from exc
-
-    if data is None:
-        raise HTTPException(status_code=503, detail="Berth occupancy unavailable")
-
-    log.info(
-        f"[EXT] berth_occupancy marina={marina_id} pedestal={pedestal_id} "
-        f"user={user.id} stale={is_stale}"
-    )
-    return {
-        "marina_id": marina_id,
-        "pedestal_id": pedestal_id,
-        "is_stale": is_stale,
-        "data": data,
-    }
-
-
-# ── 2. Camera frame ───────────────────────────────────────────────────────────
 
 @router.get("/{marina_id}/pedestals/{pedestal_id}/camera/frame")
 async def get_camera_frame(
@@ -82,43 +52,16 @@ async def get_camera_frame(
     db: Session = Depends(get_db),
     factory: PedestalAPIClientFactory = Depends(get_pedestal_factory),
 ):
-    """
-    Proxy a live JPEG frame from the pedestal camera.
-    Returns Content-Type: image/jpeg.  503 when camera unavailable.
-    Frame fetch is logged to audit_log (operator-initiated action).
-    """
-    _require_marina(marina_id, user, db)
-    client = factory.get_client(marina_id, db)
+    """A live JPEG from the pedestal camera. Never served from cache."""
+    _, client = marina_client(marina_id, user, db, factory)
+    outcome = await client.camera_frame(pedestal_id, db)
+    if not outcome.ok or not isinstance(outcome.data, bytes):
+        raise HTTPException(status_code=503, detail=outcome.public())
+    record_action(db, user_id=user.id, marina_id=marina_id, action="get_camera_frame",
+                  pedestal_id=pedestal_id, details={"bytes": len(outcome.data)})
+    return Response(content=outcome.data, media_type="image/jpeg",
+                    headers={"Cache-Control": "no-store"})
 
-    try:
-        frame_bytes = await client.get_camera_frame(pedestal_id, marina_id, db)
-    except (httpx.RequestError, httpx.HTTPStatusError, Exception) as exc:
-        log.warning(f"[EXT] camera_frame pedestal={pedestal_id} error: {exc}")
-        raise HTTPException(
-            status_code=503,
-            detail=f"Camera frame unavailable: {exc}",
-        ) from exc
-
-    record_action(
-        db,
-        user_id=user.id,
-        marina_id=marina_id,
-        action="get_camera_frame",
-        pedestal_id=pedestal_id,
-        details={"bytes": len(frame_bytes)},
-    )
-    log.info(
-        f"[EXT] camera_frame marina={marina_id} pedestal={pedestal_id} "
-        f"user={user.id} bytes={len(frame_bytes)}"
-    )
-    return Response(
-        content=frame_bytes,
-        media_type="image/jpeg",
-        headers={"Cache-Control": "no-store"},
-    )
-
-
-# ── 3. Camera stream URL ──────────────────────────────────────────────────────
 
 @router.get("/{marina_id}/pedestals/{pedestal_id}/camera/stream")
 async def get_camera_stream_url(
@@ -128,30 +71,5 @@ async def get_camera_stream_url(
     db: Session = Depends(get_db),
     factory: PedestalAPIClientFactory = Depends(get_pedestal_factory),
 ):
-    """
-    Return the RTSP stream URL for a pedestal camera plus reachability.
-    Does not proxy the stream — caller connects directly.
-    503 when camera not configured or Pedestal SW unreachable.
-    """
-    _require_marina(marina_id, user, db)
-    client = factory.get_client(marina_id, db)
-
-    try:
-        data, is_stale = await client.get_camera_stream_url(pedestal_id, marina_id, db)
-    except Exception as exc:
-        log.error(f"[EXT] camera_stream pedestal={pedestal_id} error: {exc}")
-        raise HTTPException(status_code=503, detail="Camera stream URL unavailable") from exc
-
-    if data is None:
-        raise HTTPException(status_code=503, detail="Camera stream URL unavailable")
-
-    log.info(
-        f"[EXT] camera_stream marina={marina_id} pedestal={pedestal_id} "
-        f"user={user.id} stale={is_stale}"
-    )
-    return {
-        "marina_id": marina_id,
-        "pedestal_id": pedestal_id,
-        "is_stale": is_stale,
-        "data": data,
-    }
+    _, client = marina_client(marina_id, user, db, factory)
+    return _data_or_503(await client.camera_stream(pedestal_id, db), marina_id, pedestal_id)

@@ -12,6 +12,7 @@ from ..models.cache import AlarmLog
 from ..models.user import User
 from ..services.pedestal_api_factory import PedestalAPIClientFactory, get_pedestal_factory
 from ..services.audit_log import record_action
+from ._cabinet import marina_client, read
 from .auth import get_current_user, require_marina_access
 from ..utils.time import utcnow
 
@@ -31,15 +32,8 @@ async def get_active_alarms(
     db: Session = Depends(get_db),
     factory: PedestalAPIClientFactory = Depends(get_pedestal_factory),
 ):
-    """Fetch active (unacknowledged) alarms from Pedestal SW."""
-    marina = db.get(Marina, marina_id)
-    if not marina:
-        raise HTTPException(status_code=404, detail="Marina not found")
-    require_marina_access(marina_id, user, db)
-
-    client = factory.get_client(marina_id, db)
-    data, is_stale = await client.get_active_alarms(marina_id, db)
-    return {"marina_id": marina_id, "is_stale": is_stale, "alarms": data}
+    _, client = marina_client(marina_id, user, db, factory)
+    return read(await client.active_alarms(db), "alarms", marina_id=marina_id)
 
 
 @router.get("/{marina_id}/alarms/log")
@@ -96,17 +90,13 @@ async def acknowledge_alarm(
     2. Update local alarm_log record
     3. Write audit log entry
     """
-    marina = db.get(Marina, marina_id)
-    if not marina:
-        raise HTTPException(status_code=404, detail="Marina not found")
-    require_marina_access(marina_id, user, db)
-
-    client = factory.get_client(marina_id, db)
-    try:
-        result = await client.acknowledge_alarm(alarm_id)
-    except Exception as exc:
-        log.warning(f"[ALARMS] Pedestal SW acknowledge failed: {exc} — updating local log only")
-        result = {"warning": "Pedestal SW unreachable; local log updated"}
+    _, client = marina_client(marina_id, user, db, factory)
+    outcome = await client.acknowledge_alarm(alarm_id, db=db)
+    if not outcome.ok:
+        # Behaviour kept from before phase 2: the local log is still updated, so
+        # the operator's acknowledgement is not lost when the cabinet is away.
+        # What changed: the outcome is now said, not hidden behind "acknowledged".
+        log.warning("[ALARMS] cabinet acknowledge: %s — local log updated only", outcome.code)
 
     local_entry = (
         db.query(AlarmLog)
@@ -127,8 +117,10 @@ async def acknowledge_alarm(
         action="acknowledge_alarm",
         pedestal_id=pedestal_id,
         target_id=alarm_id,
-        details={"result": result},
+        details={"outcome": outcome.code, "result": outcome.data if outcome.ok else None},
     )
 
     log.info(f"[ALARMS] acknowledge_alarm marina={marina_id} alarm={alarm_id} user={user.id}")
-    return {"acknowledged": True, "alarm_id": alarm_id, "acknowledged_by": user.id, "result": result}
+    return {"acknowledged": True, "alarm_id": alarm_id, "acknowledged_by": user.id,
+            "cabinet_acknowledged": outcome.ok, "outcome": outcome.public(),
+            "result": outcome.data if outcome.ok else None}

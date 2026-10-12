@@ -1,14 +1,16 @@
-"""Dashboard router — aggregated marina overview data."""
+"""Dashboard router — aggregated marina overview data, and the berth view (spec §3, §6.2)."""
 import logging
-from fastapi import APIRouter, Depends, HTTPException
+
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from ..cabinet import berth_view, cabinet_config
 from ..database import get_db
-from ..models.marina import Marina
 from ..models.user import User
 from ..models.cache import PedestalCache
 from ..services.pedestal_api_factory import PedestalAPIClientFactory, get_pedestal_factory
-from .auth import get_current_user, require_marina_access
+from ._cabinet import marina_client, read
+from .auth import get_current_user
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/marinas", tags=["dashboard"])
@@ -21,28 +23,18 @@ async def get_dashboard(
     db: Session = Depends(get_db),
     factory: PedestalAPIClientFactory = Depends(get_pedestal_factory),
 ):
-    """
-    Aggregated dashboard: pedestals, health, active sessions, pending sessions.
-    Returns is_stale=True if any data came from cache.
-    """
-    marina = db.get(Marina, marina_id)
-    if not marina:
-        raise HTTPException(status_code=404, detail="Marina not found")
-    require_marina_access(marina_id, user, db)
+    """Pedestals, health, active and pending sessions. Every read carries its outcome."""
+    marina, client = marina_client(marina_id, user, db, factory)
+    pedestals = await client.list_pedestals(db)
+    health = await client.health(db)
+    active = await client.active_sessions(db)
+    pending = await client.pending_sessions(db)
+    outcomes = [pedestals, health, active, pending]
 
-    client = factory.get_client(marina_id, db)
-
-    pedestals_data, stale1 = await client.list_pedestals(marina_id, db)
-    health_data, stale2 = await client.get_health(marina_id, db)
-    active_data, stale3 = await client.get_active_sessions(marina_id, db)
-    pending_data, stale4 = await client.get_pending_sessions(marina_id, db)
-
-    is_stale = any([stale1, stale2, stale3, stale4])
-
-    # Build temperature map from pedestal cache (updated by webhooks)
+    # Webhook readings, keyed by the REAL pedestal id (API cache rows have none)
     cache_rows = (
         db.query(PedestalCache)
-        .filter(PedestalCache.marina_id == marina_id)
+        .filter(PedestalCache.marina_id == marina_id, PedestalCache.pedestal_id.isnot(None))
         .all()
     )
     temperature_map = {
@@ -54,20 +46,17 @@ async def get_dashboard(
         for row in cache_rows
         if row.last_temperature is not None
     }
-    readings_map = {
-        row.pedestal_id: row.last_readings
-        for row in cache_rows
-        if row.last_readings
-    }
+    readings_map = {row.pedestal_id: row.last_readings for row in cache_rows if row.last_readings}
 
     return {
         "marina_id": marina_id,
         "marina_name": marina.name,
-        "is_stale": is_stale,
-        "pedestals": pedestals_data,
-        "health": health_data,
-        "active_sessions": active_data,
-        "pending_sessions": pending_data,
+        "is_stale": any(o.is_stale for o in outcomes),
+        "pedestals": pedestals.data if pedestals.has_data else None,
+        "health": health.data if health.has_data else None,
+        "active_sessions": active.data if active.has_data else None,
+        "pending_sessions": pending.data if pending.has_data else None,
+        "outcomes": {o.endpoint_key: o.public() for o in outcomes},
         "temperature_map": temperature_map,
         "readings_map": readings_map,
     }
@@ -80,15 +69,8 @@ async def get_health(
     db: Session = Depends(get_db),
     factory: PedestalAPIClientFactory = Depends(get_pedestal_factory),
 ):
-    """Health check for a specific marina's Pedestal SW."""
-    marina = db.get(Marina, marina_id)
-    if not marina:
-        raise HTTPException(status_code=404, detail="Marina not found")
-    require_marina_access(marina_id, user, db)
-
-    client = factory.get_client(marina_id, db)
-    data, is_stale = await client.get_health(marina_id, db)
-    return {"marina_id": marina_id, "is_stale": is_stale, "data": data}
+    _, client = marina_client(marina_id, user, db, factory)
+    return read(await client.health(db), "data", marina_id=marina_id)
 
 
 @router.get("/{marina_id}/pedestals")
@@ -98,15 +80,8 @@ async def list_pedestals(
     db: Session = Depends(get_db),
     factory: PedestalAPIClientFactory = Depends(get_pedestal_factory),
 ):
-    """List all pedestals for a marina."""
-    marina = db.get(Marina, marina_id)
-    if not marina:
-        raise HTTPException(status_code=404, detail="Marina not found")
-    require_marina_access(marina_id, user, db)
-
-    client = factory.get_client(marina_id, db)
-    data, is_stale = await client.list_pedestals(marina_id, db)
-    return {"marina_id": marina_id, "is_stale": is_stale, "pedestals": data}
+    _, client = marina_client(marina_id, user, db, factory)
+    return read(await client.list_pedestals(db), "pedestals", marina_id=marina_id)
 
 
 @router.get("/{marina_id}/berths")
@@ -116,12 +91,33 @@ async def list_berths(
     db: Session = Depends(get_db),
     factory: PedestalAPIClientFactory = Depends(get_pedestal_factory),
 ):
-    """List berth occupancy for a marina."""
-    marina = db.get(Marina, marina_id)
-    if not marina:
-        raise HTTPException(status_code=404, detail="Marina not found")
-    require_marina_access(marina_id, user, db)
+    """Berths with server-computed status, outlets, and controls only where they work.
 
-    client = factory.get_client(marina_id, db)
-    data, is_stale = await client.list_berths(marina_id, db)
-    return {"marina_id": marina_id, "is_stale": is_stale, "berths": data}
+    The frontend renders `berth_colour` and `status_sentence` and never derives a
+    status itself (spec §3, TC-ERP-SIM-15).
+    """
+    _, client = marina_client(marina_id, user, db, factory)
+    # sequential on purpose: one SQLAlchemy session must not be shared by
+    # concurrently running coroutines (each call writes sync_log)
+    health = await client.health(db)
+    berths = await client.list_berths(db)
+
+    pks = sorted(int(k) for k in (health.data or {}) if str(k).isdigit())         if health.has_data and isinstance(health.data, dict) else []
+    status, load, breakers = {}, {}, {}
+    for pk in pks:
+        status[pk] = await client.pedestal_status(pk, db)
+        load[pk] = await client.pedestal_load(pk, db)
+        breakers[pk] = await client.pedestal_breakers(pk, db)
+    alarms = await client.active_alarms(db)
+    sessions = await client.active_sessions(db)
+
+    # A control is offered only if the command endpoint is not known to be off.
+    controls_enabled = not client.is_known_not_enabled("controls.socket_cmd")
+
+    view = berth_view.build(
+        health=health, berths=berths, status=status, load=load, breakers=breakers,
+        alarms=alarms, sessions=sessions, config=cabinet_config.load(marina_id),
+        controls_enabled=controls_enabled,
+    )
+    view["marina_id"] = marina_id
+    return view

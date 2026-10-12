@@ -6,28 +6,7 @@ Verifies:
 - alarm_log is filtered by marina_id
 - marina_manager blocked from other marinas
 """
-from unittest.mock import AsyncMock, MagicMock
 from app.utils.time import utcnow
-
-
-def _mock_factory(**methods):
-    mock_client = MagicMock()
-    for name, return_value in methods.items():
-        setattr(mock_client, name, AsyncMock(return_value=return_value))
-    mock_factory = MagicMock()
-    mock_factory.get_client.return_value = mock_client
-    return mock_factory
-
-
-def _override(mock_factory):
-    from app.services.pedestal_api_factory import get_pedestal_factory as real_dep
-    from app.main import app
-    app.dependency_overrides[real_dep] = lambda: mock_factory
-
-
-def _clear():
-    from app.main import app
-    app.dependency_overrides.clear()
 
 
 def _seed_alarm(marina_id: int, pedestal_id: int = 1) -> int:
@@ -76,20 +55,22 @@ def test_manager_blocked_from_restricted_marina_alarms(
     assert r.status_code == 403
 
 
-def test_acknowledge_alarm_writes_audit_log(client, admin_headers, marina_id, setup_test_database):
-    factory = _mock_factory(acknowledge_alarm={"acknowledged": True})
-    _override(factory)
+def _cabinet_alarm(aid=100, pedestal_id=1, alarm_type="temperature"):
+    # AlarmResponse, Cloud_IOT routers/alarms.py:13-27
+    return {"id": aid, "alarm_type": alarm_type, "source": "mqtt", "pedestal_id": pedestal_id,
+            "status": "triggered", "severity": None, "message": "Temperature above 50",
+            "details": None, "triggered_at": "2026-10-12T09:00:00", "acknowledged_at": None,
+            "acknowledged_by": None, "resolved_at": None}
 
-    r = client.post(
-        f"/api/marinas/{marina_id}/alarms/100/acknowledge",
-        headers=admin_headers,
-    )
-    _clear()
 
+def test_acknowledge_alarm_writes_audit_log(client, admin_headers, marina_id, sim,
+                                            setup_test_database):
+    sim.state.sim.alarms = [_cabinet_alarm(100)]
+    r = client.post(f"/api/marinas/{marina_id}/alarms/100/acknowledge", headers=admin_headers)
     assert r.status_code == 200
     data = r.json()
-    assert data["acknowledged"] is True
-    assert data["alarm_id"] == 100
+    assert data["acknowledged"] is True and data["alarm_id"] == 100
+    assert data["cabinet_acknowledged"] is True
 
     from tests.conftest import TestSession
     from app.models.cache import AuditLog
@@ -106,26 +87,30 @@ def test_acknowledge_alarm_writes_audit_log(client, admin_headers, marina_id, se
                 AuditLog.target_id == 100,
                 AuditLog.user_id == user.id,
             )
+            .order_by(AuditLog.id.desc())
             .first()
         )
-        assert entry is not None
-        assert entry.performed_at is not None
+        assert entry is not None and entry.performed_at is not None
+        assert entry.details["outcome"] == "ok"
     finally:
         db.close()
 
 
-def test_active_alarms_proxied_from_pedestal(client, admin_headers, marina_id):
-    mock_alarms = [{"id": 1, "alarm_type": "temperature"}]
-    factory = _mock_factory(get_active_alarms=(mock_alarms, False))
-    _override(factory)
+def test_acknowledge_when_cabinet_is_away_says_so(client, admin_headers, marina_id, sim):
+    sim.state.sim.fail_next = [500] * 10
+    r = client.post(f"/api/marinas/{marina_id}/alarms/100/acknowledge", headers=admin_headers)
+    assert r.status_code == 200
+    assert r.json()["cabinet_acknowledged"] is False
+    assert r.json()["outcome"]["code"] == "no_contact"
 
+
+def test_active_alarms_proxied_from_pedestal(client, admin_headers, marina_id, sim):
+    sim.state.sim.alarms = [_cabinet_alarm(1)]
     r = client.get(f"/api/marinas/{marina_id}/alarms/active", headers=admin_headers)
-    _clear()
-
     assert r.status_code == 200
     data = r.json()
     assert data["is_stale"] is False
-    assert data["alarms"] == mock_alarms
+    assert data["alarms"] == [_cabinet_alarm(1)]
 
 
 def test_unauthenticated_alarm_log_returns_401(client, marina_id):

@@ -1,3 +1,4 @@
+import { cabinetSentence } from '../api'
 import { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
 import { getPendingSessions, getActiveSessions } from '../api/energy'
@@ -58,8 +59,8 @@ export default function PedestalControl() {
     try {
       await allowSession(id, sessionId, pedestalId)
       await fetchData()
-    } catch {
-      setError('Failed to allow session.')
+    } catch (err) {
+      setError(cabinetSentence(err, 'Failed to allow session.'))
     } finally {
       setActionLoading(null)
     }
@@ -73,8 +74,8 @@ export default function PedestalControl() {
       setDenyDialog(null)
       setDenyReason('')
       await fetchData()
-    } catch {
-      setError('Failed to deny session.')
+    } catch (err) {
+      setError(cabinetSentence(err, 'Failed to deny session.'))
     } finally {
       setActionLoading(null)
     }
@@ -87,8 +88,8 @@ export default function PedestalControl() {
       await stopSession(id, stopDialog.sessionId, stopDialog.pedestalId)
       setStopDialog(null)
       await fetchData()
-    } catch {
-      setError('Failed to stop session.')
+    } catch (err) {
+      setError(cabinetSentence(err, 'Failed to stop session.'))
     } finally {
       setActionLoading(null)
     }

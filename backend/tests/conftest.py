@@ -207,3 +207,61 @@ def restricted_marina_id(setup_test_database):
         return m.id
     finally:
         db.close()
+
+
+# ─── Cabinet simulator (spec §9.1) ────────────────────────────────────────────
+
+async def _no_sleep(_seconds):
+    return None
+
+
+@pytest.fixture
+def sim(setup_test_database):
+    """The real ERP app and the real cabinet client, talking to the simulator.
+
+    The simulator runs in-process through httpx.ASGITransport; credentials are
+    the seeded Test Marina's. Backoff waits are skipped (the waits themselves
+    are asserted in test_cabinet_client.py). Yields the simulator app; a test changes
+    `sim.state.sim` to set up a scenario.
+    """
+    import httpx
+    from simulator.cabinet_sim import create_app, make_state
+    from app.services.pedestal_api_factory import get_pedestal_factory
+
+    state = make_state("full")
+    state.service_email = "erp@test.service"
+    state.service_password = "test-service-pass-123"
+    sim_app = create_app(state)
+
+    factory = get_pedestal_factory()
+    factory._clients.clear()
+    factory.transport = httpx.ASGITransport(app=sim_app)
+    factory.sleep = _no_sleep
+    try:
+        yield sim_app
+    finally:
+        factory.transport = None
+        factory.sleep = None
+        factory._clients.clear()
+        db = TestSession()
+        try:
+            from app.models.cache import PedestalCache
+            db.query(PedestalCache).delete()
+            db.commit()
+        finally:
+            db.close()
+
+
+@pytest.fixture
+def cabinet_config(tmp_path, monkeypatch):
+    """Write an ERP_CABINETS_FILE for the seeded marina; returns a setter."""
+    import json
+
+    def write(marina_id, device_type, berths):
+        p = tmp_path / "cabinets.json"
+        p.write_text(json.dumps({"marinas": {str(marina_id): {
+            "device_type": device_type, "berths": berths}}}), encoding="utf-8")
+        monkeypatch.setenv("ERP_CABINETS_FILE", str(p))
+        return p
+
+    return write

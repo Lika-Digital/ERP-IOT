@@ -1,10 +1,10 @@
 """
-PedestalAPIClientFactory — singleton factory for per-marina PedestalAPIClient instances.
+PedestalAPIClientFactory — one CabinetClient (app/cabinet/client.py) per marina.
 
 Responsibilities:
 - Load marina credentials from DB.
 - Decrypt the stored service account password.
-- Create PedestalAPIClient instances and cache them by marina_id.
+- Create CabinetClient instances and cache them by marina_id.
 - Provide a FastAPI dependency function.
 
 Usage in a router:
@@ -17,32 +17,38 @@ Usage in a router:
         db: Session = Depends(get_db),
     ):
         client = factory.get_client(marina_id, db)
-        data, is_stale = await client.list_pedestals(marina_id, db)
+        outcome = await client.list_pedestals(db)   # an Outcome, never an exception
 """
 import logging
-from typing import Dict
+from typing import Dict, Optional
+
+import httpx
 
 from sqlalchemy.orm import Session
 
 from ..models.marina import Marina
 from ..utils.encryption import decrypt_password
-from .pedestal_api import PedestalAPIClient
+from ..cabinet.client import CabinetClient
 
 logger = logging.getLogger(__name__)
 
 
 class PedestalAPIClientFactory:
     """
-    Singleton factory.  One PedestalAPIClient per marina_id is cached in memory
+    Singleton factory.  One CabinetClient per marina_id is cached in memory
     so that the JWT token cache inside each client is preserved across requests.
     """
 
     def __init__(self) -> None:
-        self._clients: Dict[int, PedestalAPIClient] = {}
+        self._clients: Dict[int, CabinetClient] = {}
+        # Tests point every client at the in-process simulator through this.
+        self.transport: Optional[httpx.AsyncBaseTransport] = None
+        # ...and skip real backoff waits through this (None = asyncio.sleep).
+        self.sleep = None
 
-    def get_client(self, marina_id: int, db: Session) -> PedestalAPIClient:
+    def get_client(self, marina_id: int, db: Session) -> CabinetClient:
         """
-        Return the cached PedestalAPIClient for this marina.
+        Return the cached CabinetClient for this marina.
         Creates a new client on first call (or if credentials changed).
 
         Raises:
@@ -87,14 +93,19 @@ class PedestalAPIClientFactory:
             # Credentials changed — create a fresh client
             logger.info(f"[Factory] Credentials changed for marina {marina_id} — refreshing client")
 
-        client = PedestalAPIClient(
+        client = CabinetClient(
             marina_id=marina_id,
             base_url=marina.pedestal_api_base_url,
             service_email=marina.pedestal_service_email,
             service_password=plain_password,
+            # channel B (X-API-Key) has no caller before the NFC flow (phase 4/7);
+            # its key lands with the cabinets table in phase 3 (spec §4.1)
+            erp_api_key=None,
+            transport=self.transport,
+            **({"sleep": self.sleep} if self.sleep else {}),
         )
         self._clients[marina_id] = client
-        logger.debug(f"[Factory] Created PedestalAPIClient for marina {marina_id}")
+        logger.debug(f"[Factory] Created CabinetClient for marina {marina_id}")
         return client
 
     def invalidate(self, marina_id: int) -> None:
