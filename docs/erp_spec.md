@@ -3,9 +3,10 @@
 Što se gradi, u kojem redoslijedu, i svaka odluka izrečena tako da ispravak
 košta jedan redak, a ne razgovor.
 
-    Verzija 4 — zamjenjuje v3 od 2026-10-11
-    Datum 2026-10-11
-    Status faza 1 ZAVRŠENA, gate zelen (§10.1); faza 2 čeka odobrenje; §1 je prazan
+    Verzija 5 — zamjenjuje v4 od 2026-10-11
+    Datum 2026-10-12
+    Status faze 1 i 2 ZAVRŠENE, gate i CI zeleni (§10.1, §10.2); faza 3 čeka odobrenje;
+           §1 je prazan, ali §0.7 donosi točke koje traže tvoju potvrdu
 
 Čita se uz `docs/inputs/odluke.md` **v2.1** (odluke, obvezujuće — v2.1 dodaje **D18**),
 `docs/inputs/ormar_gateway_izvjestaj.md` (ugovor s ormarom, file:line),
@@ -13,6 +14,19 @@ košta jedan redak, a ne razgovor.
 `docs/inputs/ormar_ui_v2_spec.txt` (specifikacija ormara — uzor forme i izvor rječnika stanja).
 
 **Sve u ovom dokumentu je ODLUČENO. §1 je prazan — nema otvorenih blokatora.**
+
+### Što se promijenilo u verziji 5
+
+| | |
+|---|---|
+| **Faza 2 završena** | gate 6/6 i CI zeleni; izvještaj s brojkama u **§10.2** |
+| **§0.7 · NOVO — ispravci iz koda ormara** | simulator je sagrađen iz **koda** ormara (`Cloud_IOT` `a709cf8`, samo `git show`), ne iz snimljenih odgovora — njih u repou nema. Čitanje je oborilo **devet** pretpostavki ove specifikacije; dvije traže tvoju potvrdu (⚠) |
+| **§2.4 · `GET /session/{id}` nije siguran za prikaz** | i on piše `last_reconciled_at` — kao `by-user`. Oba su sada samo za usklađivanje (⚠ §0.7 #1) |
+| **§2.5 · četiri nova retka** | 400 `session_state_changed`, 404 `not_found`, 409 `nfc_mapping_mismatch`; 503 „Not enabled" s direktnih ruta = `not_enabled` |
+| **§3.1 / §3.2** | heartbeat 15 s → `STALE` nakon 30 s; novi redak `unclassified` (plovilo nepoznato, ništa drugo istina) — **nije zeleno** |
+| **§4.1** | ormar **ne kaže ima li vode**; `device_type` i mapiranje vez→priključak su ERP podatak, do faze 3 iz `ERP_CABINETS_FILE` (⚠ §0.7 #3) |
+| **§9** | BOOT-01b je stage gatea (pravi Chromium); SIM-00..16 zeleni, s napomenom što je od njih ugovorni dio a što čeka fazu 3/7 |
+| **§7.2 / §11** | R2b, R12, R13 novi zahtjevi; O15, O16, O18, O19, O20 zatvoreni; O17 odlučen; novi O21–O26 |
 
 ### Što se promijenilo u verziji 4
 
@@ -229,6 +243,30 @@ koja su jedino što je od nje preživjelo u v3. Svako je sada odluka, ne nalaz.
 > **Ako griješim** · Jedan ključ u listi odbacivanja; ako ormar ikad legitimno pošalje cijenu,
 > to je izmjena ugovora i ide kroz §1, ne kroz parser.
 
+### §0.7 · ISPRAVCI iz koda ormara (faza 2)
+
+Snimljenih odgovora Krka u repou nema. Simulator je zato sagrađen iz **koda koji te odgovore
+proizvodi**: `Cloud_IOT` grana `develop`, commit **`a709cf8`**, čitan isključivo s `git show`
+(radno stablo ondje ima tuđe necommitane izmjene i nije čitano). Svaki handler u
+`backend/simulator/cabinet_sim.py` nosi file:line. Živi odgovor i dalje provjerava TC-ERP-LIVE-01.
+
+| # | Pretpostavka u spec v4 | Što kod kaže (`a709cf8`) | Posljedica u ERP-u |
+|---|---|---|---|
+| **1** ⚠ | `GET /api/nfc/session/{id}` je put **za prikaz** (§2.4, SIM-00g) | **i on piše `last_reconciled_at`** kad nema korisničkog tokena (`nfc.py:688-708` → `erp_reconciliation.py:112-124`) — isto kao `by-user` | oba se zovu samo iz usklađivanja (`*_for_reconciliation`); prikaz sesija ide kanalom A (`sessions.active`). **Tvoja potvrda**, i R2b (§7.2) |
+| 2 | ormarov token traje 8 h (stari klijent ga je keširao 7 h) | **120 min** (`config.py:21`), odgovor **nema `expires_in`** | stari klijent je na 401 brisao token **bez ponavljanja**: ~5 od svakih 7 sati ERP bi prikazivao keš. Sada `exp` iz JWT-a, 401 → jedna ponovna prijava |
+| **3** ⚠ | `sockets/valves.config_list` služe za otkrivanje mogućnosti (§2.2, D3) | `valves/config` **uvijek** vraća dva ventila (`pedestal_config.py:551-572`), `/water` isto (`ext_pedestal_endpoints.py:325-377`) — i na retrofitu. Nema `available`, nema imena, nema faza | ormar **ne kaže ima li vode**. `device_type` je ERP podatak (§4.1 ga već ima); do faze 3 dolazi iz `ERP_CABINETS_FILE`. **Tvoja potvrda** privremenog izvora |
+| 4 | Q1 šalje `currentAmpsL1..L3` / `powerKwTotal` (§4.1, D3, SIM-03) | ext API šalje **`current_l1..l3`** + `power_kw` (snake_case, `meter_load.py:64-107`); camelCase je MQTT | parser čita ext imena; SIM-03 testira njih |
+| 5 | 409 „već u uporabi" na `socket_cmd` (§2.5) | na `socket_cmd` **ne postoji**; postoji samo na NFC `/scan` (`nfc.py:543-685`) i `approve_socket` | `outlet_busy` dolazi s kanala B; SIM-07 testira tamo |
+| 6 | 403 = „endpoint nije uključen" (§2.5) | na proxiranim rutama da (`"Endpoint not allowed"`); na **direktnim** rutama je **503** `{"error":"Feature not available","reason":"Not enabled"}` **bez `detail`**; neaktivan gateway je 403/404, ne 503 | oba oblika → `not_enabled` |
+| 7 | `allow/deny/stop` imaju samo 409 (§2.5) | vraćaju **400** `"Session is X, expected Y"` (`controls.py:176-319`) | novi kod `session_state_changed` |
+| 8 | interval heartbeata nepoznat | **15 s** (`docs/architecture.md:67`); `opta_connected` se nakon starta **nikad ne vraća na false** (`main.py:600-603`) | `STALE` nakon 30 s; NALAZ 5.1 potvrđen još jače — `device_connected` je trajno `true` |
+| 9 | `pedestals.list` nosi `display_id` (§2.2) | **ne** — `display_id` je `opta_client_id` u `pedestals.health` (ključan po PK-u) | tablica PK↔display gradi se iz `health` |
+
+Usput, bez posljedice za ERP danas: `GET /api/berths` **stvara** vez za svaki ormar koji ga
+nema (`berths.py:213-223`) — još jedan GET s nuspojavom (O22); `/water` `total_l` je brojač
+sesije, a `session_l` je uvijek `null` (`ext_pedestal_endpoints.py:363`); alarm curenja je
+`alarm_type: "moisture"`, ne `water_leak`.
+
 ## §1 Blokirajuće
 
 **Prazno. Nema otvorenih blokatora.** Sve u ovom dokumentu je odlučeno.
@@ -414,7 +452,7 @@ daje 403. ERP do njega dolazi isključivo izravno.
 | namjena | poziv | tijelo / parametri | napomena |
 |---|---|---|---|
 | Pripremi priključak | `POST /api/nfc/scan` | `{nfc_tag_id, user_id}` | ne uključuje — uključuje se na priklop |
-| Stanje sesije | `GET /api/nfc/session/{session_id}` | — | **ovo se koristi za prikaz** |
+| Stanje sesije | `GET /api/nfc/session/{session_id}` | — | ⚠ **i ovo mijenja stanje** (§0.7 #1) — samo iz usklađivača |
 | Sesije korisnika | `GET /api/nfc/sessions/by-user/{user_id}` | `?status=active\|ended&limit=1..500` | ⚠ **mijenja stanje** — samo iz usklađivača (§7.2 R2) |
 | Zaustavi sesiju | `POST /api/nfc/session/{session_id}/stop` | — | 409 kad je osoblje već zatvorilo |
 
@@ -501,6 +539,10 @@ Ormar je popravljen prema svojoj specifikaciji. Ugovor je
 | **409** `detail` = no plug inserted | kabel nije utaknut | `awaiting_plug`; priprema ostaje | „Priklopite kabel za početak." |
 | **409** `detail` = već u uporabi | jedna sesija po priključku | `outlet_busy` | „Ovaj priključak trenutno koristi netko drugi." |
 | **409** (kanal B, `/stop`) | sesija već zatvorena (osoblje) | zatvori obračun po zadnjoj brojci; **nije greška** | ništa |
+| **400** `Session is X, expected Y` | sesija je u međuvremenu promijenila stanje (`controls.py:176-319`) | `session_state_changed`; ne ponavlja | „Sesija je u međuvremenu promijenila stanje." |
+| **404** | ormar ne poznaje zapis | `not_found` | „Ormar ne poznaje ovaj zapis." |
+| **409** `NFC tag … is mapped to …` | naljepnica pripada drugom priključku | `nfc_mapping_mismatch`; ništa se ne uključuje | „Naljepnica ne odgovara ovom priključku." |
+| **503** `{"reason":"Not enabled"}` | direktna ruta nije uključena (bez `detail`, §0.7 #6) | isto kao 403: `not_enabled`, ponovna proba za 1 h | isto kao 403 |
 | **422** | tip path parametra — `display_id` poslan na PK-only rutu | **greška u ERP-u**; logiraj kao bug, ne ponavljaj | „Tehnička greška, prijavljena." |
 | **503** | gateway neaktivan, ili mogućnost nije uključena/dostupna | `capability_unavailable` — **nije greška** | jedna rečenica, **nijedna kontrola** (D3) |
 | **5xx / timeout / connect** | ormar ili mreža | 3 pokušaja, backoff 1/2/4 s; zatim keš s `is_stale=true` | sivo + „Podaci od HH:MM" |
@@ -532,7 +574,8 @@ Ormar je popravljen prema svojoj specifikaciji. Ugovor je
 | **struja** | `DA` / `NE` | aktivna **električna** sesija na utičnici tog veza; vode ne ulaze |
 | **rezervacija** | `DA` / `NE` | ERP (`berth_reservations`) |
 
-Pragovi: **`STALE` nakon 2× intervala heartbeata, `OFFLINE` nakon 10 min** (D2).
+Pragovi: **`STALE` nakon 2× intervala heartbeata, `OFFLINE` nakon 10 min** (D2). Interval je
+**15 s** (§0.7 #8), dakle `STALE` nakon 30 s.
 Svježina ML-a iz `last_analyzed`; prag **30 min**, nakon toga `plovilo = NEPOZNATO`.
 
 > **Odlučeno** · `device_connected` (ERP-ovo ime za `opta_connected`) **nije dokaz da je
@@ -572,6 +615,20 @@ vlagu i temperaturu.
 
 **Stanje bez unosa u ovoj tablici ne može se iscrtati** — postaje `unknown` /
 „Nešto treba provjeriti". To je pošteno i tjera da se unos doda, umjesto da praznina prođe.
+
+> **Odlučeno (faza 2)** · To stanje ima ime: **`unclassified`** / `unknown` / sivo. Najčešći slučaj je
+> **plovilo `NEPOZNATO`** (`last_analyzed` fali ili je starije od 30 min) bez ičeg drugog istinitog.
+>
+> **Zašto** · Rang 12 (`free`, zeleno) traži da „ništa iznad nije istina" — a za nepoznato plovilo
+> to bi bilo zeleno za vez koji ne vidimo. Pravilo same tablice kaže da se to ne crta.
+>
+> **Ako griješim** · Jedan redak u `berth_status.py`.
+
+Boje se prenose kao **ključevi** `grey | red | orange | yellow | blue | green` (`berth_colour`);
+frontend ih samo pretvara u klasu.
+
+`outlet_silent` (rang 2.5) **nema izvor na ext API-ju** — „stanje priključka starije od 60 s" zna
+samo CORE ormara. U fazi 2 je uvijek neistinit (O24).
 
 **Rang 7 (`measurement_missing`) okida se iz `consumption_source == "unknown"`** u ugovoru
 sesije (§2.4), i dodatno iz ERP-ove provjere preračuna: ako se brojka ne slaže s razlikom
@@ -667,6 +724,16 @@ outlets                         -- priključci, uvijek pravim imenom (D3)
 > samo na računu.
 >
 > **Ako griješim** · Nema verzije ovoga koju bih izveo drukčije.
+
+> **Odlučeno (faza 2, ⚠ potvrdi)** · `device_type` i mapiranje vez → priključak su **ERP podatak**:
+> ormar ih ne izlaže (§0.7 #3, NALAZ 4.2). Do tablica faze 3 dolaze iz jedne JSON datoteke
+> (`ERP_CABINETS_FILE`, `backend/app/cabinet/cabinet_config.py`). **Bez datoteke se ništa ne
+> pogađa**: voda se ne crta, signal struje veza je `UNKNOWN`, a zaslon to i kaže.
+>
+> **Zašto** · Faza 2 ne smije dodavati migracije — `006` je tvojom odlukom O17 (faza 3).
+> Alternativa — zaključivati iz `valves/config` — dala bi vodu svakom retrofitu.
+>
+> **Ako griješim** · Faza 3 preuzima isti oblik u tablice `cabinets` / `outlets`; datoteka se briše.
 
 > **Odlučeno** · `phases` i oblik telemetrije su podatak, ne pretpostavka koda.
 >
@@ -1467,6 +1534,9 @@ na dan čitanja i služi prioritizaciji — **ugovorna provjera je TC-ERP-LIVE-0
 |---|---|---|---|---|
 | ~~R9~~ | ~~NFC payload po ugovoru sa 16 ključeva~~ — **ZATVOREN u v3**: ormar je popravljen prema specifikaciji, ne naplaćuje i ne računa cijenu, vraća stanje brojila. Provjerava se **živim odgovorom** pri spajanju (TC-ERP-LIVE-01), ne commitom | — | — | ništa; BLOK-3 je zatvoren |
 | **R2** | **`GET /api/nfc/sessions/by-user` ne smije mijenjati stanje** — ili, ako mora, to mora biti dokumentirano i idempotentno, a `/reconciliation` i `/divergence` dostupni s `X-API-Key` | vidi okvir ispod | **djelomično** — na Krku ne piše; na `develop` piše | bolji pull u fazi 4; iteracija po korisnicima radi bez toga |
+| **R2b** | **`GET /api/nfc/session/{id}` ne smije mijenjati stanje** — isto kao R2 (§0.7 #1) | `a709cf8:…/nfc.py:688-708` → `erp_reconciliation.py:112-124` | nije provjereno | bez toga ERP nema read-only put do pojedine sesije |
+| **R12** | **`GET /api/berths` ne smije stvarati vezove** (O22) | `a709cf8:…/berths.py:213-223` | nije provjereno | ništa |
+| **R13** | **`valves/config` neka kaže koliko ventila ormar STVARNO ima** (ili `available`) | `a709cf8:…/pedestal_config.py:551-572` | nije provjereno | ništa — ERP ima `device_type` |
 | **R1** | **Ext endpoint za čitanje mapiranja** vez → `socket_id`/`valve_id` (D18, „odmah") | NALAZ 4.2; `api_catalog.py` identičan na oba | **ne** — nijedna `/api/marina/*` ruta nije u katalogu; na `773bca6` `berth_assignment.py` ni ne postoji | §4.3 prelazi iz `'unverifiable'` u stvarnu usporedbu |
 | **R10** | **Ext endpoint za upis mapiranja** — bidirectional, s autorom i auditom (D18, „kasnije") | isto | **ne** | cilj iz D18 („Admin unosi u ERP, ERP šalje ormaru"); usporedba radi bez toga |
 | **R4** | **Popravak 2.3** — mod se poštuje i na direktnim ext write rutama | `a709cf8:…/ext_breaker_endpoints.py:91-101`; **datoteka identična na Krku** | **da, isti problem** | uključivanje `breakers.socket_reset_ext` i `load.auto_stop_ack_ext` (§2.3) |
@@ -1696,6 +1766,16 @@ završetak faze 5:
 | **TC-ERP-SIM-15** | statusi se računaju na serveru | izvorni skan: nijedna `status_code` vrijednost se ne izvodi u `frontend/src/**` |
 | **TC-ERP-SIM-16** | odsutna mogućnost | `available: false` → **nijedan** kontrolni element u DOM-u (traži se odsutnost, ne `disabled`) |
 
+**Faza 2 — što je od ovoga ugovorni dio, a što čeka:** `billing_records` (faza 7) i tablice
+mapiranja/naljepnica (faza 3) ne postoje. Zato SIM-00e/11/12 tvrde `billable == False` i
+`manual_review`, ne odsutnost retka u `billing_records`; SIM-14 tvrdi pravilo traženja (oba
+zapisa), ne indekse; SIM-04 tvrdi da je „dijeli V1" samo na prikazu priključka. Kad faze 3 i 7
+dodaju tablice, isti testovi dobivaju po jednu tvrdnju više — ne nove testove.
+
+DOM tvrdnje (SIM-01/02/05/06/07) vrti `scripts/browser_check.py` u pravom Chromiumu nad pravim
+bundleom (stage 6 gatea, i u CI-ju). Provjereno mutacijom: frontend koji crta kontrolu bez
+dopuštenja servera → SIM-06 pada.
+
 ### §9.1b · Prvi stvarni spoj — ugovor se provjerava na živom odgovoru
 
 > **Odlučeno** · **TC-ERP-LIVE-01**: pri prvom stvarnom spajanju ormara, ERP provjerava
@@ -1710,6 +1790,9 @@ završetak faze 5:
 >
 > **Ako griješim** · Test je jedan skript s read-only GET-ovima; vrti se pri spajanju i u
 > runbooku (§8.4), ne na svaki push.
+>
+> ⚠ **Faza 2:** `GET /api/nfc/session/{id}` **nije read-only** (§0.7 #1) — označi sesiju kao
+> usklađenu. LIVE-01 ga smije zvati samo na **probnoj** sesiji stvorenoj za taj test (O23).
 
 ### §9.2 · Prihvatni testovi na pravom ormaru (D11)
 
@@ -1785,6 +1868,45 @@ je prva stvarna provjera; boot tamo ide protiv pravog Postgresa 16, lokalno prot
 lokalno, ali ih `core.hooksPath=.githooks` zaobilazi; zovu obrisani `tests/run_tests.sh`, pa bi
 bez `hooksPath` pali, a ne prošli.
 
+### §10.2 · Faza 2 — izvještaj (2026-10-12)
+
+**Gate zelen, CI zelen.** Lokalno `bash scripts/gate.sh` → `GATE (full): 6/6`, 71 s. CI run
+[`38212339841`](https://github.com/Lika-Digital/ERP-IOT/actions/runs/38212339841) na Linuxu, protiv
+pravog Postgresa i s pravim Chromiumom; sažetak je javna anotacija:
+`GATE (full): 6/6; PYTEST: collected=242 passed=242 skipped=0; BOOT: 8/8; BROWSER: 12/12`.
+
+| Mjera | Kraj faze 1 | Kraj faze 2 | Kako izmjereno |
+|---|---|---|---|
+| Backend testova | 132 | **242**, 0 preskočenih | `scripts/pytest_counts.py` |
+| od toga ugovorni (novi) | — | contract 47 · sim 38 · client 20 · units 32 | `pytest --co` po datoteci |
+| Stageova gatea | 5 | **6** (+ browser, BOOT-01b) | `scripts/gate.sh` |
+| Provjera u pravom pregledniku | ne postoji | **12/12** — login, 4 veza iz simulatora, SIM-01/02/05/06/07, nula page/console grešaka | `scripts/browser_check.py` |
+| Mjesta koja sastavljaju putanju ormara | svaki poziv (`"/api/ext/" + path`) | **1** (`contract.build_path`); test skenira `app/` | `test_no_cabinet_path_is_built_outside_the_contract_module` |
+| Redaka tablice §2.2 provjerenih protiv koda | 0 | **32/32** | test parsira spec |
+| Ishod ormara → ERP 500 | Smart Mode 409 → **500** | **0** (5 kvarova × 6 ruta) | `test_no_cabinet_outcome_is_an_erp_500` |
+| Vrijeme ERP-a na kešu zbog tokena | ~5 h od 7 (izračun, §0.7 #2) | **0** — 401 → ponovna prijava | `test_expired_token_relogin_once…` |
+| Bundle | 646,47 kB | 647,73 kB | `vite build` |
+
+**SIM-00..16: svi zeleni** (u pytestu i, gdje traže DOM, u pregledniku). **Berths / 409 /
+`is_stale` ispravljeni:** Berths više ne računa ništa (SIM-15 skenira `frontend/src` na
+`status_code` literale); 409 je rečenica ormara, ne „Failed to…" ni 500; keš putuje do sive boje
+s „podaci od HH:MM".
+
+**Mutacije:** test odsutnosti cijene uhvatio je ime polja u nalazu; frontend koji crta kontrolu
+bez dopuštenja servera ruši SIM-06 u pregledniku.
+
+**Simulator — iskreno:** šest profila (`full`, `three_phase`, `shared_valve`, `silent`,
+`smart_off`, `retrofit`), ali `three_phase` i `shared_valve` su stanjem isti kao `full` — Q1 je
+trofazna u punom ormaru, a dijeljeni ventil je ERP mapiranje, ne stanje ormara.
+
+**Što faza 2 nije mogla:** provjeriti ugovor na **živom** ormaru (TC-ERP-LIVE-01, i treba O23);
+dva tijela u simulatoru (`camera.stream_ext`, `analytics.*`) nisu izvađena iz koda — ERP ih samo
+prosljeđuje i ne čita im ključeve (O25).
+
+**Grana:** commitovi faze 2 `25b2d79` i `380b96b` otišli su i na `faza/1-temelji` (moja greška —
+prihvaćenu granu nisam smio puniti). Faza 2 dalje živi na `faza/2-ugovor`; `faza/1-temelji` nisam
+prepisivao jer bi to bio force-push (O26).
+
 ---
 
 ## §11 Odgođeno
@@ -1800,13 +1922,19 @@ Nađeno usput. Nije u izvedbi gore; tvoje je da odlučiš prioritet.
 | O5 | ~~`erp_docs_inputs.zip` u korijenu~~ — **obrisan u v2** na tvoj zahtjev | zatvoreno |
 | O11 | **ERP nema način da iz API-ja sazna koju verziju ormar vrti** | u v3 ne treba: referenca je ugovor, a provjerava se živim odgovorom (TC-ERP-LIVE-01). Ako ikad zatreba, `pedestals.list` bi mogao nositi verziju — zahtjev, ne izmjena |
 | O14 | ~~Prijava ugašenog računa s točnom lozinkom vraćala je 403 `Account is disabled`, a kriva lozinka 401 — razlika je otkrivala da račun postoji i da je lozinka točna~~ — **odlučeno i primijenjeno u fazi 1:** nepoznat e-mail, kriva lozinka i ugašen račun daju **isti 401 s istom porukom**; razlog ide samo u log (`backend/app/routers/auth.py`, test `test_inactive_user_login_is_indistinguishable_from_wrong_password`) | zatvoreno |
-| O15 | Nepoznat e-mail preskače `bcrypt.verify`, pa odgovara **brže** od krive lozinke — odgovor je isti, vrijeme nije (enumeracija po vremenu). Popravak je jedan redak: provjera protiv lažnog hasha kad korisnik ne postoji | nađeno pri O14; nije traženo, a mjerenje vremena u testu je krhko — tvoje je da odlučiš |
+| O15 | ~~Nepoznat e-mail odgovarao je brže od krive lozinke~~ — **popravljeno nakon faze 1**: lažna bcrypt provjera istog cost faktora; test broji provjere (1 po odbijanju). Izmjereno: prije 2,6 ms / 220 ms, poslije 173 / 190 ms | zatvoreno |
 | O12 | **`GET /api/nfc/sessions/by-user` na `develop` piše u bazu** (`erp_reconciliation.py:112-124`) | §7.2 R2 — zahtjev je podnesen; ERP se dotad samoograničava |
 | O16 | ~~`backend/alembic.ini` nosio je lozinku baze u čistom tekstu~~ — **odlučeno i primijenjeno:** `alembic.ini` nema URL, `alembic/env.py` ga uzima iz `app.config`, `DATABASE_URL` je obvezan (fail-fast, bez zadanog URL-a — zadani je nosio drugu lozinku), `.env.example` prazan. Test: nijedna konfiguracijska datoteka ne sadrži URL s lozinkom. **Gdje se lozinka koristila:** `alembic.ini` od commita `b534175` (21 verzija u povijesti, repo je **javan**), spec v4 (citirana), lokalni `backend/.env` kao `DEFAULT_ADMIN_PASSWORD`, i **lokalni Postgres je prihvaća** za `erp_user` — mora se rotirati | zatvoreno u kodu; rotacija je na vlasniku baze |
-| O17 | **Modeli i migracije se razilaze u 9 indeksa** (`alembic check` nakon `upgrade head`): `index=True` na `id` u 7 tablica (suvišno uz PK) i na `pedestal_id` u `alarm_log`, `session_log`. Stupci i ograničenja se slažu. Uz to `init_db()` vrti `create_all` pri svakom startu, pa svježa baza bez migracija dobije indekse, a migrirana ne | prijedlog za fazu 3: migracija `006` dodaje dva korisna indeksa, modeli gube `index=True` na PK-u, `alembic check` ulazi u gate |
+| O17 | **Modeli i migracije se razilaze u 9 indeksa** (`alembic check`) — **odlučeno: faza 3, migracija `006`**; uz to `alembic check` ulazi u gate | faza 3 |
 | O18 | ~~ruff s defaultima prijavljuje 327 nalaza~~ — **odlučeno:** uključena samo **DTZ** pravila; svih 36 `datetime.utcnow()` poziva i 8 `default=` stupaca ide kroz `app/utils/time.utcnow()` (naivan UTC, isti ugovor kao stupci). Ostala pravila (BLE001 ×18, UP…) kasnije | DTZ zatvoren; ostalo odgođeno |
 | O19 | ~~`npm run lint` zove eslint koji nije instaliran~~ — **odlučeno i primijenjeno:** skripta `lint` uklonjena iz `frontend/package.json`; frontend gate je `tsc --noEmit` + `vite build` | zatvoreno |
-| O20 | API keš je ključan samo po `sync_type`, pa `get_daily_analytics` s različitim `date_from`/`date_to` dijeli jedan redak — stale fallback može vratiti **drugi raspon datuma** | faza 2 (ugovor + rukovanje odgovorima); ključ treba uključiti parametre |
+| O20 | ~~API keš je ključan samo po `sync_type`~~ — **zatvoreno u fazi 2**: ključ je endpoint + putanja + parametri upita; test: drugi raspon datuma nikad ne dobije tuđi keš | zatvoreno |
+| O21 | ⚠ **`GET /api/nfc/session/{id}` mijenja stanje** (§0.7 #1) — spec ga je birao za prikaz | **tvoja potvrda**: prikaz sesija kanalom A; R2b |
+| O22 | `GET /api/berths` na ormaru **stvara** vez za ormar bez veza (`berths.py:213-223`) | R12; ERP to ne može spriječiti, samo ne ovisi o tome |
+| O23 | TC-ERP-LIVE-01 čita `GET /api/nfc/session/{id}`, koji označi sesiju usklađenom | pri spajanju koristiti probnu sesiju; ili R2b |
+| O24 | `outlet_silent` (rang 2.5) nema izvor na ext API-ju | zahtjev prema ormaru ako zatreba; do tada nikad istinit |
+| O25 | tijela `camera.stream_ext` i `analytics.*` u simulatoru nisu izvađena iz koda | ERP ih prosljeđuje bez čitanja ključeva; LIVE-01 ih može dodati |
+| O26 | `faza/1-temelji` na originu sadrži i dva commita faze 2 | vratiti granu na `ab87e8b` traži force-push — **tvoja odluka**; ništa ne ovisi o tome |
 | O6 | 11 događaja se emitira na ormaru a nije u `EVENT_CATALOG`, među njima **`meter_telemetry_received`** (telemetrija brojila) i **`direct_cmd_sent`** (jedina push-potvrda da je naredba otišla) — NALAZ 6.3 | ERP ih **ne može pretplatiti**; pull ih pokriva. Zahtjev prema ormaru ako ikad zatrebaju |
 | O7 | `usage.*`, `mobile.*`, `qr.*` rute: usmjeravanje je isto na `773bca6` i `main`, ali `usage_history.py` (+30/−7), `mobile.py` (+168/−28) i `qr.py` (+7/−2) su mijenjani — **oblik odgovora se može razlikovati** | izvještaj ormara to nije provjeravao polje po polje; ERP koristi samo `usage.history`, i to za usklađivanje |
 | O8 | Postoji li brojilo na glavnom priključku marine (za vršnu snagu, D14) | energetski agent, faza 9 |
@@ -1851,10 +1979,11 @@ Nađeno usput. Nije u izvedbi gore; tvoje je da odlučiš prioritet.
 
 ---
 
-`docs/erp_spec.md` · verzija 4 · 2026-10-11 · zamjenjuje v3 istog dana
+`docs/erp_spec.md` · verzija 5 · 2026-10-12 · zamjenjuje v4 od 2026-10-11
 
 **§1 je prazan — nema otvorenih blokatora.** Šest odluka iz v1 i v2 je odlučeno i primijenjeno
 (§1.0). Referenca za ormar je **ugovor**, a provjerava se **živim odgovorom pri spajanju**
 (TC-ERP-LIVE-01), ne commitom.
 
-**Faza 1 je završena** — gate zelen, izvještaj u §10.1. **Faza 2 ne počinje bez odobrenja.**
+**Faze 1 i 2 su završene** — gate i CI zeleni, izvještaji u §10.1 i §10.2. **Tri točke traže tvoju
+potvrdu** (§0.7 #1, §0.7 #3, O26). **Faza 3 ne počinje bez odobrenja.**

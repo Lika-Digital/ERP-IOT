@@ -125,16 +125,21 @@ git config core.hooksPath .githooks
 The gate is one script, used by the hooks and by CI (`.github/workflows/gate.yml`):
 
 ```bash
-bash scripts/gate.sh          # full: ruff, pytest, bandit, tsc + vite build, real boot
+bash scripts/gate.sh          # full: ruff, pytest, bandit, tsc + vite build, real boot, real browser
 bash scripts/gate.sh --fast   # pre-commit: ruff, pytest, bandit
 ```
 
-It needs `backend/.venv` installed from `backend/requirements.lock` and `frontend/node_modules`
-from `npm ci`. A missing tool, a skipped test, or a server that does not come up fails the gate —
+It needs `backend/.venv` installed from `backend/requirements.lock`, `frontend/node_modules`
+from `npm ci`, and Chromium for the browser check: `backend/.venv/Scripts/python -m playwright install chromium`. A missing tool, a skipped test, or a server that does not come up fails the gate —
 nothing is skipped.
 
-**126 tests**, plus `scripts/boot_check.py` (real migration, real uvicorn, login, authenticated
-route). Pre-commit runs `--fast`; pre-push runs the full gate on every branch. Pushes to `main`
+**242 tests**, plus `scripts/boot_check.py` (real migration, real uvicorn, login, authenticated
+route) and `scripts/browser_check.py` (real bundle in Chromium against the cabinet simulator,
+`backend/simulator/cabinet_sim.py`).
+
+The cabinet does not say whether it has water or which outlets serve which berth. Until the
+`cabinets`/`outlets` tables (phase 3), that comes from a JSON file named by `ERP_CABINETS_FILE`
+(shape in `backend/app/cabinet/cabinet_config.py`). Without it nothing is guessed. Pre-commit runs `--fast`; pre-push runs the full gate on every branch. Pushes to `main`
 also require typing `release` or `CLOUD_IOT_RELEASE=1`.
 
 ## System Verification
