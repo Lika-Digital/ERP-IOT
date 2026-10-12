@@ -304,10 +304,11 @@ def test_tc_erp_auth_01_protected_count_matches_graph():
 
     Faza 1: 27 od 31. Faza 2: 28 od 32 — nova zasticena ruta
     POST /api/marinas/{id}/pedestals/{pk}/outlets/{outlet}/cmd (operaterski put, D3).
+    Faza 3: 35 od 39 — sedam ruta admina modela (cabinet_admin.py), sve zasticene.
     Broj se mijenja samo svjesno, u istom commitu kao ruta.
     """
     rs = _routes()
-    assert (sum(p for _, _, p in rs), len(rs)) == (28, 32)
+    assert (sum(p for _, _, p in rs), len(rs)) == (35, 39)
 
 
 def test_tc_erp_auth_01_no_credentials_is_strictly_401(client):

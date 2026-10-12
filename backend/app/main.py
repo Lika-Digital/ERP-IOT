@@ -9,7 +9,8 @@ from .config import settings
 from .database import init_db
 from .middleware.security import SecurityMiddleware
 from .services.websocket_manager import ws_manager
-from .routers import auth, marinas, dashboard, controls, energy, alarms, webhooks, pedestal_ext
+from .routers import (auth, marinas, dashboard, controls, energy, alarms, webhooks, pedestal_ext,
+                      cabinet_admin)
 from .routers.auth import _decode_token
 
 logging.basicConfig(
@@ -56,6 +57,7 @@ app.include_router(energy.router)
 app.include_router(alarms.router)
 app.include_router(pedestal_ext.router)
 app.include_router(webhooks.router)
+app.include_router(cabinet_admin.router)
 
 
 # ── Health endpoint ───────────────────────────────────────────────────────────

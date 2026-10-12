@@ -167,7 +167,6 @@ def main() -> int:
 
         # ── ERP backend, real migration ────────────────────────────────────
         db_url = f"sqlite:///{t / 'browser.db'}"
-        cfg = t / "cabinets.json"
         erp_env = {k: v for k, v in os.environ.items()
                    if k not in ("JWT_SECRET", "DATABASE_URL", "DEFAULT_ADMIN_PASSWORD")}
         erp_env.update({
@@ -175,7 +174,6 @@ def main() -> int:
             "JWT_SECRET": "browser-check-" + os.urandom(8).hex(),
             "DEFAULT_ADMIN_EMAIL": ADMIN_EMAIL, "DEFAULT_ADMIN_PASSWORD": ADMIN_PASSWORD,
             "ERP_ENCRYPTION_KEY": "ZmDfcTF7_60GrrY167zsiPd67pEvs0aGOv2oasOM1Pg=",
-            "ERP_CABINETS_FILE": str(cfg),
         })
         r = subprocess.run([sys.executable, "-m", "alembic", "upgrade", "head"],
                            cwd=str(BACKEND), env=erp_env, capture_output=True, text=True)
@@ -196,22 +194,40 @@ def main() -> int:
         code, body = http("POST", f"{erp_url}/api/auth/login",
                           {"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD})
         token = json.loads(body)["access_token"] if code == 200 else fail(2, body)
-        code, body = http("POST", f"{erp_url}/api/marinas", {
-            "name": "Krk (sim)", "pedestal_api_base_url": sim_url,
-            "pedestal_service_email": SIM_EMAIL, "pedestal_service_password": SIM_PASSWORD,
-        }, token=token)
-        if code not in (200, 201):
-            fail(2, f"{code} {body[:300]}")
-        marina_id = json.loads(body)["id"]
-
-        def config(device_type, berths):
-            cfg.write_text(json.dumps({"marinas": {str(marina_id): {
-                "device_type": device_type, "berths": berths}}}), encoding="utf-8")
+        def marina(name, device_type, mapping):
+            """A marina on the simulator, provisioned through the phase-3 admin API:
+            cabinet, one ERP berth per cabinet berth, and the berth -> outlet mapping."""
+            code, body = http("POST", f"{erp_url}/api/marinas", {
+                "name": name, "pedestal_api_base_url": sim_url,
+                "pedestal_service_email": SIM_EMAIL, "pedestal_service_password": SIM_PASSWORD,
+            }, token=token)
+            if code not in (200, 201):
+                fail(2, f"marina: {code} {body[:300]}")
+            mid = json.loads(body)["id"]
+            code, body = http("POST", f"{erp_url}/api/marinas/{mid}/cabinets", {
+                "pedestal_pk": 1, "display_id": "MAR_KRK_ORM_01", "device_type": device_type,
+            }, token=token)
+            if code != 201:
+                fail(2, f"cabinet: {code} {body[:300]}")
+            cab_id = json.loads(body)["id"]
+            for cab_berth, outlets in mapping.items():
+                code, body = http("POST", f"{erp_url}/api/marinas/{mid}/berth-registry", {
+                    "berth_number": f"A-{cab_berth:02d}", "cabinet_id": cab_id,
+                    "cabinet_berth_id": cab_berth}, token=token)
+                if code != 201:
+                    fail(2, f"berth: {code} {body[:300]}")
+                bid = json.loads(body)["id"]
+                code, body = http("PUT", f"{erp_url}/api/marinas/{mid}/berth-registry/{bid}/outlets",
+                                  {"outlets": outlets}, token=token)
+                if code != 200:
+                    fail(2, f"mapping: {code} {body[:300]}")
+            return mid
 
         def profile(name):
             http("POST", f"{sim_url}/__sim/profile/{name}")
 
-        config("full", {"1": ["Q1"], "2": ["Q2"], "3": ["Q3", "V1"], "4": ["Q4", "V1"]})
+        marina_id = marina("Krk (sim)", "full", {1: ["Q1"], 2: ["Q2"], 3: ["Q3", "V1"], 4: ["Q4", "V1"]})
+        retrofit_id = marina("Retrofit (sim)", "retrofit", {1: ["Q1"], 2: ["Q2"], 3: ["Q3"], 4: ["Q4"]})
         ok(2)
 
         # ── the real bundle ────────────────────────────────────────────────
@@ -250,10 +266,8 @@ def main() -> int:
                 fail(4, f"no redirect after login: {exc}")
             ok(4)
 
-            berths_url = f"{spa_url}/marinas/{marina_id}/berths"
-
-            def load():
-                page.goto(berths_url)
+            def load(mid=None):
+                page.goto(f"{spa_url}/marinas/{mid or marina_id}/berths")
                 page.wait_for_selector("[data-berth]", timeout=15000)
 
             try:
@@ -280,15 +294,13 @@ def main() -> int:
 
             profile("retrofit")
             http("PATCH", f"{sim_url}/__sim/credentials", {"email": SIM_EMAIL, "password": SIM_PASSWORD})
-            config("retrofit", {"1": ["Q1"], "2": ["Q2"], "3": ["Q3"], "4": ["Q4"]})
-            load()
+            load(retrofit_id)
             if page.locator("[data-outlet^='V']").count() or "voda" in page.inner_text("[data-page]"):
                 fail(8, "retrofit: a water element is in the DOM")
             ok(8)
 
             profile("silent")
             http("PATCH", f"{sim_url}/__sim/credentials", {"email": SIM_EMAIL, "password": SIM_PASSWORD})
-            config("full", {"1": ["Q1"], "2": ["Q2"], "3": ["Q3", "V1"], "4": ["Q4", "V1"]})
             load()
             colours = set(page.locator("[data-berth]").evaluate_all(
                 "els => els.map(e => e.dataset.colour)"))

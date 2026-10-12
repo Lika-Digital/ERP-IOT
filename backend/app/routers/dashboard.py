@@ -116,7 +116,7 @@ async def list_berths(
 
     view = berth_view.build(
         health=health, berths=berths, status=status, load=load, breakers=breakers,
-        alarms=alarms, sessions=sessions, config=cabinet_config.load(marina_id),
+        alarms=alarms, sessions=sessions, config=cabinet_config.load(marina_id, db),
         controls_enabled=controls_enabled,
     )
     view["marina_id"] = marina_id

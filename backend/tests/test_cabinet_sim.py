@@ -178,9 +178,8 @@ def test_sim_02_retrofit_has_no_water_anywhere(client, admin_headers, marina_id,
     assert any(c[1].endswith("/load") for c in _state(sim).calls)
 
 
-def test_sim_02_unconfigured_cabinet_guesses_nothing(client, admin_headers, marina_id, sim,
-                                                     monkeypatch):
-    monkeypatch.delenv("ERP_CABINETS_FILE", raising=False)
+def test_sim_02_unconfigured_cabinet_guesses_nothing(client, admin_headers, marina_id, sim):
+    # no cabinets row for the marina (phase 3: the source is the database)
     v = _berths(client, admin_headers, marina_id)
     assert v["cabinet"]["configured"] is False
     assert all(b["outlets"] == [] for b in v["berths"])

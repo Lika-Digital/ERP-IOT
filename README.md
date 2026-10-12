@@ -137,9 +137,11 @@ nothing is skipped.
 route) and `scripts/browser_check.py` (real bundle in Chromium against the cabinet simulator,
 `backend/simulator/cabinet_sim.py`).
 
-The cabinet does not say whether it has water or which outlets serve which berth. Until the
-`cabinets`/`outlets` tables (phase 3), that comes from a JSON file named by `ERP_CABINETS_FILE`
-(shape in `backend/app/cabinet/cabinet_config.py`). Without it nothing is guessed. Pre-commit runs `--fast`; pre-push runs the full gate on every branch. Pushes to `main`
+The cabinet does not say whether it has water or which outlets serve which berth. That is ERP
+data: provision the cabinet (`POST /api/marinas/{id}/cabinets`, device type `full`|`retrofit`),
+register berths and map them to outlets (`/api/marinas/{id}/berth-registry`), and import the NFC
+tags (`POST /api/marinas/{id}/cabinets/{cid}/nfc-tags/import`, CSV `outlet,uid,uid_reversed`).
+Without a provisioned cabinet nothing is guessed. Pre-commit runs `--fast`; pre-push runs the full gate on every branch. Pushes to `main`
 also require typing `release` or `CLOUD_IOT_RELEASE=1`.
 
 ## System Verification

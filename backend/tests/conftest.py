@@ -252,16 +252,51 @@ def sim(setup_test_database):
             db.close()
 
 
+def _clear_cabinets(marina_id):
+    """Explicit order: the app's SQLite engine has no FK cascades (PRAGMA off)."""
+    from app.models.berth import (Berth, BerthOutlet, BerthOutletCabinet, MappingComparison,
+                                  OutletNfcTag)
+    from app.models.cabinet import Cabinet, CabinetCapability, Outlet
+
+    db = TestSession()
+    try:
+        cab_ids = [c.id for c in db.query(Cabinet).filter(Cabinet.marina_id == marina_id)]
+        berth_ids = [b.id for b in db.query(Berth).filter(Berth.marina_id == marina_id)]
+        out_ids = [o.id for o in db.query(Outlet).filter(Outlet.cabinet_id.in_(cab_ids))]
+        db.query(BerthOutlet).filter(BerthOutlet.berth_id.in_(berth_ids)).delete()
+        db.query(Berth).filter(Berth.id.in_(berth_ids)).delete()
+        db.query(OutletNfcTag).filter(OutletNfcTag.outlet_id.in_(out_ids)).delete()
+        db.query(Outlet).filter(Outlet.id.in_(out_ids)).delete()
+        for model in (CabinetCapability, MappingComparison, BerthOutletCabinet):
+            db.query(model).filter(model.cabinet_id.in_(cab_ids)).delete()
+        db.query(Cabinet).filter(Cabinet.id.in_(cab_ids)).delete()
+        db.commit()
+    finally:
+        db.close()
+
+
 @pytest.fixture
-def cabinet_config(tmp_path, monkeypatch):
-    """Write an ERP_CABINETS_FILE for the seeded marina; returns a setter."""
-    import json
+def cabinet_config(marina_id):
+    """Provision the seeded marina's cabinet IN THE DATABASE (phase 3; phase 2
+    wrote a file). write(marina_id, device_type, {cabinet_berth_id: [outlets]})
+    creates the cabinet, one ERP berth per cabinet berth, and the mapping."""
+    from app.services import cabinets as svc
 
-    def write(marina_id, device_type, berths):
-        p = tmp_path / "cabinets.json"
-        p.write_text(json.dumps({"marinas": {str(marina_id): {
-            "device_type": device_type, "berths": berths}}}), encoding="utf-8")
-        monkeypatch.setenv("ERP_CABINETS_FILE", str(p))
-        return p
+    def write(mid, device_type, berths):
+        _clear_cabinets(mid)
+        db = TestSession()
+        try:
+            cab = svc.provision_cabinet(
+                db, marina_id=mid, pedestal_pk=1, display_id="MAR_KRK_ORM_01",
+                device_type=device_type, base_url="http://pedestal-sw.test",
+                service_email="erp@test.service", service_password="test-service-pass-123")
+            for cab_berth, outs in berths.items():
+                b = svc.create_berth(db, marina_id=mid, berth_number=f"A-{int(cab_berth):02d}",
+                                     cabinet_id=cab.id, cabinet_berth_id=int(cab_berth))
+                svc.set_berth_outlets(db, b, list(outs), assigned_by="test@lika.digital")
+            return cab.id
+        finally:
+            db.close()
 
-    return write
+    yield write
+    _clear_cabinets(marina_id)
