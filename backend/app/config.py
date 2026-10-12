@@ -9,7 +9,8 @@ _config_logger = logging.getLogger(__name__)
 
 class Settings(BaseSettings):
     # ── Database ──────────────────────────────────────────────────────────────
-    database_url: str = "postgresql://erp_user:erp_password@localhost:5432/erp_iot"
+    # No default: a default URL is a default password (spec §11 O16).
+    database_url: Optional[str] = None
 
     # ── App server ────────────────────────────────────────────────────────────
     # 127.0.0.1, ne 0.0.0.0: nginx je jedini javni slusatelj (spec §8.1).
@@ -66,6 +67,17 @@ if _is_blank(settings.jwt_secret):
         "  Razvoj:     dodaj JWT_SECRET u backend/.env\n"
         "  Produkcija: systemd LoadCredential (spec 8.3), nikad u datoteku uz aplikaciju\n"
         "  Generiraj:  python -c \"import secrets; print(secrets.token_hex(32))\""
+    )
+
+# ── Database URL: FAIL-FAST ───────────────────────────────────────────────────
+# Do O16 je zadani URL nosio lozinku (`erp_password`), a alembic.ini drugu
+# (javnu). Sada postoji jedan izvor — DATABASE_URL iz okruzenja ili .env — i
+# bez njega se nista ne dize, ni aplikacija ni migracija.
+if _is_blank(settings.database_url):
+    raise MissingSecretError(
+        "DATABASE_URL nije postavljen. Aplikacija se nece dici.\n"
+        "  Razvoj:     dodaj DATABASE_URL u backend/.env\n"
+        "  Produkcija: systemd LoadCredential (spec 8.3), nikad u datoteku uz aplikaciju"
     )
 
 # ── Admin password check ──────────────────────────────────────────────────────

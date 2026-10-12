@@ -204,11 +204,34 @@ def test_tc_erp_auth_02_env_example_ships_blank_secrets():
     produkciju.
     """
     body = (_BACKEND / ".env.example").read_text(encoding="utf-8")
-    for key in ("JWT_SECRET", "DEFAULT_ADMIN_PASSWORD", "ERP_ENCRYPTION_KEY"):
+    for key in ("DATABASE_URL", "JWT_SECRET", "DEFAULT_ADMIN_PASSWORD", "ERP_ENCRYPTION_KEY"):
         assert re.search(rf"^{key}=\s*$", body, re.M), (
             f"{key} u .env.example nema praznu vrijednost (spec §8.3)"
         )
     assert "change-me" not in body, ".env.example jos nosi 'change-me' vrijednost"
+
+
+def test_o16_absent_database_url_refuses_to_boot():
+    """Bez DATABASE_URL nema podizanja — ni tihog pada na zadani URL s lozinkom."""
+    proc = _import_config_with({"JWT_SECRET": "x" * 64, "DATABASE_URL": None})
+    assert proc.returncode != 0
+    assert "DATABASE_URL" in proc.stderr
+
+
+# <lozinka> u komentaru je oznaka mjesta, ne lozinka
+_CRED_URL = re.compile(r"\w+://[^\s:/@]+:(?!<)[^\s@]+@")
+
+
+def test_o16_no_database_credentials_in_config_files():
+    """URL s korisnikom i lozinkom ne smije biti u datotekama koje se citaju.
+
+    alembic.ini je nosio javnu lozinku (spec §11 O16), config.py zadani URL s
+    drugom. Oboje su sad bez lozinke; jedini izvor je DATABASE_URL.
+    """
+    for rel in ("alembic.ini", ".env.example", "app/config.py", "alembic/env.py"):
+        text = (_BACKEND / rel).read_text(encoding="utf-8")
+        hit = _CRED_URL.search(text)
+        assert not hit, f"{rel}: URL s lozinkom ({hit.group(0)[:30]}…)"
 
 
 def test_tc_erp_auth_02_app_does_not_bind_all_interfaces_by_default():

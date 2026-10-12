@@ -14,10 +14,11 @@ from app.models import marina, user, cache  # noqa: F401, E402  — register all
 
 config = context.config
 
-# Allow DATABASE_URL env var to override alembic.ini
-db_url = os.environ.get("DATABASE_URL")
-if db_url:
-    config.set_main_option("sqlalchemy.url", db_url)
+# One source for the URL: app.config (DATABASE_URL from env or .env), which
+# fails fast when it is missing. alembic.ini carries no URL (spec §11 O16).
+from app.config import settings  # noqa: E402
+
+config.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"))
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
