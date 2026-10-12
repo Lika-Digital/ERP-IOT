@@ -141,8 +141,13 @@ else
 fi
 
 # ═════════════════════════════════════════════════════════════════════════════
-stage "growth" "phase 4 - database growth over 7 simulated days, bounded by retention"
-"$PY" scripts/growth_check.py --days 7 | tee "$WORK/growth.log"
+# Local hooks measure 2 simulated days, CI 7 (your decision 2026-10-12): the same
+# check — rates, retention proof, budget — and the 7-day number comes from CI on
+# real PostgreSQL. 7 days locally took 7-14 min per push on the author's machine.
+GROWTH_DAYS=2
+[ "${GITHUB_ACTIONS:-}" = "true" ] && GROWTH_DAYS=7
+stage "growth" "phase 4 - database growth over $GROWTH_DAYS simulated days, bounded by retention"
+"$PY" scripts/growth_check.py --days "$GROWTH_DAYS" | tee "$WORK/growth.log"
 if [ "${PIPESTATUS[0]}" -eq 0 ]; then
     pass "growth"
 else

@@ -627,8 +627,11 @@ def test_tc_erp_boot_01b_browser_check_is_a_gate_stage():
 
 
 def test_phase4_growth_check_is_a_gate_stage_on_postgres_in_ci():
-    """Faza 4: rast baze izmjeren i ogranicen — u gateu, i u CI-ju na pravom PostgreSQL-u."""
+    """Faza 4: rast baze izmjeren i ogranicen — u gateu, i u CI-ju na pravom PostgreSQL-u.
+    Lokalno 2 simulirana dana, u CI-ju 7 (odluka 2026-10-12)."""
     gate = (_REPO / "scripts" / "gate.sh").read_text(encoding="utf-8")
-    assert "scripts/growth_check.py --days 7" in gate
+    assert 'scripts/growth_check.py --days "$GROWTH_DAYS"' in gate
+    assert "GROWTH_DAYS=2" in gate
+    assert '[ "${GITHUB_ACTIONS:-}" = "true" ] && GROWTH_DAYS=7' in gate
     wf = (_REPO / ".github" / "workflows" / "gate.yml").read_text(encoding="utf-8")
     assert "GROWTH_DATABASE_URL: postgresql://" in wf

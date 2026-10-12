@@ -126,8 +126,16 @@ def main() -> dict:
 
         from app.services.collector import Collector
         col = Collector()
-        asyncio.run(col.run_all_once())                  # seeds registers, reconciles, acks
-        state.sockets[0].energy_kwh += 0.5
+        asyncio.run(col.run_all_once())                  # seeds registers, reconciles
+        # billed (phase 7 does this) — only a billed session is acknowledged (§4.0b, v8)
+        db = SessionLocal()
+        try:
+            s = db.query(ErpSession).filter(ErpSession.erp_ref == "erp-utc-1").one()
+            s.billing_state = "billed"
+            db.commit()
+        finally:
+            db.close()
+        state.sockets[0].energy_kwh += 0.5               # the next run: an interval, and the ack
         asyncio.run(col.run_all_once())                  # an interval
         from app.services import retention
         db = SessionLocal()

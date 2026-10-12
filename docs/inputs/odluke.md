@@ -1,7 +1,7 @@
 # ERP-IOT — dnevnik odluka
 
-**Verzija 2.2 · 2026-10-12** — zamjenjuje v2.1 od 2026-10-11.
-v2.2 dodaje **D19** (ventili i utičnice prema Smart Modeu). v2.1 je dodao **D18** (mapiranje na obje strane); prvi isporučeni zip sadržavao je stariju v2 bez njega.
+**Verzija 2.3 · 2026-10-12** — zamjenjuje v2.2.
+v2.3 ispravlja mrežna pravila u **D13** (ormar → ERP samo webhook; bez statične IP). v2.2 dodaje **D19** (ventili i utičnice prema Smart Modeu). v2.1 je dodao **D18** (mapiranje na obje strane); prvi isporučeni zip sadržavao je stariju v2 bez njega.
 Ormar (Cloud_IOT) je druga strana ugovora; ovdje se bilježe odluke koje se tiču ERP-a i ono što ERP traži od ormara.
 
 Izvori, redom po težini:
@@ -172,11 +172,13 @@ Modul platforme, s laganim klijentom na svakom ormaru. Prodaje se kao značajka 
 ### Slojevi
 | Sloj | Sadržaj | Reagira |
 |---|---|---|
-| 0 Higijena | TLS/WireGuard; MFA na ERP adminu, Tailscale i Teltonika RMS računu; Tailscale odobravanje uređaja + tailnet lock; **Tailscale ACL** (ERP → ormar samo na port API-ja; ormar ↛ ERP, ormar ↛ ormar); servisni račun po ormaru s minimalnim Gateway pravima; **pinane verzije ovisnosti**; automatska sigurnosna ažuriranja; backup; tajne odvojene od diska aplikacije i jedinstvene po ormaru | — |
+| 0 Higijena | TLS/WireGuard; MFA na ERP adminu, Tailscale i Teltonika RMS računu; Tailscale odobravanje uređaja + tailnet lock; **Tailscale ACL** (ERP → ormar samo nginx :80, nikad :8000; ormar → ERP **samo port webhook prijemnika**; ormar ↛ ormar — *ispravak 2026-10-12*, spec §7.0); servisni račun po ormaru s minimalnim Gateway pravima; **pinane verzije ovisnosti**; automatska sigurnosna ažuriranja; backup; tajne odvojene od diska aplikacije i jedinstvene po ormaru | — |
 | 1 Klasična obrana | nftables default-deny; SSH samo ključevi; CrowdSec (engine + bouncer) na VPS-u i ormarima; Cloudflare ispred ERP UI-a (WAF, Access za admin); rate limiting; audit log svake upravljačke naredbe; HMAC potpis webhooka | odmah, automatski |
 | 2 Mamci | lažni API ključ u konfiguraciji; lažni Gateway endpoint (npr. `/api/ext/admin/debug`); lažni servisni račun; lažni ormar u Tailscale mreži. Nitko legitiman ih ne dira — svaki dodir je napadač | tiho bilježi |
 | 3 Agent | ponašanje servisnih računa i naredbi **po domeni marine**: `socket_cmd` u neobično vrijeme ili s nove adrese, serija nepoznatih NFC tagova (pogađanje), Smart Mode izvan radnog vremena, račun koji zove endpointe koje nikad nije zvao, vrata ormara + novi uređaj u LAN-u (D16); povezivanje događaja preko slojeva | šuti, slaže slučaj, javlja s dokazima |
 | 4 Živo znanje | strukturirani izvori: CISA KEV, NVD / GitHub Security Advisories za naš stack **i Teltonika firmware**, CrowdSec blocklista, abuse.ch → IOC-ovi i CVE-ovi u bazu, usporedba s pinanim verzijama | predlaže pravila, čovjek odobrava |
+
+**Ispravak 2026-10-12 · mreža.** Statična IP nije potrebna: ERP ↔ ormar preko Tailscalea (stalne 100.x adrese, radi iza NAT-a/5G-a), javni UI kroz Cloudflare tunel (odlazna veza, nema otvorenih ulaznih portova). ERP → ormar samo nginx :80 na Tailscale adresi ormara, nikad izravno :8000. Ormar → ERP samo port webhook prijemnika preko Tailscale adrese ERP-a; sve ostalo zabranjeno. Ormar ↛ ormar. SSH na VPS samo preko Tailscalea; na VPS-u javno nema otvorenih ulaznih portova. Detalji: spec §7.0.
 
 ### Klijent na ormaru (i retrofitu, ako ima snage)
 Šalje logove (prijave, API, Gateway, DHCP zakupe, vrata) preko Tailscalea u ERP; prati izmjene datoteka koda i konfiguracije; lokalni CrowdSec bouncer; heartbeat sigurnosnog stanja.

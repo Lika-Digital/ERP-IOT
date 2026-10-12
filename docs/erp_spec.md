@@ -3,17 +3,31 @@
 Što se gradi, u kojem redoslijedu, i svaka odluka izrečena tako da ispravak
 košta jedan redak, a ne razgovor.
 
-    Verzija 7 — zamjenjuje v6 od 2026-10-12
+    Verzija 8 — zamjenjuje v7 od 2026-10-12
     Datum 2026-10-12
-    Status faze 1–4 ZAVRŠENE, gate i CI zeleni (§10.1–§10.4); faza 5 čeka odobrenje;
-           §1 je prazan
+    Status faze 1–4 ZAVRŠENE i PRIHVAĆENE (§10.1–§10.4); sljedeća je faza 4.5 · LIVE lokalno
+           (§10.5) — čeka tvoju potvrdu plana; §1 je prazan
 
-Čita se uz `docs/inputs/odluke.md` **v2.2** (odluke, obvezujuće — v2.1 dodaje **D18**, v2.2 **D19**),
+Čita se uz `docs/inputs/odluke.md` **v2.3** (odluke, obvezujuće — v2.1 dodaje **D18**, v2.2 **D19**,
+v2.3 ispravak mreže u **D13**),
 `docs/inputs/ormar_gateway_izvjestaj.md` (ugovor s ormarom, file:line),
 `docs/inputs/erp_inventar.md` (stanje repoa 2026-10-10) i
 `docs/inputs/ormar_ui_v2_spec.txt` (specifikacija ormara — uzor forme i izvor rječnika stanja).
 
 **Sve u ovom dokumentu je ODLUČENO. §1 je prazan — nema otvorenih blokatora.**
+
+### Što se promijenilo u verziji 8
+
+| | |
+|---|---|
+| **Faza 4 prihvaćena** | gate: lokalne kuke mjere rast **2** simulirana dana, CI **7** (`scripts/gate.sh`) |
+| **§7.0 · NOVO — mreža (ispravak D13)** | bez statične IP; ERP ↔ ormar preko Tailscalea; ERP → ormar **samo nginx :80**; ormar → ERP **samo port webhooka**; ormar ↛ ormar; SSH samo preko Tailscalea; na VPS-u **nijedan javni ulazni port** |
+| **§8 · VPS procijenjen** | 2 CPU / 2 GB / 40 GB / 200 GB prometa: **VPS odgovara**. Frontend se gradi **u CI-ju**, na VPS ide gotov `dist/`; swap 1 GB |
+| **§10.5 · NOVO — faza 4.5 · LIVE lokalno** | ERP na tvom PC-u, spojen na Krk kroz Tailscale; LIVE-01 samo čitanje, poller preko noći, kontrole tek na izričit OK |
+| **§10.6 · NOVO — raspored** | 4.5 → 5 → spajanje VPS-a na Krk → tjedan stvarnog rada; tko što radi, trajanje, blokade |
+| **O34 zatvoren** | ormar je objavio R14 a0–c na `main` (`eac7aa2`); raspon i `ack` potvrđeni u kodu, **jedna razlika ispravljena**: `ack` tek nakon obračuna (§4.0b) |
+| **O36 ostaje, preoblikovan** | registar vode postoji na ormaru i dolazi u sesiji, ali ga **nijedna ext ruta ne vraća**; `/water` `total_l` je brojač sesije → **R16** |
+| **Ispravak koda faze 4** | `ack` samo naplaćenih sesija; sesija s `erp_ref: null` je „tuđa", ne pokvaren payload — oboje s testom |
 
 ### Što se promijenilo u verziji 7
 
@@ -839,12 +853,19 @@ pisao), ostale su dobile stupce.
 > (R14 b) odgovori 404 „Not Found", ERP prelazi na `by-user` (danas, `a709cf8`) — samo iz
 > usklađivača, za korisnike s otvorenom ili neusklađenom sesijom, noću za sve iz zadnjih 30
 > dana. S R14 b čita po vremenu završetka, nastavlja gdje je stao (preklop 10 min), sa
-> stranicama, i potvrđuje (R14 c, `POST /api/nfc/sessions/ack`) samo sesije čiju je konačnu
-> brojku spremio. Svaki prolaz je redak u `reconciliation_runs` — ERP-ovo „zadnje usklađeno"
-> (§6.3), ne ormarov detektor.
+> stranicama, i potvrđuje (R14 c, `POST /api/nfc/sessions/ack`) **samo naplaćene sesije**
+> (`billing_state='billed'`, faza 7). Svaki prolaz je redak u `reconciliation_runs` — ERP-ovo
+> „zadnje usklađeno" (§6.3), ne ormarov detektor.
 >
-> **Zašto** · Ormar je R14 prihvatio, ali na Krku još nije. Zastavica bi se morala sjetiti
-> nekoga; 404 zna sam. Imena parametara su ERP-ovo čitanje odgovora ormara (O34).
+> **Ispravak u v8** · do v7 ERP je potvrđivao čim spremi konačnu brojku. Ormarov ugovor
+> (`Cloud_IOT eac7aa2`, `backend/app/routers/nfc.py:950-968`) kaže „call it only once a session
+> is really billed": detektor alarmira na „završeno, pripisano, nepotvrđeno". Potvrda pri
+> usklađivanju utišala bi ga dok ERP još **ništa ne naplaćuje**. Do faze 7 ERP ne potvrđuje
+> ništa — i ormarov zaostatak to istinito pokazuje. Test + mutacija.
+>
+> **Zašto** · Ormar je R14 objavio na `main` (`eac7aa2`), a koja verzija vrti na Krku zna tek
+> LIVE-01 (§10.5). Zastavica bi se morala sjetiti nekoga; 404 zna sam. Na `main` je `by-user`
+> zakomentiran (`nfc.py:821`) — ondje postoji samo raspon, pa ERP ide njime.
 >
 > **Ako griješim** · Jedna funkcija (`reconciler._range`).
 
@@ -1720,11 +1741,34 @@ koji izgleda kao račun** — to je §12.
 
 ## §7 Sigurnost
 
+### §7.0 · Mreža — ispravak D13 (2026-10-12)
+
+> **Odlučeno** · **Statična IP nije potrebna.** ERP ↔ ormar ide preko **Tailscalea** (stalne
+> 100.x adrese, radi iza NAT-a i 5G-a). Javni UI ide kroz **Cloudflare tunel** (`cloudflared`,
+> odlazna veza) — na VPS-u **nema otvorenih javnih ulaznih portova**.
+>
+> **Zašto** · Tvoja odluka. Ormari su na 5G-u iza CGNAT-a; Tailscale to rješava bez javne
+> adrese na ijednoj strani, a tunel izlaže UI bez ulaznog porta koji bi se mogao skenirati.
+>
+> **Ako griješim** · Statična IP bi bila dodatak, ne zamjena — pravila ispod ostaju.
+
+| Smjer | Dopušteno | Kako se drži |
+|---|---|---|
+| **ERP → ormar** | **samo nginx `:80`** na Tailscale adresi ormara; **nikad izravno `:8000`** (ormar ga drži na loopbacku — `Cloud_IOT eac7aa2` „the backend binds loopback") | Tailscale ACL `tag:erp → tag:cabinet:80`; `cabinets.base_url = http://100.x.y.z` (bez porta) |
+| **Ormar → ERP** | **samo port prijemnika webhooka** na Tailscale adresi ERP-a | nginx na VPS-u sluša na **Tailscale adresi**, port `8081`, i propušta **samo** `POST /api/webhooks/cabinet/*` (sve ostalo 404); ACL `tag:cabinet → tag:erp:8081`; nftables to isto ponavlja na `tailscale0` |
+| **Ormar ↛ ormar** | ništa | ACL bez ijednog pravila `tag:cabinet → tag:cabinet` (Tailscale je default-deny) |
+| **Javni UI** | samo kroz `cloudflared` | nginx UI blok sluša **samo na `127.0.0.1`**; `/api/webhooks/` u tom bloku vraća 404 — webhook nikad nije javan |
+| **SSH na VPS** | samo preko Tailscalea | `sshd ListenAddress` = Tailscale adresa (ili Tailscale SSH); nftables: javno sučelje **default-deny bez iznimki** |
+
+Tailscale je enkripcija (WireGuard), zato je `http://` prema ormaru unutar tailneta prihvatljiv;
+TLS je na Cloudflareu za javni UI. ACL prijedlog (JSON) i nftables pravila su artefakti faze 5.
+
 ### §7.1 · ERP strana — slojevi 0–2 (D13)
 
 **Sloj 0 · higijena** — dio postavljanja VPS-a, prije javnog izlaganja (§8):
 MFA na ERP adminu, Tailscale i Teltonika RMS računu; Tailscale odobravanje uređaja + tailnet
-lock; **Tailscale ACL** — ERP → ormar samo na port API-ja, ormar ↛ ERP, ormar ↛ ormar;
+lock; **Tailscale ACL po §7.0** — ERP → ormar samo nginx `:80`, ormar → ERP **samo port
+webhooka** (ispravak: do v7 „ormar ↛ ERP", ali webhook ide upravo tim smjerom), ormar ↛ ormar;
 servisni račun **po ormaru** s minimalnim Gateway pravima (§2.3); **pinane verzije
 ovisnosti**; automatska sigurnosna ažuriranja; backup; **tajne odvojene od diska aplikacije i
 jedinstvene po ormaru**.
@@ -1791,7 +1835,8 @@ na dan čitanja i služi prioritizaciji — **ugovorna provjera je TC-ERP-LIVE-0
 | ~~R9~~ | ~~NFC payload po ugovoru sa 16 ključeva~~ — **ZATVOREN u v3**: ormar je popravljen prema specifikaciji, ne naplaćuje i ne računa cijenu, vraća stanje brojila. Provjerava se **živim odgovorom** pri spajanju (TC-ERP-LIVE-01), ne commitom | — | — | ništa; BLOK-3 je zatvoren |
 | **R2** | **`GET /api/nfc/sessions/by-user` ne smije mijenjati stanje** — ili, ako mora, to mora biti dokumentirano i idempotentno, a `/reconciliation` i `/divergence` dostupni s `X-API-Key` | vidi okvir ispod | **djelomično** — na Krku ne piše; na `develop` piše | bolji pull u fazi 4; iteracija po korisnicima radi bez toga |
 | **R15** | **Voda u ERP načinu** — ERP šalje `POST /api/nfc/scan`, zatim `water/{V}/cmd activate`; ormarov `OutletActivated` preuzima rezervaciju i upisuje `erp_ref`. **U ERP načinu ormar odbija otvoriti ventil bez važeće rezervacije.** Auto-otvaranje (`valve_configs.auto_activate`) se u smart modu + ERP načinu gasi u kodu | odgovor ormara 2026-10-12; `a709cf8:…/pedestal_config.py:551-572` (zadano `auto_activate = true`) | **zatvoreno odlukom D19** (§5.3) — u Smart Mode ON ništa se ne otvara bez naredbe | NFC tok za vodu (§5.1, faza 7) |
-| **R14** | **Pojednostavljenje kanala B po D6.2** — (1) **zakomentirati u kodu, ne brisati** registar naljepnica (`/api/nfc/tags`, `/tags/bulk`) i MODE 2 (`nfc_direct_client_mode`, korisnički tokeni na `/api/nfc/*`), uz oznaku `D6.2 / R14` na svakom mjestu; (2) `POST /api/nfc/scan` prima `{cabinet_id, outlet: "Q1".."V2", erp_ref}` umjesto `{nfc_tag_id, user_id}` — priprema i 5-min čekanje na priklop ostaju; (3) sesija nosi `erp_ref` umjesto `customer_id`/`nfc_user_id`, sve ostalo u ugovoru ostaje; (4) **čitanje bez nuspojava** — `GET /session/{id}` ne upisuje `last_reconciled_at`; ERP potvrđuje obračun izričito, npr. `POST /api/nfc/sessions/ack {session_ids}`, i tek tada detektor `erp_reconciliation_silent` mjeri pravu stvar; (5) `by-user` se zamjenjuje čitanjem po `erp_ref` ili po vremenskom rasponu; (6) ugovor sa 16 ključeva, `test_tc_six_13g` i testovi koji pokrivaju zakomentirani kod usklađuju se u istom commitu, da suite ormara ostane zelen. **Zakomentirati, ne brisati** — tvoja odluka 2026-10-12: kod ostaje u repou ormara za slučaj da zatreba | `a709cf8:…/nfc.py` (11 ruta), `nfc.py:543-685` (`/scan` razrješava tag), `nfc.py:688-759` + `erp_reconciliation.py:112-124` (`mark_reconciled`) | **PRIHVAĆEN 2026-10-12** — redoslijed na ormaru: **a0** gašenje auto-otvaranja ventila (zaseban commit, prvi) → **a** popravak vode (R15), uključujući test za stop sa `socket_id=None` → **b** pojednostavljenje D6.2 s ugovorom i testovima → **c** `ack`. `erp_ref` je **novi stupac uz stare**, povijest se ne prepisuje. Raspon za usklađivanje: **po vremenu završetka**, `ended_from` uključivo, `ended_to` isključivo, **sa stranicama** | ništa danas; kad prođu b i c, otpadaju R2, R2b, O21, O23, §0.7 #1 i iteracija po korisnicima u §5.2 |
+| **R14** | **Pojednostavljenje kanala B po D6.2** — (1) **zakomentirati u kodu, ne brisati** registar naljepnica (`/api/nfc/tags`, `/tags/bulk`) i MODE 2 (`nfc_direct_client_mode`, korisnički tokeni na `/api/nfc/*`), uz oznaku `D6.2 / R14` na svakom mjestu; (2) `POST /api/nfc/scan` prima `{cabinet_id, outlet: "Q1".."V2", erp_ref}` umjesto `{nfc_tag_id, user_id}` — priprema i 5-min čekanje na priklop ostaju; (3) sesija nosi `erp_ref` umjesto `customer_id`/`nfc_user_id`, sve ostalo u ugovoru ostaje; (4) **čitanje bez nuspojava** — `GET /session/{id}` ne upisuje `last_reconciled_at`; ERP potvrđuje obračun izričito, npr. `POST /api/nfc/sessions/ack {session_ids}`, i tek tada detektor `erp_reconciliation_silent` mjeri pravu stvar; (5) `by-user` se zamjenjuje čitanjem po `erp_ref` ili po vremenskom rasponu; (6) ugovor sa 16 ključeva, `test_tc_six_13g` i testovi koji pokrivaju zakomentirani kod usklađuju se u istom commitu, da suite ormara ostane zelen. **Zakomentirati, ne brisati** — tvoja odluka 2026-10-12: kod ostaje u repou ormara za slučaj da zatreba | `a709cf8:…/nfc.py` (11 ruta), `nfc.py:543-685` (`/scan` razrješava tag), `nfc.py:688-759` + `erp_reconciliation.py:112-124` (`mark_reconciled`) | **PRIHVAĆEN 2026-10-12** — redoslijed na ormaru: **a0** gašenje auto-otvaranja ventila (zaseban commit, prvi) → **a** popravak vode (R15), uključujući test za stop sa `socket_id=None` → **b** pojednostavljenje D6.2 s ugovorom i testovima → **c** `ack`. `erp_ref` je **novi stupac uz stare**, povijest se ne prepisuje. Raspon za usklađivanje: **po vremenu završetka**, `ended_from` uključivo, `ended_to` isključivo, **sa stranicama** | **OBJAVLJENO na `main` `eac7aa2`** (2026-10-12): a0 `8770cd9`, a `bad32e4`, b `dadb48c`, c `beab47b`. Na Krku: **nepoznato** — LIVE-01 (§10.5) | ništa danas; kad je b i c na Krku, otpadaju R2, R2b, O21, O23, §0.7 #1 i iteracija po korisnicima u §5.2 |
+| **R16** | **Kumulativni registar vode po V1/V2 na ext API-ju** — kao `meter_energy_kwh` za struju (`meter_load.py:87`): `valve_configs.meter_total_l` + `meter_updated_at` u `GET /api/ext/pedestals/{id}/water` | `eac7aa2:…/models/valve_config.py:34-40` (registar postoji), `mqtt_handlers.py:3880-3897` (u `total_liters` očitanje ide **brojač sesije**), `ext_pedestal_endpoints.py:326-372` (`/water` čita to očitanje, ne registar) | **provjeriti živim odgovorom** (§10.5 b) | povijest vode po priključku (intervali, D14); naplata vode **ne** čeka — sesija nosi `meter_water_start_l/end_l` iz registra |
 | **R2b** | **`GET /api/nfc/session/{id}` ne smije mijenjati stanje** — isto kao R2 (§0.7 #1) | `a709cf8:…/nfc.py:688-708` → `erp_reconciliation.py:112-124` | nije provjereno | bez toga ERP nema read-only put do pojedine sesije |
 | **R12** | **`GET /api/berths` ne smije stvarati vezove** (O22) | `a709cf8:…/berths.py:213-223` | nije provjereno | ništa |
 | **R13** | **`valves/config` neka kaže koliko ventila ormar STVARNO ima** (ili `available`) | `a709cf8:…/pedestal_config.py:551-572` | nije provjereno | ništa — ERP ima `device_type` |
@@ -1879,7 +1924,7 @@ način isporuke je gore od njenog nepostojanja.
 ### §8.1 · Što VPS treba
 
 Ubuntu 24.04 LTS · Python 3.11+ · PostgreSQL 16+ · nginx · `cloudflared` (**samo za UI**) ·
-Tailscale (**prema ormarima**, D12) · Node 18+ **samo za build**, ne za izvođenje.
+Tailscale (**prema ormarima**, D12) · **bez Node-a** — frontend dolazi kao gotov `dist/` iz CI-ja (§8.2).
 **Ništa se ne kompajlira**: `psycopg2-binary`, `bcrypt` i `cryptography` dolaze kao wheel-ovi
 (mjereno: instalirani u `backend/.venv` bez prevodioca).
 
@@ -1907,19 +1952,68 @@ Tailscale (**prema ormarima**, D12) · Node 18+ **samo za build**, ne za izvođe
 | CrowdSec engine + bouncer | 100–150 MB | D13 sloj 1 |
 | **Ukupno u radu** | **~600–750 MB** | |
 
-**RAM je vezujuće ograničenje, i veže pri buildu, ne u radu.** `npm install` + `vite build`
-doseže 0,5–1 GB. Na **2 GB** oboje stane; na 1 GB aplikacija radi a build pada.
+**RAM je vezujuće ograničenje, i vezao je pri buildu, ne u radu** (`npm install` + `vite build`
+0,5–1 GB). Od v8 se na VPS-u ne gradi.
 
-> **Odlučeno** · Frontend se **gradi na VPS-u**, u 2 GB, kao korak runbooka.
+> **Odlučeno (v8, mijenja v7)** · Frontend se **gradi u CI-ju**; na VPS ide gotov `dist/`
+> (artefakt CI runa koji je prošao gate). Na VPS-u nema Node-a ni `node_modules`.
 >
-> **Zašto** · Build danas prolazi i mjeren je (§0.2): 21 s, 908 modula. Graditi drugdje i
-> prenositi `dist/` znači drugo okruženje u lancu isporuke bez dobitka na 2 GB.
+> **Zašto** · Tvoja pretpostavka, i bolja od moje: CI već gradi `dist/` iz `package-lock.json`,
+> a **isti taj bundle** prolazi provjeru u pravom pregledniku (BOOT-01b). Build na VPS-u bio bi
+> drugi build, neprovjeren, i jedini razlog za RAM vrh od 1 GB. Bez njega VPS treba ~0,9 GB.
 >
-> **Ako griješim** · Ako build ikad prestane stati, `dist/` se gradi u CI-u i prenosi —
-> jedan korak runbooka manje, jedan artefakt više.
+> **Ako griješim** · Build na VPS-u je jedan korak runbooka više.
 
-Disk: **20 GB** (D13). OS ~2,5 GB, venv ~150 MB, `node_modules` ~110 MB (samo build),
-Postgres baza ~50 MB na početku. Rast je ograničen retencijom iz §4.7; slike se ne spremaju.
+#### Procjena ponude: 2 CPU · 2 GB RAM · 40 GB disk · 200 GB prometa/mj
+
+| RAM u radu | Procjena |
+|---|---|
+| OS, minimalan | 150–250 MB |
+| PostgreSQL 16 (`shared_buffers` 128 MB) | 150–200 MB |
+| backend (uvicorn, 1 worker, poller u istom procesu na svojoj niti) | ~150 MB |
+| nginx | 10–20 MB |
+| CrowdSec engine + bouncer | 100–150 MB |
+| `tailscaled` | 30–60 MB |
+| `cloudflared` | 30–50 MB |
+| **Ukupno** | **~620–880 MB** od 2 GB — ~1 GB rezerve |
+
+> **Odlučeno** · **Swap 1 GB** (datoteka, `vm.swappiness=10`).
+>
+> **Zašto** · Ne zbog rada nego kao osigurač: bez swapa OOM killer pri prvom vrhu ubija
+> najveći proces — Postgres. Uz nizak `swappiness` swap se ne koristi dok ne mora.
+>
+> **Ako griješim** · Jedna datoteka.
+
+**Disk 40 GB** (spec je tražio 20): OS ~2,5 GB, venv ~150 MB, `dist/` ~1 MB, baza ~50 MB na
+početku i **~140–150 MB** u mirnom stanju za dva ormara (izmjereno, §10.4), lokalne kopije
+backupa nekoliko dana. Ostaje > 30 GB.
+
+**Promet 200 GB/mj** — procjena po izvoru (veličine odgovora iz simulatora, građenog iz koda
+ormara; stvarna brojka se mjeri u §10.5 c):
+
+| Izvor | Računica | Mjesečno |
+|---|---|---|
+| polling, po ormaru | ~6 100 poziva/dan × (odgovor 0,3–2 kB + ~0,6 kB zaglavlja) ≈ 10 MB/dan, uz WireGuard | **~0,3 GB po ormaru** |
+| webhook | samo događaji sesija i alarma; **ne** heartbeat (bio bi +70 MB/mj po ormaru, a ERP ga ne sprema) | < 0,1 GB |
+| UI kroz Cloudflare | bundle 648 kB (gzip ~200 kB) po hladnom učitavanju + API | < 1 GB |
+| kamera | **samo slika na zahtjev** (`camera.frame_ext`, ~100–300 kB, prolazi dvaput: ormar → VPS → preglednik); 100 pogleda/dan | ~2 GB |
+| backup izvan VPS-a | dnevni `pg_dump`, komprimiran | ~1 GB |
+| ažuriranja OS-a | | 1–2 GB |
+| **Ukupno** | | **~5–7 GB od 200** |
+
+> **Odlučeno** · **Video kamere nikad ne prolazi kroz ERP.** `camera.stream_ext` vraća samo
+> RTSP adresu (kao danas); ERP ne proxyja stream.
+>
+> **Zašto** · Stream od 1–2 Mbps je 0,5–0,9 GB na sat gledanja; kroz VPS bi deset dana
+> stalnog gledanja potrošilo cijeli mjesečni promet. To je jedini izvor koji može probiti
+> 200 GB, i zato je pravilo, ne procjena.
+>
+> **Ako griješim** · Ako marina ikad traži video kroz ERP, to je zaseban servis s vlastitim
+> prometom, ne ovaj VPS.
+
+**VPS odgovara.** 2 CPU i 2 GB nose sve iz §8.1 s ~1 GB rezerve u RAM-u, 40 GB je dvostruko
+od traženog, a promet je ~3 % ponude. Jedini uvjet: build u CI-ju i video izvan ERP-a — oboje
+je gore odlučeno.
 
 ### §8.3 · Tajne
 
@@ -1937,12 +2031,13 @@ završetak faze 5:
 
 ```
 1  OS, korisnik, SSH samo ključevi, nftables default-deny
-2  Tailscale + ACL; provjeri ormar ↛ ERP
+2  Tailscale + ACL po §7.0; provjeri: ormar → ERP SAMO :8081 webhook, ormar ↛ ormar,
+   javno sučelje bez ijednog otvorenog ulaznog porta (nmap izvana), SSH samo preko Tailscalea
 3  PostgreSQL, baza, korisnik
 4  systemd credentials: JWT_SECRET, ERP_ENCRYPTION_KEY, DATABASE_URL
 5  venv iz LOCK datoteke (ne iz requirements.txt)
 6  alembic upgrade head
-7  frontend build
+7  dist/ iz artefakta CI runa koji je prošao gate (ne build na VPS-u, §8.2); swap 1 GB
 8  nginx + cloudflared (SAMO UI) + Cloudflare Access na /admin
 9  CrowdSec engine + bouncer
 10 unattended-upgrades
@@ -2078,7 +2173,8 @@ završava zelenim gateom i ažuriranom ovom specifikacijom (verzija +1, što se 
 | **2** | **Ugovor s ormarom + simulator** — tablica ključ→putanja, rukovanje 401/403/409/422/503/5xx po §2.5, Smart Mode iz `health`, PK vs `display_id`, `device_connected`, `berths.list`, `is_stale` do boje, kanal B s `X-API-Key`; simulator (puni, retrofit, trofazna Q1, dijeljeni ventil, tihi ormar, Smart Mode OFF) | TC-ERP-SIM-00..16 zeleni; **Berths/409/`is_stale` ispravljeni** |
 | **3** | **Model podataka** — §4 u cijelosti, mapiranje **po D18** (obje strane + usporedba), NFC tagovi s dva zapisa + **CSV uvoz za Krk**, tip uređaja i mogućnosti, korisnici, ugovori, `billing_mode` default `prepaid`, knjiga kredita, `consumption_source` | migracije `006+`; **uvoz Krk CSV-a pogađa točan priključak** (ne samo „prepoznato") |
 | **4** | **Prikupljanje + retencija u istom commitu** — poller po §5.2, pull-usklađivanje `by-user`, prijemnik webhooka (danas `X-API-Key`, spreman za HMAC), `command_audit` | podaci teku; **rast baze izmjeren i ograničen** — brojka prije i poslije 7 dana |
-| **5** | **VPS** — systemd (§8), 2 GB / 20 GB, Postgres, nginx, `cloudflared` samo za UI, Tailscale prema ormarima, **slojevi 0 i 1 PRIJE javnog izlaganja**, backup + probna obnova, runbook; `docker-compose.yml` obrisan | ERP javno dostupan iza Cloudflare Accessa; **runbook proveden na čistom VPS-u** |
+| **4.5** | **LIVE lokalno** (v8) — ERP na tvom PC-u, spojen na pravi Krk preko Tailscalea: LIVE-01 samo čitanje, simulator ispravljen prema živom odgovoru, poller i retencija preko noći, kontrole tek na izričit OK (§10.5) | **simulator se slaže sa živim ormarom** ili je svaka razlika zapisana i ispravljena; stvarni rast izmjeren i uspoređen sa simuliranim |
+| **5** | **VPS** — systemd (§8), 2 GB / 40 GB, Postgres, nginx, `cloudflared` samo za UI, Tailscale prema ormarima, **slojevi 0 i 1 PRIJE javnog izlaganja**, backup + probna obnova, runbook; `docker-compose.yml` obrisan | ERP javno dostupan iza Cloudflare Accessa; **runbook proveden na čistom VPS-u** |
 | **6** | **Zauzeće vezova + 2D SVG** — četiri signala iz §3.1, tablica stanja §3.2, statični SVG s `svg_id` po vezu | **Krk na karti, četiri signala, sivo za tiho** |
 | **7** | **Poslovna logika i NFC tok** — §5.1, §5.4, tarifa (§4.5), `billing_records`, izvoz za blagajnu, knjiga kredita u iznosima | **TC-ERP-ACC-01..06 prolaze na pravom ormaru**; potrošnja se slaže na obje strane |
 | **8** | **Sigurnosni modul v1** — mamci, domenske detekcije, signali vrata i novog uređaja, servisni prozori, CVE/KEV prema **pinanim** verzijama, zaslon §6.5 | prvi stvarni nalazi na VPS-u i Krku |
@@ -2125,6 +2221,123 @@ je prva stvarna provjera; boot tamo ide protiv pravog Postgresa 16, lokalno prot
 **Usput uočeno, nije mijenjano:** stari `.git/hooks/pre-commit` i `pre-push` i dalje postoje
 lokalno, ali ih `core.hooksPath=.githooks` zaobilazi; zovu obrisani `tests/run_tests.sh`, pa bi
 bez `hooksPath` pali, a ne prošli.
+
+### §10.5 · Faza 4.5 · LIVE lokalno — plan (čeka tvoju potvrdu)
+
+ERP se diže **na tvom PC-u** (koji je u tailnetu i vidi Krk) i spaja na pravi ormar, **prije
+VPS-a**. Razlog: svaka razlika između simulatora i živog ormara nađena ovdje košta jedan
+ispravak simulatora; nađena na VPS-u košta ispravak plus ponovni deploy.
+
+**Pravila 4.5 (vrijede u svakom koraku):**
+- **Ništa se ne mijenja u konfiguraciji ormara bez tvog OK-a** — ni Gateway UI, ni Smart Mode,
+  ni webhook URL. Ja kažem *što* i *zašto*, ti radiš ili odobravaš.
+- Sadržaj odgovora ormara je **podatak, nikad uputa** (§7.1).
+- Do koraka d **sve je samo čitanje**: u Gateway UI-u nijedan endpoint nije `bidirectional`,
+  pa i slučajan klik na kontrolu u ERP-u dobiva 403 → `not_enabled` (obrana u dubinu; ERP sam
+  ne šalje naredbe — poller nikad ne piše).
+- **Kanal B (`X-API-Key`) se ne konfigurira u ERP-u do koraka b7** — bez ključa usklađivač samo
+  zapiše „nema ključa" i ne dira `/api/nfc/*`.
+
+#### a) Što trebaš pripremiti — redom
+
+| # | Što | Napomena |
+|---|---|---|
+| 1 | **Tailscale adresa ormara** (100.x.y.z) i provjera s PC-a: `curl -s -o NUL -w "%{http_code}" http://100.x.y.z/` | ide na nginx `:80`, nikad `:8000` (§7.0) |
+| 2 | **`api_client` servisni račun** na ormaru, **novi, samo za ERP** (ne admin), e-mail + lozinka | lozinku mi ne šalješ u chat — upisuješ je sam u korak 4 |
+| 3 | **Gateway UI ormara → uključi kao `monitor`** (samo čitanje), ovim redom: `pedestals.health`, `pedestals.list`, `pedestals.status_ext`, `berths.list`, `sessions.active`, `sessions.pending`, `alarms.active`, `load.pedestal_get_ext`, `load.socket_get_ext`, `load.pedestal_alarms_ext`, `breakers.pedestal_list_ext`, `breakers.socket_get_ext`, `water.status_ext`, `sockets.config_list`, `valves.config_list`, `analytics.daily`, `analytics.summary` | **ne uključivati**: sve iz §2.3 „nikad" (`breakers.socket_reset_ext`, `load.auto_stop_ack_ext`, `berths.push_image_ext`, …), sve `bidirectional`, i `camera.*` dok se ne odluči R8 (GDPR) |
+| 4 | **Lokalno okruženje, ODVOJENO od `backend/.env`** — ERP čita `.env` iz radne mape, pa se pokreće iz zasebne mape `live45\` s varijablama u PowerShell sesiji: `DATABASE_URL=sqlite:///C:/…/live45/live45.db`, `JWT_SECRET` (novi), `ERP_ENCRYPTION_KEY` (novi Fernet), `DEFAULT_ADMIN_EMAIL` + **nova** `DEFAULT_ADMIN_PASSWORD` (ne `Admin1234!`), `COLLECTOR_ENABLED=false` za korak b, `true` za c | SQLite, ne tvoj lokalni Postgres (njegova lozinka je javna, O16); rast se uspoređuje u recima, bajtove daje VPS |
+| 5 | Koja verzija vrti na Krku, ako znaš (commit/tag) | ako ne, LIVE-01 to zaključuje iz odgovora (`/api/nfc/sessions` postoji → `main` ≥ `dadb48c`) |
+
+Webhook u 4.5 **nije** potreban: pull je izvor istine (D7), a webhook bi tražio promjenu
+konfiguracije ormara (URL na tvoj PC) i ulazni port na tvom PC-u. Ide u korak „spajanje VPS-a".
+
+#### b) LIVE-01 — samo čitanje
+
+Ja pišem `scripts/live_check.py`: za svaki poziv dohvati živi odgovor, usporedi ga s onim što
+simulator vraća za isti poziv (skup ključeva, tipovi, oblik, identitet PK/display), i ispiše
+razlike po imenu ključa. Živi odgovori spremaju se u `docs/inputs/live/` **tek nakon što ih
+pregledaš** (mogu sadržavati imena vezova, ne smiju imena ljudi).
+
+| # | Poziv | Što se očekuje (simulator) | Posebno gledamo |
+|---|---|---|---|
+| b1 | `pedestals.health` | objekt ključan po PK-u (string), `smart_mode`, `last_heartbeat` s `Z`, `opta_client_id` | stvarni PK i `display_id` za provisioning; razmak heartbeata (15 s?) |
+| b2 | `pedestals.list` | lista, bez `display_id` | broj ormara iza jedne adrese |
+| b3 | `pedestals.status_ext/{pk}` i `/{display_id}` | `door_state`, temperatura, vlaga | oba identiteta rade |
+| b4 | `berths.list` | `state_code`, `match_ok_bit`, `last_analyzed` | **GET koji stvara vez ako ga nema (O22)** — na Krku vezovi postoje, ali ovo javljam prije poziva |
+| b5 | `sessions.active`, `sessions.pending` | lista `SessionResponse` | polja koja dashboard čita |
+| b6 | `load.pedestal_get_ext/{pk}`, `breakers.pedestal_list_ext/{pk}` | `energy_kwh` je **registar** (raste, ne resetira se), Q1 trofazna `current_l1..l3` | dva očitanja u razmaku: registar monoton? |
+| b6w | `water.status_ext/{pk}` | `valves[{valve_id, total_l, session_l, updated_at}]` | **O36 / R16**: je li `total_l` registar ili brojač sesije (vidi dolje) |
+| b7 | *(samo ako Krk ima R14 b i daš `X-API-Key`)* `GET /api/nfc/sessions?ended_from&ended_to&limit=5` | `{sessions, total, next_offset}`, 16 ključeva s `erp_ref` | na `main` je čitanje **bez nuspojava** (`beab47b`); na starijem kodu se ne zove |
+
+**Poziv za vodu koji tražiš (O36):** s PC-a, nakon koraka a3:
+
+```
+POST http://<tailscale-ormara>/api/auth/service-token   {"email": "...", "password": "..."}
+GET  http://<tailscale-ormara>/api/ext/pedestals/<pk>/water   Authorization: Bearer <token>
+```
+
+Tri puta: **prije** korištenja vode, **nakon** kratkog točenja na V1 (par litara), i **nakon
+drugog** točenja na V1. Ako `total_l` raste preko obje sesije bez pada — ponaša se kao registar
+u praksi; ako padne ili krene ispočetka — brojač sesije, kako kod kaže. U oba slučaja R16
+ostaje dok ruta ne vraća `meter_total_l` izrijekom, jer ERP ne smije ovisiti o tome koja je
+firmware grana zadnja upisala očitanje.
+
+Svaka razlika simulatora od živog ormara: zapis u §0.8 (novo, kao §0.7), ispravak simulatora,
+test koji je drži — u istom commitu.
+
+#### c) Poller i retencija protiv živog ormara
+
+`COLLECTOR_ENABLED=true`, ormar provisioniran u lokalnom ERP-u **bez** kanala B i bez
+webhook ključa. **Preko noći (8–12 h)** umjesto „nekoliko sati": noć ima prazan hod, dan ima
+promet — oba oblika rasta. Mjerim isto što `growth_check.py` broji (reci po tablici, po satu),
+`sync_log` greške, stvarne veličine odgovora (bajti po pozivu → procjena prometa §8.2) i
+uspoređujem sa simuliranim danom. Retenciju vrtim na kraju s pomaknutim satom na **kopiji**
+baze, ne na živoj.
+
+#### d) Kontrolni testovi — TEK NA TVOJ IZRIČIT OK, svaki posebno
+
+Prije: u Gateway UI-u prebaci **samo `controls.socket_cmd` na `bidirectional`**. Ništa drugo
+(`water_cmd`, `allow/deny/stop`, `diagnostics.run` ostaju monitor ili isključeni).
+
+| # | Test | Uvjet | Očekivano |
+|---|---|---|---|
+| d1 | Smart Mode ON, **jedna utičnica**, `socket_cmd activate` | netko na ormaru, poznato trošilo utaknuto, **nije gostov brod** | 200 `sent`; `command_audit` red **prije** poziva s razlogom i punim URL-om; potrošnja vidljiva u sljedećem intervalu |
+| d2 | ista utičnica, `stop` | | 200; red u `command_audit` |
+| d3 | Smart Mode OFF (ti ga prebacuješ na ormaru) | | ERP u ≤ 60 s uklanja kontrole iz DOM-a; ručni `POST …/cmd` → **409 `standalone` s rečenicom, nikad 500** |
+| d4 | Smart Mode natrag ON, `socket_cmd` natrag na **monitor** | | kontrole se vraćaju tek s `bidirectional` |
+
+Napomena za d1: ako je na Krku uključen `nfc_cross_check_required` (§2.3, R6), `activate` bez
+taga daje 400 — ERP ga tada prikazuje kao svoju grešku; LIVE-01 b1 to ne vidi, d1 da.
+
+#### e) Gotovo kad
+
+LIVE-01 bez neobjašnjene razlike; simulator ispravljen; noćni rast izmjeren i usporediv sa
+simuliranim; d1–d4 prošli na tvoj OK. Spec v9 s izvještajem §10.7.
+
+### §10.6 · Raspored — od 4.5 do tjedna stvarnog rada
+
+| Korak | Što radim ja | Što trebaš ti | Trajanje | Blokira |
+|---|---|---|---|---|
+| **4.5 LIVE lokalno** | `live_check.py`, usporedba, ispravci simulatora, noćno mjerenje, kontrolni testovi s tobom | a1–a5; biti dostupan za d (netko fizički na Krku za d1–d3) | **2–3 dana** kalendarski: ~½ dana moj rad za b, 1 noć za c, ~1 h zajedno za d | servisni račun + Gateway UI; osoba na Krku za d |
+| **5 VPS** | systemd unit, nginx (UI na loopbacku, webhook samo na Tailscale adresi `:8081`), nftables, Tailscale ACL prijedlog (JSON), `cloudflared` konfiguracija, CrowdSec, systemd credentials, backup + skripta probne obnove, `verify_system.sh`, CI artefakt `dist/`, brisanje `docker-compose.yml` | kupiti VPS; domena u Cloudflareu + Access politika; Tailscale admin (dodati VPS, primijeniti ACL); **odredište backupa izvan VPS-a**; SSH ključ; **rotirati `Admin1234!`** gdje god je bio | **2–3 dana** moj rad + **½ dana zajedno** za runbook na čistom VPS-u | domena/Cloudflare račun; odluka o odredištu backupa |
+| **Spajanje VPS → Krk** | provisioning ormara u ERP-u na VPS-u (`base_url` = Tailscale adresa), LIVE-01 ponovno **s VPS-a**, provjera ACL-a u oba smjera | OK za: webhook URL + ključ u Gateway UI-u ormara (Tailscale adresa VPS-a `:8081`), `X-API-Key` za kanal B | **1–2 h** | tvoj OK za konfiguraciju ormara |
+| **Tjedan stvarnog rada** | dnevno: `/api/health`, `reconciliation_runs`, greške u `sync_log`, rast po tablici; na kraju izvještaj: **stvarni** rast prije/poslije 7 dana (zatvara O35) i usporedba sa simulacijom | ništa osim javiti neobičnosti na ormaru | **7 dana** kalendarski | ništa |
+
+**Najranije:** ERP na VPS-u spojen na Krk za ~**1 tjedan** od potvrde plana (4.5 ~3 dana + VPS
+~3 dana + spajanje), stvarni tjedan rada završava ~**2 tjedna** od potvrde. Uz pretpostavku da
+domena i Tailscale admin nisu blokada.
+
+**Predlažem dvije promjene redoslijeda/pristupa:**
+
+1. **Faza 5 kod se piše dok teče 4.5 c (noćno mjerenje).** systemd, nginx, ACL i runbook ne
+   ovise o živom ormaru; ako ih pišem u istoj sesiji dok poller skuplja, VPS je spreman dan
+   ranije. *Razlog:* c je čekanje, ne rad. Ništa se ne deploya prije tvog OK-a za fazu 5.
+2. **Tjedan stvarnog rada mjeri polling, intervale i alarme — ne naplatu.** ERP-ove sesije
+   nastaju tek NFC tokom u fazi 7, pa će usklađivač tjedan dana vidjeti samo „tuđe" sesije
+   (D19) i to je ispravno. Ako tjedan treba dokazati i naplatu, faza 7 mora prije njega —
+   **predlažem da ne**: prvo dokazati da sakupljanje stabilno radi, pa naplatu na tome. Dok
+   tjedan teče, fazu 6 (karta) mogu razvijati lokalno protiv simulatora, bez dodira s
+   produkcijom — samo ako to potvrdiš.
 
 ### §10.4 · Faza 4 — izvještaj (2026-10-12)
 
@@ -2192,7 +2405,7 @@ ne postoje, pa ERP danas radi `by-user` putem, a novi put je provjeren samo prot
 
 **Cijena:** gate je sporiji — stupanj growth traje 7–14 min lokalno (ovaj stroj, izmjereno u tri
 pokretanja), a CI posao je s 4 min 7 s (faza 3) narastao na 9 min 7 s. Simulira 10 080 minuta stvarnim pozivima; kraći prozor bi mjerio manje od
-onoga što kriterij traži. Ako ti je push predug, `--days 2` u `gate.sh` je jedan broj.
+onoga što kriterij traži. **Odlučeno pri prihvaćanju faze 4:** lokalne kuke mjere 2 dana, CI 7.
 
 ### §10.3 · Faza 3 — izvještaj (2026-10-12)
 
@@ -2305,11 +2518,13 @@ Nađeno usput. Nije u izvedbi gore; tvoje je da odlučiš prioritet.
 | O31 | ~~Klijent ormara spaja se po `marinas.pedestal_api_base_url`~~ — **zatvoreno u fazi 4**: klijent iz retka `cabinets` (§4.0b); marina bez ormara čita po starom, bez kanala B i prikupljanja | zatvoreno |
 | O32 | Admin modela ima API, nema zaslona (ormari, registar vezova, mapiranje, NFC uvoz) | prvi zaslon kad zatreba instalacija; do tada API + CSV |
 | O33 | Zaslon Vezovi prikazuje imena vezova s ormara, ne `berths.berth_number` iz ERP-a | faza 6 (zauzeće + 2D karta) gradi zaslon na ERP-ovim vezovima |
-| O34 | Imena parametara i oblik odgovora R14 b/c su **ERP-ovo čitanje** ormarova odgovora: `GET /api/nfc/sessions?ended_from&ended_to&limit&offset` → `{sessions, total}`, `POST /api/nfc/sessions/ack {session_ids}` | potvrditi kad ormar objavi b i c; razlika je jedna funkcija (`client.nfc_sessions_ended_between`, `nfc_ack`) i simulator |
+| O34 | ~~Imena parametara R14 b/c su ERP-ovo čitanje~~ — **potvrđeno u kodu ormara** `eac7aa2`, `backend/app/routers/nfc.py:880-968`: `GET /api/nfc/sessions?ended_from&ended_to&limit&offset` → `{sessions, total, count, next_offset, …}`, `POST /api/nfc/sessions/ack {session_ids}` → `{acked, unknown, not_final, not_attributed}`. **Jedna razlika ispravljena:** `ack` tek nakon obračuna (§4.0b). Payload nosi `erp_ref` umjesto `customer_id` (null = sesija koju ERP nije otvorio) — parser to sada prima kao „tuđu" sesiju | zatvoreno; živi odgovor u §10.5 b7 |
 | O35 | Rast baze izmjeren je **simulacijom** (stvarni kod, simulirani ormari i sat, modelirani Krk dan) — ne tjednom na pravom ormaru | prava brojka prije i poslije 7 dana mjeri se na VPS-u nakon faze 5, istim `scripts/growth_check.py` brojanjem po tablici |
-| O36 | Voda nema registar na ext API-ju (`/water` `total_l` je brojač sesije, §0.7) — intervali vode se ne pišu; voda ulazi samo kroz konačnu brojku sesije | zahtjev prema ormaru ako energetskom agentu (D14) zatreba povijest vode |
+| O36 | Voda nema **registar na ext API-ju**. Provjereno u kodu ormara (`eac7aa2`): registar **postoji** (`valve_configs.meter_total_l`, `models/valve_config.py:34-40`, puni ga `mqtt_handlers.py:3880-3890`) i **dolazi ERP-u u sesiji** (`meter_water_start_l/end_l`, `nfc_service.py:406-407, 467-470`) — naplata vode je dakle po registru. Ali `GET /api/ext/pedestals/{id}/water` vraća `total_l` = zadnje očitanje `total_liters` (`ext_pedestal_endpoints.py:358-367`), a u to očitanje ventilni put upisuje **brojač sesije** (`mqtt_handlers.py:3897`, `liters_for_session`); docstring kaže „cumulative", kod ne. Intervali vode se zato ne pišu | **ostaje otvoreno** → **R16**; živi odgovor u §10.5 b6w (tri očitanja) pokazuje ponašanje na Krku |
 | O37 | Stari `POST /api/webhooks/pedestal/{marina}` (HMAC po marini) ostaje uz novi po ormaru, sada zatvoren bez tajne | obrisati kad Krk šalje na `/api/webhooks/cabinet/{id}` |
 | O38 | Razlog naredbe traži se `window.prompt`-om; uloge `admin`/`operator` iz §5.3 (ograda 1) još ne postoje — naredbe smiju `super_admin` i `marina_manager` kao prije | pravi dijalog i uloge dolaze sa zaslonima naplate (faza 7) |
+| O39 | Koja verzija ormara vrti na Krku — R14 b/c i loopback backend objavljeni su na `main` `eac7aa2`, Krk nepoznat | LIVE-01 (§10.5 b1, b7) |
+| O40 | Faza 4 tjedan stvarnog rada ne mjeri naplatu (ERP-ove sesije nastaju tek u fazi 7) | §10.6, prijedlog 2 |
 | O6 | 11 događaja se emitira na ormaru a nije u `EVENT_CATALOG`, među njima **`meter_telemetry_received`** (telemetrija brojila) i **`direct_cmd_sent`** (jedina push-potvrda da je naredba otišla) — NALAZ 6.3 | ERP ih **ne može pretplatiti**; pull ih pokriva. Zahtjev prema ormaru ako ikad zatrebaju |
 | O7 | `usage.*`, `mobile.*`, `qr.*` rute: usmjeravanje je isto na `773bca6` i `main`, ali `usage_history.py` (+30/−7), `mobile.py` (+168/−28) i `qr.py` (+7/−2) su mijenjani — **oblik odgovora se može razlikovati** | izvještaj ormara to nije provjeravao polje po polje; ERP koristi samo `usage.history`, i to za usklađivanje |
 | O8 | Postoji li brojilo na glavnom priključku marine (za vršnu snagu, D14) | energetski agent, faza 9 |

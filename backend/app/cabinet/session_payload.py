@@ -112,7 +112,9 @@ def parse_session(raw: dict) -> ParsedSession:
         # not even in a finding — whoever reads it later would take it as real.
         findings.append(Finding("price_field_dropped", f"{dropped} field(s)"))
 
-    required = CONTRACT_KEYS - ({"customer_id"} if payload.get("erp_ref") else set())
+    # the cabinet's new contract (eac7aa2) carries the KEY erp_ref instead of customer_id;
+    # erp_ref may be null — a session the ERP did not start, not a broken payload
+    required = CONTRACT_KEYS - ({"customer_id"} if "erp_ref" in payload else set())
     missing = sorted(required - payload.keys())
     if missing:
         raise PayloadError(f"payload is missing contract keys: {', '.join(missing)}")

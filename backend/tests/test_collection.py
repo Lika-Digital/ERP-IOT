@@ -306,7 +306,8 @@ def test_reconcile_without_channel_b_key_is_a_failed_run_with_the_reason(sim, ca
 
 # ─── reconciliation, R14 b/c ─────────────────────────────────────────────────
 
-def test_r14_range_matches_by_erp_ref_acks_and_reads_change_nothing(sim, cab, clock):
+def test_r14_range_matches_by_erp_ref_acks_only_billed_and_reads_change_nothing(sim, cab,
+                                                                                   clock):
     from app.models.metering import ErpSession, ReconciliationRun
     st = sim.state.sim
     st.contract = "r14"
@@ -322,17 +323,25 @@ def test_r14_range_matches_by_erp_ref_acks_and_reads_change_nothing(sim, cab, cl
     assert (s.cabinet_session_id, s.water_liters, s.reconciled_at is not None) == (
         201, Decimal("120.000"), True)
     assert s.ended_at == started + timedelta(minutes=30)   # activated_at + duration
-    assert s.ack_sent_at is not None and st.acked == [201]
+    # reconciled is not billed: no ack yet (the cabinet's contract, eac7aa2 nfc.py:950-968)
+    assert s.ack_sent_at is None and st.acked == []
     assert st.reconciled == {}, "a read changed state on the cabinet"
     db = _db()
     try:
         run = db.query(ReconciliationRun).filter_by(cabinet_id=cab).one()
     finally:
         db.close()
-    assert (run.mode, run.ok, run.sessions_acked) == ("range", True, 1)
+    assert (run.mode, run.ok, run.sessions_acked) == ("range", True, 0)
     assert run.window_to == clock.now
 
-    # the next run continues where this one stopped, with the overlap, and acks nothing twice
+    # billed (phase 7 does this) -> the next run acks it, once
+    db = _db()
+    try:
+        db.get(ErpSession, sid).billing_state = "billed"
+        db.commit()
+    finally:
+        db.close()
+    # the next run continues where this one stopped, with the overlap
     clock.advance(minutes=15)
     col = _collector()
     _run(col.run_all_once())
@@ -343,7 +352,10 @@ def test_r14_range_matches_by_erp_ref_acks_and_reads_change_nothing(sim, cab, cl
     finally:
         db.close()
     assert r2.window_from == run.window_to - timedelta(minutes=10)
-    assert st.acked == [201]
+    assert st.acked == [201] and _get(ErpSession, sid).ack_sent_at is not None
+    clock.advance(minutes=15)
+    _run(_collector().run_all_once())
+    assert st.acked == [201], "acked twice"
 
 
 def test_r14_range_reads_every_page(sim, cab, clock, monkeypatch):
@@ -590,3 +602,20 @@ def test_a_slow_collector_never_makes_the_api_wait(client):
     assert r.status_code == 200 and waited < 1.0, f"the API waited {waited:.2f} s"
     main = (Path(__file__).resolve().parents[1] / "app" / "main.py").read_text(encoding="utf-8")
     assert "CollectorThread(collector)" in main, "the app must start the collector on its thread"
+
+
+def test_new_contract_session_without_erp_ref_is_not_ours_not_a_broken_payload(sim, cab):
+    """Cabinet eac7aa2: the payload has `erp_ref` instead of `customer_id`, and erp_ref is
+    null for a session the ERP did not start (Smart Mode OFF, D19). That is 'unknown',
+    never a contract break."""
+    from app.services import session_sync
+    from app.models.cabinet import Cabinet
+    raw = session_payload(session_id=777, socket_id="Q2", erp_ref=None)
+    del raw["customer_id"]
+    db = _db()
+    try:
+        out = session_sync.apply(db, db.get(Cabinet, cab), raw, final_by_pull=True,
+                                 now=erp_time.utcnow())
+    finally:
+        db.close()
+    assert out == "unknown"

@@ -5,8 +5,10 @@ Two modes, chosen by asking the cabinet, not by configuration:
   range    R14 b — sessions by END time, [ended_from, ended_to), paged. Each run
            continues where the last good one stopped (with an overlap, because
            the cabinet may commit a session a little after its end time). Then
-           R14 c: the ERP acknowledges, explicitly, the sessions whose final
-           figure it stored.
+           R14 c: the ERP acknowledges, explicitly, the sessions it has BILLED —
+           the cabinet's contract (Cloud_IOT eac7aa2, routers/nfc.py:950-968):
+           its detector alarms on "ended, attributed, not acknowledged", so an
+           ack at reconciliation would silence it while nothing is billed yet.
   by_user  today's cabinet (a709cf8): the range route answers 404 "Not Found",
            so the ERP reads by-user — ONLY here, never for display (§7.2 R2,
            TC-ERP-SIM-00g) — for the customers with an open or not yet
@@ -118,8 +120,10 @@ async def _refresh_active(db, cab, client, run, now) -> None:
 
 
 async def _ack(db, cab, client, run, now) -> None:
+    # billed only (phase 7 bills); until then the ERP acknowledges nothing, and the
+    # cabinet's backlog says, truthfully, that nothing is billed
     rows = (db.query(ErpSession)
-            .filter(ErpSession.cabinet_id == cab.id, ErpSession.reconciled_at.isnot(None),
+            .filter(ErpSession.cabinet_id == cab.id, ErpSession.billing_state == "billed",
                     ErpSession.ack_sent_at.is_(None), ErpSession.cabinet_session_id.isnot(None))
             .all())
     if not rows:
