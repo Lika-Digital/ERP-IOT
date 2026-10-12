@@ -3,10 +3,10 @@
 Što se gradi, u kojem redoslijedu, i svaka odluka izrečena tako da ispravak
 košta jedan redak, a ne razgovor.
 
-    Verzija 6 — zamjenjuje v5.2 od 2026-10-12
+    Verzija 7 — zamjenjuje v6 od 2026-10-12
     Datum 2026-10-12
-    Status faze 1, 2 i 3 ZAVRŠENE, gate i CI zeleni (§10.1–§10.3); faza 4 čeka odobrenje;
-           §1 je prazan; O28 (ventili na ormaru 1) čeka nekoga s pristupom ormaru
+    Status faze 1–4 ZAVRŠENE, gate i CI zeleni (§10.1–§10.4); faza 5 čeka odobrenje;
+           §1 je prazan
 
 Čita se uz `docs/inputs/odluke.md` **v2.2** (odluke, obvezujuće — v2.1 dodaje **D18**, v2.2 **D19**),
 `docs/inputs/ormar_gateway_izvjestaj.md` (ugovor s ormarom, file:line),
@@ -14,6 +14,19 @@ košta jedan redak, a ne razgovor.
 `docs/inputs/ormar_ui_v2_spec.txt` (specifikacija ormara — uzor forme i izvor rječnika stanja).
 
 **Sve u ovom dokumentu je ODLUČENO. §1 je prazan — nema otvorenih blokatora.**
+
+### Što se promijenilo u verziji 7
+
+| | |
+|---|---|
+| **Faza 4 završena** | gate **7/7** i CI zeleni, na PostgreSQL-u; izvještaj u **§10.4** |
+| **D19 · NOVO** (`odluke.md` v2.2) | ventili i utičnice prema Smart Modeu (§5.3); **O28 zatvoren** bez upita u bazu ormara |
+| **§4.0 · vrijeme** | naivni UTC prihvaćen **uz pravilo da je svako spremljeno vrijeme UTC** — tri čuvara, test na UTC+14 |
+| **§4.0b · NOVO — odluke faze 4** | intervali po priključku (D19), naplata tek nakon pulla (baza), usklađivač sam otkriva R14 b/c, webhook po ormaru, `command_audit` prije poziva s obveznim razlogom, klijent iz `cabinets` (O31), `sync_log` bilježi promjene |
+| **Rast baze** | izmjeren 7 simuliranih dana na PostgreSQL-u: **856 kB → 3568 kB**, projekcija uz retenciju **140,6 MB**; retencija dokazana skokom sata preko svih prozora |
+| **§4.7** | retencija izvedena; dodani prozori za `reconciliation_runs`, `pedestal_cache`, `audit_log` |
+| **O26** | grana ostaje, bez force-pusha |
+| **§11** | O29 ažuriran, O31 zatvoren, O34–O38 novi |
 
 ### Što se promijenilo u verziji 6
 
@@ -2112,6 +2125,74 @@ je prva stvarna provjera; boot tamo ide protiv pravog Postgresa 16, lokalno prot
 **Usput uočeno, nije mijenjano:** stari `.git/hooks/pre-commit` i `pre-push` i dalje postoje
 lokalno, ali ih `core.hooksPath=.githooks` zaobilazi; zovu obrisani `tests/run_tests.sh`, pa bi
 bez `hooksPath` pali, a ne prošli.
+
+### §10.4 · Faza 4 — izvještaj (2026-10-12)
+
+**Gate zelen, CI zelen.** CI run
+[`38257555625`](https://github.com/Lika-Digital/ERP-IOT/actions/runs/38257555625), Linux, pravi
+PostgreSQL 16 i Chromium, posao 9 min 7 s:
+`GATE (full): 7/7; PYTEST: collected=333 passed=333 skipped=0; BOOT: 12/12; BROWSER: 12/12; GROWTH: OK`.
+
+**Kriterij faze — podaci teku; rast baze izmjeren i ograničen: DA.** `scripts/growth_check.py`
+(7. stupanj gatea) vrti **stvarni** poller, usklađivač, prijemnik webhooka i retenciju protiv
+dva simulirana Krk ormara kroz **7 simuliranih dana** (modelirani dan po ormaru: 4 ERP-ove sesije
+po 90 min na 2,3 kW, jedan sat Smart Mode OFF na ormaru 2, jedan alarm). Na PostgreSQL-u:
+
+| | Dan 0 | Dan 7 |
+|---|---|---|
+| Redaka (sve tablice) | 57 | **7142** |
+| Veličina (zbroj `pg_total_relation_size`) | 856 kB | **3568 kB** |
+
+| Tablica koja raste | redaka na dan (2 ormara) |
+|---|---|
+| `consumption_intervals` | 795 |
+| `reconciliation_runs` | 194 |
+| `session_log` | 8 |
+| `sessions` | 8 |
+| `alarm_log` | 2 |
+
+**Ograničen:** svaka tablica koja raste ima prozor (§4.7) ili je izrijekom trajna; iz izmjerenog
+rasta i prozora projekcija mirnog stanja je **140,6 MB** (proračun skripte 1024 MB; disk
+20 GB, §8.2). Projekcija nije tvrdnja nego **dokaz**: sat skače preko svih prozora, retencija se
+vrti, i skripta pada ako ijedna tablica s prozorom nije prazna, ako mjesečni agregat nema **isti
+kWh** kao obrisani intervali, ili ako je nestala ijedna sesija. Nije: 205,632 kWh → 205,632 kWh,
+56 → 56 sesija.
+
+**Nađeno mjerenjem i popravljeno:** `sync_log` je pisao redak po uspješnom pozivu —
+**10 416 redaka na dan** (90 % svih redaka), 312 000 u prozoru. Sada bilježi promjene: **0 na dan** u
+mirnom radu (§4.0b).
+
+| Mjera | Kraj faze 3 | Kraj faze 4 | Kako izmjereno |
+|---|---|---|---|
+| Backend testova | 289 | **333**, 0 preskočenih | `scripts/pytest_counts.py` |
+| Tablica | 25 | **28** | `grep -c __tablename__` |
+| Migracija | 008 | **009** | `alembic/versions/` |
+| Sondi u bazi | 14 | **22** (17 odbijanja, 5 dopuštenja) | `scripts/schema_probes.py`, PG i SQLite |
+| Boot provjera | 10 | **12** (+ poller kao vođa, + webhook bez ključa → 401) | `scripts/boot_check.py` |
+| Stupnjeva gatea | 6 | **7** (+ growth) | `scripts/gate.sh` |
+| Javnih ruta | 4 | **5** (+ webhook po ormaru, s vlastitom provjerom ključa) | TC-ERP-AUTH-01 |
+| Stupaca vremena provjerenih na UTC+14 | 0 | **najmanje 34**, iz svih tablica koje pišu | `test_utc_storage.py` |
+
+**Mutacije (8, sve uhvaćene):** webhook koji „usklađuje"; Smart Mode OFF potrošnja na sesiji
+(D19); nula kao redak po pozivu; retencija bez mjesečnog agregata; webhook bez pohranjenog ključa;
+naredba poslana prije zapisa u `command_audit` (prvi put **promaknula** — test je gledao samo
+zadnji poziv; pooštren); `sync_log` po uspjehu; `utcnow()` na lokalno vrijeme.
+
+**Jedan crveni pre-push, i što je promijenio.** Lokalni gate je jednom pao u pregledniku:
+proxy je dobio prekinutu vezu od backenda usred učitavanja vezova. Uzrok **nije potvrđen** —
+log backenda brisao se s privremenom mapom. Popravljeno je ono što je moglo biti uzrok i što je
+ionako krivo: poller je radio sinkroni posao s bazom **na istoj petlji koja poslužuje API**. Sada
+ima svoju nit i petlju (test: namjerno spor ciklus pollera, `/api/health` odgovara za < 1 s), a
+provjera preglednika pri svakom padu ispisuje kraj loga ERP-a. Nakon toga: 4/4 zaredom lokalno,
+pa pre-push i CI zeleni.
+
+**Što faza 4 nije mogla:** pravi tjedan na pravom ormaru (O35, nakon faze 5); R14 b/c na Krku još
+ne postoje, pa ERP danas radi `by-user` putem, a novi put je provjeren samo protiv simulatora
+(O34); vodu bez registra (O36).
+
+**Cijena:** gate je sporiji — stupanj growth traje 7–14 min lokalno (ovaj stroj, izmjereno u tri
+pokretanja), a CI posao je s 4 min 7 s (faza 3) narastao na 9 min 7 s. Simulira 10 080 minuta stvarnim pozivima; kraći prozor bi mjerio manje od
+onoga što kriterij traži. Ako ti je push predug, `--days 2` u `gate.sh` je jedan broj.
 
 ### §10.3 · Faza 3 — izvještaj (2026-10-12)
 
