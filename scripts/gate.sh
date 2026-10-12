@@ -23,6 +23,8 @@ MODE="full"
 RED='\033[0;31m'; GREEN='\033[0;32m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
 
 STAGES_RUN=0
+PYTEST_LINE="PYTEST: not run"
+BOOT_LINE="BOOT: not run"
 STAGES_OK=0
 FAILED=()
 
@@ -65,8 +67,10 @@ stage "pytest" "backend tests - no skips, no empty runs"
     -W ignore::DeprecationWarning --junitxml="$WORK/pytest.xml")
 PYTEST_EXIT=$?
 rm -f backend/tests/test_erp.db
-"$PY" scripts/pytest_counts.py "$WORK/pytest.xml"
+PYTEST_LINE="$("$PY" scripts/pytest_counts.py "$WORK/pytest.xml")"
 COUNTS_EXIT=$?
+echo "$PYTEST_LINE"
+PYTEST_LINE="$(echo "$PYTEST_LINE" | head -1)"
 if [ $PYTEST_EXIT -eq 0 ] && [ $COUNTS_EXIT -eq 0 ]; then
     pass "pytest"
 else
@@ -117,12 +121,15 @@ fi
 
 # ═════════════════════════════════════════════════════════════════════════════
 stage "boot" "TC-ERP-BOOT-01a - migration, real uvicorn, health, login, auth route"
-if "$PY" scripts/boot_check.py; then
+"$PY" scripts/boot_check.py | tee "$WORK/boot.log"
+if [ "${PIPESTATUS[0]}" -eq 0 ]; then
     pass "boot"
 else
     fail "boot"
 fi
 fi
+
+[ -f "$WORK/boot.log" ] && BOOT_LINE="$(grep -o 'BOOT: .*' "$WORK/boot.log" | tail -1)"
 
 # ═════════════════════════════════════════════════════════════════════════════
 EXPECTED=3
@@ -130,6 +137,11 @@ EXPECTED=3
 echo ""
 echo "──────────────────────────────────────────────────────────"
 echo "GATE ($MODE): $STAGES_OK/$EXPECTED stages passed"
+# In GitHub Actions the summary also becomes an annotation: readable on the
+# public run page and through the API without a login, unlike the raw log.
+if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
+    echo "::notice title=gate::GATE ($MODE): $STAGES_OK/$EXPECTED stages passed; $PYTEST_LINE; $BOOT_LINE"
+fi
 if [ ${#FAILED[@]} -eq 0 ] && [ "$STAGES_RUN" -eq "$EXPECTED" ] && [ "$STAGES_OK" -eq "$EXPECTED" ]; then
     echo -e "${GREEN}${BOLD}GREEN${NC}"
     exit 0
