@@ -3,10 +3,10 @@
 Što se gradi, u kojem redoslijedu, i svaka odluka izrečena tako da ispravak
 košta jedan redak, a ne razgovor.
 
-    Verzija 10 — zamjenjuje v9 od 2026-10-12
-    Datum 2026-10-13
-    Status faze 1–4 ZAVRŠENE i PRIHVAĆENE (§10.1–§10.4); faza 4.5 OBRISANA; faza 5 u pet
-           koraka 5a–5e (§10.6) — 5a (D20) u izvedbi; agenti D21/D22 dizajnirani (§13);
+    Verzija 11 — zamjenjuje v10 od 2026-10-13
+    Datum 2026-10-14
+    Status faze 1–4 ZAVRŠENE i PRIHVAĆENE (§10.1–§10.4); korak 5a (D20) ZAVRŠEN, čeka
+           prihvaćanje (§10.7); 5b čeka tvoju listu (§10.7); agenti D21/D22 dizajnirani (§13);
            §1 je prazan
 
 Čita se uz `docs/inputs/odluke.md` **v2.5** (odluke, obvezujuće — v2.1 dodaje **D18**, v2.2 **D19**,
@@ -16,6 +16,17 @@ v2.3 ispravak mreže u **D13**, v2.4 **D20**, v2.5 **D21**, **D22** i redoslijed
 `docs/inputs/ormar_ui_v2_spec.txt` (specifikacija ormara — uzor forme i izvor rječnika stanja).
 
 **Sve u ovom dokumentu je ODLUČENO. §1 je prazan — nema otvorenih blokatora.**
+
+### Što se promijenilo u verziji 11
+
+| | |
+|---|---|
+| **5a (D20) završen** | gate **7/7** zelen; izvještaj s brojkama u **§10.7** |
+| **§4.9 izveden** | migracija `010`: uloge `admin` / `marina_manager` (CHECK), TOTP, rezervni kodovi, jednokratni linkovi, `auth_audit`; `password_hash` smije biti NULL dok se link ne iskoristi |
+| **§7.1 · dva nalaza ispravljena** | WebSocket `/ws` primao je spoj **bez tokena** i slao obavijesti svih marina — sada samo puni token, a Marina Manager samo dodijeljenu marinu; `refresh` je izdavao novi token na **bilo koji** valjani JWT — sada samo na puni |
+| **D20 · Marina Manager ne vidi konfiguraciju** | `GET …/cabinets`, `…/berth-registry`, `…/nfc-tags/lookup` sada samo Admin; popis marina Manageru ne pokazuje adresu ormara ni servisni račun |
+| **O38 zatvoren do kraja** | razlog naredbe traži se u pravom dijalogu, ne `window.prompt` |
+| **§11** | O38 zatvoren; O43, O44 novi |
 
 ### Što se promijenilo u verziji 10
 
@@ -1418,6 +1429,14 @@ auth_audit                     -- svaka prijava, neuspjeh, zaključavanje, reset
   user_id NULL, email_tried, event, source_ip, created_at   -- retencija 2 godine (§4.7)
 ```
 
+**Izvedeno u 5a (migracija `010`)** — tri razlike od nacrta gore: `auth_audit` ima i `detail`
+(stvarni razlog odbijanja, O14) i `actor_id` (Admin koji je mijenjao); `setup_tokens` ima
+`created_by`; jednokratni link prvog admina vrijedi **30 min** (`SETUP_LINK_MINUTES`), link koji
+Admin izda na zaslonu Korisnici **24 h** (`INVITE_LINK_HOURS`) — novi korisnik ga ne mora
+otvoriti u pola sata. Token putuje u **fragmentu** (`/setup#token=…`): preglednik ga ne šalje
+ni u zahtjevu, ni u `Referer`u, ni u log poslužitelja. QR kod radi `segno` (čisti Python, bez
+ovisnosti, pinan) — TOTP sam ostaje bez ovisnosti.
+
 > **Odlučeno** · TOTP po **RFC 6238** izveden u kodu (HMAC-SHA1, 30 s, 6 znamenki, prozor ±1
 > korak), provjeren **testnim vektorima iz RFC-a**; ne nova ovisnost.
 >
@@ -1872,6 +1891,9 @@ jedinstvene po ormaru**.
 | rezervni kodovi | 10 kodova, prikazani jednom, spremljeni kao bcrypt hash, svaki jednokratan |
 | reset 2FA | samo Admin, za drugog korisnika, uz razlog i `auth_audit`; korisnik pri sljedećoj prijavi povezuje novi |
 | bez 2FA nema rada | korisnik s nepovezanim 2FA vidi samo ekran povezivanja — test prolazi sve zaštićene rute s takvim tokenom i traži 401/403 |
+| token pripada 2FA-u | puni token nosi `mfa_at` (vrijeme povezivanja 2FA): reset 2FA gasi sve sesije tog korisnika, **i nakon** što ponovno poveže novi |
+| lozinka | najmanje 12 znakova, **najviše 72 bajta** — bcrypt ostatak tiho ignorira, pa se dulja odbija, ne skraćuje |
+| WebSocket `/ws` | samo puni token; Marina Manager samo uz `marina_id` dodijeljene marine (4003 inače). **Do 5a token nije bio obavezan** — tko je dosegao `/ws`, dobivao je obavijesti svih marina |
 
 **Sloj 1 · klasična obrana:** `nftables` default-deny; SSH samo ključevi; CrowdSec (engine +
 bouncer); Cloudflare ispred ERP UI-a (WAF, Access za admin); rate limiting; **audit log svake
@@ -2462,6 +2484,48 @@ VPS-a se preklapaju); 5c odmah nakon 5b ako je domena spremna; 5d 2–3 dana; 5e
 faza 6 lokalno protiv simulatora za vrijeme tog tjedna; faza 7 poslije njega. Prijedlog v9
 „faza 5 se piše dok teče 4.5 c" je bespredmetan — 4.5 je obrisana, a 5a kreće odmah.
 
+### §10.7 · Korak 5a (D20) — izvještaj (2026-10-14)
+
+**Gate zelen.** `bash scripts/gate.sh` lokalno: `GATE (full): 7/7; PYTEST: collected=376
+passed=376 skipped=0; BOOT: 15/15; BROWSER: 14/14; GROWTH: OK`. CI na grani
+`faza/5a-d20`: **zelen**, run [`38469325261`](https://github.com/Lika-Digital/ERP-IOT/actions/runs/38469325261) na `a1a5412`, Linux, pravi PostgreSQL 16 i Chromium.
+
+**Kriterij koraka — prijava s 2FA u gateu, boot i preglednik: DA.**
+
+| Mjera | Kraj faze 4 | Kraj 5a | Kako izmjereno |
+|---|---|---|---|
+| Backend testova | 333 | **376**, 0 preskočenih | `scripts/pytest_counts.py` |
+| Tablica | 28 | **31** (+ `user_backup_codes`, `setup_tokens`, `auth_audit`) | modeli |
+| Migracija | 009 | **010** | `alembic/versions/`; `alembic check` u bootu |
+| Sondi u bazi | 22 | **29** (22 odbijanja, 7 dopuštenja) | `scripts/schema_probes.py` |
+| Boot provjera | 12 | **15** — prvi admin kroz link i 2FA; sama lozinka ne otvara ništa; rezervni kod jednom; **`DEFAULT_ADMIN_PASSWORD` u okruženju ne stvara nikoga** | `scripts/boot_check.py` |
+| Provjera u pregledniku | 12 | **14** — link → lozinka → QR → kod → rezervni kodovi jednom; odjava i prijava lozinkom + rezervnim kodom; zaslon Korisnici; razlog naredbe u dijalogu | `scripts/browser_check.py` |
+| Ruta zaštićenih / ukupno | 35 / 40 | **44 / 53** — 5 novih javnih je korak 2FA (kratki mfa token) i stranica linka | TC-ERP-AUTH-01 |
+| RFC 6238 testni vektori | — | **6/6** (SHA-1) | `test_d20.py` |
+| Bundle | 647,73 kB | **662,71 kB JS / 24,35 kB CSS (+15 kB: prijava, 2FA, Korisnici, dijalog)** | `vite build` |
+
+**Mutacije (14):** 12 uhvaćene odmah — zaključavanje isključeno; ponovljeni TOTP kod;
+rezervni kod koji vrijedi dvaput; link koji vrijedi dvaput; korisnici otvoreni Manageru;
+zaključan račun u 2FA koraku odgovara drugom porukom; prozor ±2 koraka; lozinka > 72 bajta
+prihvaćena; WebSocket bez tokena; Manager koji čuje sve marine. **Jedna je promaknula i test je
+pooštren:** „puni token nije vezan uz 2FA" — test je provjeravao samo da reset gasi sesiju, ne i
+da je stari token mrtav **nakon** ponovnog povezivanja. **Jedna nije test nego obrana u dubinu:**
+uklanjanje provjere opsega tokena na oba mjesta i dalje daje 401, jer mfa token nema `mfa_at`.
+Mutacija „WebSocket bez tokena" je u prvom prolazu **objesila** test (prihvaćen spoj čeka poruku
+zauvijek); test sada šalje `ping` pa pada odmah.
+
+**Dva nalaza usput, oba ispravljena (§7.1):** `/ws` bez obaveznog tokena i bez provjere marine;
+`/refresh` na bilo kojem valjanom JWT-u. Treći, po D20: Marina Manager je vidio konfiguraciju
+(ormari s adresom i stanjem ključeva, mapiranje, NFC pretraga, adresa ormara i servisni račun u
+popisu marina) — sada samo Admin.
+
+**Što se mijenja za tebe lokalno:** tvoj lokalni admin (`super_admin` → `admin`) zadržava
+lozinku i **pri prvoj prijavi povezuje 2FA**. `DEFAULT_ADMIN_PASSWORD` u tvom `backend/.env` se
+više ne koristi (aplikacija javi upozorenje); možeš ga obrisati — ja `backend/.env` ne diram.
+
+**Što 5a nije mogao:** ograničenje po IP-u (nginx/CrowdSec, 5b); provjeru na pravom VPS-u
+(runbook korak 11a, 5b).
+
 ### §10.4 · Faza 4 — izvještaj (2026-10-12)
 
 **Gate zelen, CI zelen.** CI run
@@ -2645,7 +2709,9 @@ Nađeno usput. Nije u izvedbi gore; tvoje je da odlučiš prioritet.
 | O35 | Rast baze izmjeren je **simulacijom** (stvarni kod, simulirani ormari i sat, modelirani Krk dan) — ne tjednom na pravom ormaru | prava brojka prije i poslije 7 dana mjeri se na VPS-u nakon faze 5, istim `scripts/growth_check.py` brojanjem po tablici |
 | O36 | Voda **za naplatu riješena**: registar (`valve_configs.meter_total_l`) stiže ERP-u uz svaku sesiju (`meter_water_start_l/end_l`, `nfc_service.py:406-407, 467-470`), pa ERP naplaćuje po brojilu. Za **prikaz** (intervali vode, povijest) ext ruta registar ne vraća: `/water` `total_l` je zadnje očitanje (`ext_pedestal_endpoints.py:358-367`), a ventilni put u njega upisuje brojač sesije (`mqtt_handlers.py:3897`) | **R16 — nizak prioritet, ne blokira fazu 7**; test u tri poziva radiš na Krku (§10.5 b6w) |
 | O37 | Stari `POST /api/webhooks/pedestal/{marina}` (HMAC po marini) ostaje uz novi po ormaru, sada zatvoren bez tajne | obrisati kad Krk šalje na `/api/webhooks/cabinet/{id}` |
-| O38 | ~~uloge `admin`/`operator` iz §5.3 ne postoje~~ — **zatvoreno odlukom D20** (§5.3: Admin i Marina Manager). Razlog naredbe se i dalje traži `window.prompt`-om — pravi dijalog dolazi s D20 zaslonima | uloge zatvorene; dijalog u fazi 5a |
+| O38 | ~~uloge `admin`/`operator` iz §5.3 ne postoje~~ — **zatvoreno odlukom D20** (§5.3: Admin i Marina Manager); ~~razlog naredbe u `window.prompt`~~ — **5a: pravi dijalog** (`ReasonDialog`), i za reset 2FA | zatvoreno |
+| O43 | Ograničenje pokušaja prijave **po IP-u** — u 5a je samo po računu (5 → 15 min) | nginx `limit_req` + CrowdSec, 5b |
+| O44 | `SecurityMiddleware` bilježi 403 kao „Unauthorised access" — s D20 je 403 i običan Manager na Admin ruti | šum u logu; rješava se s O2 (CrowdSec) |
 | O39 | Koja verzija ormara vrti na Krku — R14 b/c i loopback backend objavljeni su na `main` `eac7aa2`, Krk nepoznat | LIVE-01 (§10.5 b1, b7) |
 | O40 | Faza 4 tjedan stvarnog rada ne mjeri naplatu (ERP-ove sesije nastaju tek u fazi 7) | §10.6, prijedlog 2 |
 | O6 | 11 događaja se emitira na ormaru a nije u `EVENT_CATALOG`, među njima **`meter_telemetry_received`** (telemetrija brojila) i **`direct_cmd_sent`** (jedina push-potvrda da je naredba otišla) — NALAZ 6.3 | ERP ih **ne može pretplatiti**; pull ih pokriva. Zahtjev prema ormaru ako ikad zatrebaju |
@@ -2877,8 +2943,8 @@ review_audit                             -- samo dodavanje
 
 ---
 
-`docs/erp_spec.md` · verzija 10 · 2026-10-13 · zamjenjuje v9 od 2026-10-12
+`docs/erp_spec.md` · verzija 11 · 2026-10-14 · zamjenjuje v10 od 2026-10-13
 
 **§1 je prazan — nema otvorenih blokatora.** Faze 1–4 su završene i prihvaćene. Faza 4.5 je
-obrisana; faza 5 ide u koracima 5a–5e (§10.6), **5a (D20) u izvedbi**. Agenti D21 i D22 su
+obrisana; faza 5 ide u koracima 5a–5e (§10.6), **5a (D20) završen** (§10.7), 5b čeka tvoju listu. Agenti D21 i D22 su
 dizajnirani (§13), izvode se nakon 5e; D21 smije ranije, nakon 5a, samo na internim podacima.
