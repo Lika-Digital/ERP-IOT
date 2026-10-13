@@ -6,7 +6,7 @@ export interface Marina {
   location: string | null
   timezone: string
   logo_url: string | null
-  pedestal_api_base_url: string
+  pedestal_api_base_url: string | null   // null for a Marina Manager (D20)
   pedestal_service_email: string | null
   status: string
   created_at: string

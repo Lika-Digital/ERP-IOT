@@ -210,33 +210,27 @@ else
 fi
 echo ""
 
-# ── 10. JWT auth test ──────────────────────────────────────────────────────────
-echo -e "${BOLD}[10] JWT authentication test${NC}"
-TEST_EMAIL="${TEST_ADMIN_EMAIL:-admin@erp-iot.local}"
-TEST_PASS="${TEST_ADMIN_PASSWORD:-change-me-in-production}"
-
-LOGIN_RESP=$(curl -sf -X POST "${BACKEND_URL}/api/auth/login" \
-    -H "Content-Type: application/json" \
-    -d "{\"email\":\"${TEST_EMAIL}\",\"password\":\"${TEST_PASS}\"}" 2>/dev/null || echo "{}")
-
-TOKEN=$(python3 -c "import json,sys; d=json.loads('${LOGIN_RESP}'); print(d.get('access_token',''))" 2>/dev/null || echo "")
-
-if [[ -n "$TOKEN" ]]; then
-    pass "JWT login successful — token obtained"
-
-    # Verify /me endpoint
-    ME_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-        "${BACKEND_URL}/api/auth/me" \
-        -H "Authorization: Bearer ${TOKEN}" 2>/dev/null || echo "000")
-
-    if [[ "$ME_CODE" == "200" ]]; then
-        pass "GET /api/auth/me returns 200 with valid token"
-    else
-        fail "GET /api/auth/me returned ${ME_CODE}"
-    fi
+# ── 10. Sign-in (D20) ─────────────────────────────────────────────────────────
+# Password + 2FA means this script cannot sign in on its own — and must not be
+# able to. It checks what can be checked without a second factor; the runbook
+# (spec §8.4, step 11a/12) signs the first admin in by hand.
+echo -e "${BOLD}[10] Sign-in (D20)${NC}"
+PROBE_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${BACKEND_URL}/api/auth/login"     -H "Content-Type: application/json"     -d '{"email":"verify-system-probe@invalid","password":"not-a-password"}' 2>/dev/null || echo "000")
+if [[ "$PROBE_CODE" == "401" ]]; then
+    pass "unknown account -> 401 (same answer as a wrong password)"
 else
-    warn "Could not obtain JWT — default admin credentials not valid or user not seeded"
-    info "Set DEFAULT_ADMIN_EMAIL and DEFAULT_ADMIN_PASSWORD in backend/.env"
+    fail "unknown account -> ${PROBE_CODE}, expected 401"
+fi
+ME_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${BACKEND_URL}/api/auth/me" 2>/dev/null || echo "000")
+if [[ "$ME_CODE" == "401" ]]; then
+    pass "GET /api/auth/me without a token -> 401"
+else
+    fail "GET /api/auth/me without a token -> ${ME_CODE}"
+fi
+if [[ -n "${DEFAULT_ADMIN_PASSWORD:-}" ]] || grep -qs '^DEFAULT_ADMIN_PASSWORD=' backend/.env; then
+    fail "DEFAULT_ADMIN_PASSWORD is set - D20 removed it; delete it (first admin: python -m app.setup_admin)"
+else
+    pass "no DEFAULT_ADMIN_PASSWORD in the environment or backend/.env"
 fi
 echo ""
 

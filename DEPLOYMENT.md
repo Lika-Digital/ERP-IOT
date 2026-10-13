@@ -36,8 +36,7 @@ Edit `.env`:
 ```env
 DATABASE_URL=postgresql://erp_user:your-strong-password@localhost:5432/erp_iot
 JWT_SECRET=<generate with: python -c "import secrets; print(secrets.token_hex(32))">
-DEFAULT_ADMIN_EMAIL=admin@yourdomain.com
-DEFAULT_ADMIN_PASSWORD=<strong-password>
+PUBLIC_BASE_URL=https://erp.lika.solutions
 ALLOWED_ORIGINS=https://erp.lika.solutions
 ```
 
@@ -118,7 +117,7 @@ All 10 checks should pass (or warn for optional components).
 
 ### On the ERP-IOT side
 
-1. Log in as super_admin
+1. Log in as Admin (first admin: `python -m app.setup_admin --email …`, one-time link, then 2FA)
 2. Create a marina: POST `/api/marinas` with `pedestal_api_base_url` and `pedestal_api_key`
 3. Note the `marina_id` returned
 4. Generate a `webhook_secret` (e.g., `openssl rand -hex 32`)

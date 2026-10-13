@@ -14,7 +14,11 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    // A 401 from a sign-in step (wrong password, wrong code) is an answer to show,
+    // not an expired session; every other 401 ends the session.
+    const url: string = error.config?.url ?? ''
+    const signInStep = url.startsWith('/auth/') && !url.startsWith('/auth/me') && !url.startsWith('/auth/refresh')
+    if (error.response?.status === 401 && !signInStep) {
       useAuthStore.getState().logout()
       window.location.href = '/login'
     }

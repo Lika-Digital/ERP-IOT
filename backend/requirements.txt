@@ -27,6 +27,8 @@ bcrypt==4.0.1
 httpx==0.28.1
 python-multipart==0.0.24
 starlette==1.0.0
+# D20: QR kod za povezivanje 2FA (cisti Python, bez ovisnosti)
+segno==1.6.1
 
 # Testiranje i provjere
 pytest==9.0.2

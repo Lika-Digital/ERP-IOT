@@ -1,14 +1,14 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
-export type UserRole = 'super_admin' | 'marina_manager'
+export type UserRole = 'admin' | 'marina_manager'
 
 interface AuthState {
   token: string | null
   role: UserRole | null
   email: string | null
   fullName: string | null
-  marinaIds: number[]           // Empty = all marinas (super_admin)
+  marinaIds: number[]           // Empty = all marinas (admin)
   isAuthenticated: boolean
 
   setAuth: (

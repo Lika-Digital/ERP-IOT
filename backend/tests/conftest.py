@@ -4,7 +4,8 @@ Test fixtures for ERP-IOT backend.
 Strategy:
 - Use FastAPI TestClient (synchronous)
 - Override DATABASE_URL to SQLite in-memory before importing app
-- Seed: super_admin user, marina_manager user, one marina, access grant
+- Seed: admin, marina_manager (both with 2FA linked), one marina, access grant
+- Sign-in is password + TOTP (D20); `full_login` does both steps
 """
 import os
 import pytest
@@ -12,8 +13,6 @@ import pytest
 # ── Set env vars BEFORE importing the app ─────────────────────────────────────
 os.environ["DATABASE_URL"] = "sqlite:///./tests/test_erp.db"
 os.environ["JWT_SECRET"] = "test-secret-for-erp-iot-ci"
-os.environ["DEFAULT_ADMIN_EMAIL"] = "admin@test.erp"
-os.environ["DEFAULT_ADMIN_PASSWORD"] = "testadmin1234"
 # Test encryption key — valid Fernet key for testing only
 os.environ["ERP_ENCRYPTION_KEY"] = "ZmDfcTF7_60GrrY167zsiPd67pEvs0aGOv2oasOM1Pg="
 os.environ["COLLECTOR_ENABLED"] = "false"   # tests drive the collector themselves
@@ -23,6 +22,12 @@ from sqlalchemy.orm import sessionmaker
 from app.utils.time import utcnow
 
 TEST_DB_URL = "sqlite:///./tests/test_erp.db"
+
+# Known TOTP secrets of the seeded users, so tests can compute their codes (RFC 6238).
+TOTP_SECRETS = {
+    "superadmin@test.erp": "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP",
+    "manager@test.erp": "KRSXG5CTMVRXEZLUKRSXG5CTMVRXEZLU",
+}
 test_engine = create_engine(TEST_DB_URL, connect_args={"check_same_thread": False})
 TestSession = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
 
@@ -47,28 +52,33 @@ def setup_test_database():
     from app.models.marina import Marina
     from app.models.user import User, UserMarinaAccess
     from passlib.context import CryptContext
+    from app.utils.encryption import encrypt_password as _enc
 
     pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
     db = TestSession()
     try:
-        # Super admin
+        # Admin (D20; was super_admin), 2FA linked
         super_admin = User(
             email="superadmin@test.erp",
             password_hash=pwd_ctx.hash("superadmin1234"),
             full_name="Super Admin",
-            role="super_admin",
+            role="admin",
             is_active=True,
+            totp_secret_enc=_enc(TOTP_SECRETS["superadmin@test.erp"]),
+            totp_confirmed_at=utcnow(),
         )
         db.add(super_admin)
 
-        # Marina manager
+        # Marina manager, 2FA linked
         manager = User(
             email="manager@test.erp",
             password_hash=pwd_ctx.hash("manager1234"),
             full_name="Marina Manager",
             role="marina_manager",
             is_active=True,
+            totp_secret_enc=_enc(TOTP_SECRETS["manager@test.erp"]),
+            totp_confirmed_at=utcnow(),
         )
         db.add(manager)
 
@@ -156,24 +166,46 @@ def client(setup_test_database):
     app.dependency_overrides.clear()
 
 
-@pytest.fixture(scope="session")
-def super_admin_token(client):
-    r = client.post("/api/auth/login", json={
-        "email": "superadmin@test.erp",
-        "password": "superadmin1234",
-    })
+def totp_now(secret: str) -> str:
+    import time
+    from app.utils import totp
+    return totp.code_at(secret, time.time())
+
+
+def full_login(client, email: str, password: str, secret: str | None = None) -> str:
+    """Password, then TOTP — the only way to a full token (D20).
+
+    The same 30-second code never works twice (spec §7.1), and tests sign the
+    same user in many times within one step; so the test forgets the last
+    used step first. That is the only rule bent here, and only in tests.
+    """
+    from app.models.user import User
+    db = TestSession()
+    try:
+        u = db.query(User).filter(User.email == email).first()
+        if u is not None:
+            u.totp_last_step = None
+            db.commit()
+    finally:
+        db.close()
+    r = client.post("/api/auth/login", json={"email": email, "password": password})
+    assert r.status_code == 200, r.text
+    mfa = r.json()["mfa_token"]
+    code = totp_now(secret or TOTP_SECRETS[email])
+    r = client.post("/api/auth/mfa/verify", json={"code": code},
+                    headers={"Authorization": f"Bearer {mfa}"})
     assert r.status_code == 200, r.text
     return r.json()["access_token"]
+
+
+@pytest.fixture(scope="session")
+def super_admin_token(client):
+    return full_login(client, "superadmin@test.erp", "superadmin1234")
 
 
 @pytest.fixture(scope="session")
 def manager_token(client):
-    r = client.post("/api/auth/login", json={
-        "email": "manager@test.erp",
-        "password": "manager1234",
-    })
-    assert r.status_code == 200, r.text
-    return r.json()["access_token"]
+    return full_login(client, "manager@test.erp", "manager1234")
 
 
 @pytest.fixture(scope="session")

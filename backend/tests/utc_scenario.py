@@ -15,6 +15,7 @@ import json
 import os
 import sys
 import tempfile
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -22,8 +23,6 @@ TMP = Path(tempfile.mkdtemp(prefix="utc_scenario_"))
 os.environ.update({
     "DATABASE_URL": f"sqlite:///{(TMP / 'utc.db').as_posix()}",
     "JWT_SECRET": "utc-scenario-secret",
-    "DEFAULT_ADMIN_EMAIL": "admin@utc.erp",
-    "DEFAULT_ADMIN_PASSWORD": "utc-admin-pass",
     "ERP_ENCRYPTION_KEY": "ZmDfcTF7_60GrrY167zsiPd67pEvs0aGOv2oasOM1Pg=",
     "COLLECTOR_ENABLED": "false",
 })
@@ -66,9 +65,24 @@ def main() -> dict:
     factory.transport, factory.sleep = transport, _no_sleep
 
     with TestClient(app) as c:
-        tok = ok(c.post("/api/auth/login", json={"email": "admin@utc.erp",
-                                                 "password": "utc-admin-pass"}),
-                 "login").json()["access_token"]                         # users.last_login
+        # D20: the first admin through the real path — one-time link, password,
+        # 2FA enrolment (setup_tokens, auth_audit, users.totp_confirmed_at, last_login)
+        import contextlib
+        import io
+        from app import setup_admin
+        from app.utils import totp
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            setup_admin.main(["--email", "admin@utc.erp"])
+        link_token = out.getvalue().split("#token=", 1)[1].split()[0]
+        mfa = ok(c.post("/api/auth/setup", json={"token": link_token,
+                                                 "password": "utc-admin-password"}),
+                 "setup").json()["mfa_token"]
+        mh = {"Authorization": f"Bearer {mfa}"}
+        secret = ok(c.post("/api/auth/mfa/enroll/start", headers=mh), "enrol").json()["secret"]
+        tok = ok(c.post("/api/auth/mfa/enroll/confirm", headers=mh,
+                        json={"code": totp.code_at(secret, time.time())}),
+                 "enrol confirm").json()["access_token"]
         h = {"Authorization": f"Bearer {tok}"}
         mid = ok(c.post("/api/marinas", headers=h, json={
             "name": "UTC", "location": "Krk", "timezone": "Europe/Zagreb",

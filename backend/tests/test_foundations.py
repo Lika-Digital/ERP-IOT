@@ -204,10 +204,12 @@ def test_tc_erp_auth_02_env_example_ships_blank_secrets():
     produkciju.
     """
     body = (_BACKEND / ".env.example").read_text(encoding="utf-8")
-    for key in ("DATABASE_URL", "JWT_SECRET", "DEFAULT_ADMIN_PASSWORD", "ERP_ENCRYPTION_KEY"):
+    for key in ("DATABASE_URL", "JWT_SECRET", "ERP_ENCRYPTION_KEY"):
         assert re.search(rf"^{key}=\s*$", body, re.M), (
             f"{key} u .env.example nema praznu vrijednost (spec §8.3)"
         )
+    # D20.3: no admin password anywhere, not even an empty slot inviting one
+    assert "DEFAULT_ADMIN_PASSWORD=" not in body
     assert "change-me" not in body, ".env.example jos nosi 'change-me' vrijednost"
 
 
@@ -253,12 +255,18 @@ def test_tc_erp_auth_02_app_does_not_bind_all_interfaces_by_default():
 #
 # Popis ruta se NE pise rukom i ne broji grepom. Grep po
 # `Depends(get_current_user)` daje 23 (spec §9 v3), ali promasuje rute koje su
-# zasticene kroz require_super_admin / require_any_operator — stvarni graf
+# zasticene kroz require_admin / require_any_operator — stvarni graf
 # ovisnosti ima 27 od 31. Rucni popis bi zastario s prvom novom rutom; graf ne.
 
 _PUBLIC_ROUTES = {
     ("POST", "/api/auth/login"),
-    ("POST", "/api/auth/refresh"),
+    # D20: the 2FA step takes the short mfa token (get_mfa_user), not a full one —
+    # test_d20 proves an mfa token opens nothing else; the link pages take the link
+    ("POST", "/api/auth/mfa/verify"),
+    ("POST", "/api/auth/mfa/enroll/start"),
+    ("POST", "/api/auth/mfa/enroll/confirm"),
+    ("POST", "/api/auth/setup/check"),
+    ("POST", "/api/auth/setup"),
     ("POST", "/api/webhooks/pedestal/{marina_id}"),  # vlastita provjera HMAC-a
     ("POST", "/api/webhooks/cabinet/{cabinet_id}"),  # faza 4: vlastita provjera X-API-Key ormara
     ("GET", "/api/health"),
@@ -308,10 +316,15 @@ def test_tc_erp_auth_01_protected_count_matches_graph():
     Faza 3: 35 od 39 — sedam ruta admina modela (cabinet_admin.py), sve zasticene.
     Faza 4: 35 od 40 — nova JAVNA ruta POST /api/webhooks/cabinet/{id}, s vlastitom
     provjerom X-API-Key ormara (test_collection.py tvrdi 401 bez kljuca).
+    Faza 5a (D20): 44 od 53 — refresh postaje zasticen (treba puni token), nova
+    zasticena POST /api/auth/mfa/backup-codes i sedam ruta /api/users (samo Admin);
+    pet novih JAVNIH: 2FA korak s kratkim mfa tokenom (verify, enroll start/confirm)
+    i stranica jednokratnog linka (setup/check, setup). test_d20 tvrdi da mfa token
+    ne otvara nijednu zasticenu rutu.
     Broj se mijenja samo svjesno, u istom commitu kao ruta.
     """
     rs = _routes()
-    assert (sum(p for _, _, p in rs), len(rs)) == (35, 40)
+    assert (sum(p for _, _, p in rs), len(rs)) == (44, 53)
 
 
 def test_tc_erp_auth_01_no_credentials_is_strictly_401(client):
@@ -376,7 +389,6 @@ def _cache_proc(db_url: str, seed: str, *args: str) -> str:
         "PYTHONHASHSEED": seed,
         "DATABASE_URL": db_url,
         "JWT_SECRET": "cache-test",
-        "DEFAULT_ADMIN_PASSWORD": "cache-test",
         "ERP_ENCRYPTION_KEY": "ZmDfcTF7_60GrrY167zsiPd67pEvs0aGOv2oasOM1Pg=",
     })
     r = subprocess.run(
@@ -428,7 +440,6 @@ def test_tc_erp_cache_01_migration_drops_hash_rows_keeps_readings(tmp_path):
     e.update({
         "DATABASE_URL": f"sqlite:///{db}",
         "JWT_SECRET": "mig-test",
-        "DEFAULT_ADMIN_PASSWORD": "mig-test",
     })
 
     def alembic(*a):
@@ -535,7 +546,7 @@ def test_tc_erp_boot_02_boot_check_fails_loudly_when_nothing_comes_up():
         capture_output=True, text=True, env=e, timeout=120,
     )
     assert r.returncode != 0
-    assert "BOOT: 0/12 checks passed" in r.stdout
+    assert "BOOT: 0/15 checks passed" in r.stdout
 
 
 def _junit(tmp_path, tests: int, skipped: int, failures: int = 0) -> Path:

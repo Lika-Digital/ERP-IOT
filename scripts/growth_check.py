@@ -59,7 +59,6 @@ def main() -> int:
     db_url = os.environ.get("GROWTH_DATABASE_URL") or f"sqlite:///{(tmp / 'growth.db').as_posix()}"
     os.environ.update({
         "DATABASE_URL": db_url, "JWT_SECRET": "growth-check-" + os.urandom(6).hex(),
-        "DEFAULT_ADMIN_EMAIL": "growth@check.erp", "DEFAULT_ADMIN_PASSWORD": "growth-pass",
         "ERP_ENCRYPTION_KEY": "ZmDfcTF7_60GrrY167zsiPd67pEvs0aGOv2oasOM1Pg=",
         "COLLECTOR_ENABLED": "false",
     })
@@ -131,8 +130,22 @@ def main() -> int:
     factory.transport, factory.sleep = ByHost(), _no_sleep
 
     with TestClient(erp_app) as client:
-        tok = client.post("/api/auth/login", json={"email": "growth@check.erp",
-                                                   "password": "growth-pass"}).json()
+        # D20: the first admin through the one-time link and 2FA, as in production
+        import first_admin
+        from app import setup_admin
+
+        def post(path, body, bearer):
+            r = client.post(path, json=body,
+                            headers={"Authorization": f"Bearer {bearer}"} if bearer else {})
+            return r.status_code, r.json()
+
+        import contextlib
+        import io
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            setup_admin.main(["--email", "growth@check.erp"])
+        tok = first_admin.enrol(post, out.getvalue().split("#token=", 1)[1].split()[0],
+                                "growth-check-password")
         h = {"Authorization": f"Bearer {tok['access_token']}"}
         mid = client.post("/api/marinas", headers=h, json={
             "name": "Krk", "pedestal_api_base_url": "http://orm01.krk.test",

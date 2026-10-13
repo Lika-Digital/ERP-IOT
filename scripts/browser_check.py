@@ -7,6 +7,10 @@ Three real processes and a real browser:
     for /api and /ws what nginx does in production,
   - Chromium through Playwright.
 
+First the D20 sign-in in the browser: the one-time link sets the password, the QR
+step links 2FA with a real TOTP code, the backup codes are shown once; then a
+fresh sign-in with password + backup code.
+
 Then the DOM checks the spec asks to be made in the DOM, not in JSON:
   SIM-01 full cabinet: outlets and controls present
   SIM-06 Smart Mode OFF: readings rendered, ZERO control elements
@@ -43,9 +47,11 @@ SIM_EMAIL, SIM_PASSWORD = "erp@sim.local", "sim-password"  # noqa: S105
 EXPECTED = [
     "sim: cabinet simulator comes up",
     "erp: migration + backend come up",
-    "erp: marina pointed at the simulator",
     "spa: the real bundle is served",
-    "BOOT-01b: login in a real browser",
+    "D20: one-time link in the browser - password, QR, code, backup codes once",
+    "D20: sign-in in the browser - password, then a backup code",
+    "D20: Users screen - the admin is listed with 2FA linked",
+    "erp: marina pointed at the simulator",
     "BOOT-01b: /marinas/:id/berths renders berth rows from the simulator",
     "SIM-01: full cabinet - outlets and controls in the DOM",
     "SIM-06: Smart Mode OFF - readings shown, zero controls in the DOM",
@@ -149,7 +155,7 @@ def serve_in_thread(app, port: int):
 def main() -> int:
     print("TC-ERP-BOOT-01b - screens render in a real browser\n", flush=True)
     if not (DIST / "index.html").is_file():
-        fail(3, "frontend/dist missing - build it first (the gate does)")
+        fail(2, "frontend/dist missing - build it first (the gate does)")
 
     procs: list[subprocess.Popen] = []
     tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
@@ -174,7 +180,6 @@ def main() -> int:
         erp_env.update({
             "PYTHONPATH": str(BACKEND), "DATABASE_URL": db_url,
             "JWT_SECRET": "browser-check-" + os.urandom(8).hex(),
-            "DEFAULT_ADMIN_EMAIL": ADMIN_EMAIL, "DEFAULT_ADMIN_PASSWORD": ADMIN_PASSWORD,
             "ERP_ENCRYPTION_KEY": "ZmDfcTF7_60GrrY167zsiPd67pEvs0aGOv2oasOM1Pg=",
         })
         r = subprocess.run([sys.executable, "-m", "alembic", "upgrade", "head"],
@@ -193,55 +198,20 @@ def main() -> int:
             fail(1, (t / "erp.log").read_text(encoding="utf-8")[-1500:])
         ok(1)
 
-        code, body = http("POST", f"{erp_url}/api/auth/login",
-                          {"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD})
-        token = json.loads(body)["access_token"] if code == 200 else fail(2, body)
-        def marina(name, device_type, mapping):
-            """A marina on the simulator, provisioned through the phase-3 admin API:
-            cabinet, one ERP berth per cabinet berth, and the berth -> outlet mapping."""
-            code, body = http("POST", f"{erp_url}/api/marinas", {
-                "name": name, "pedestal_api_base_url": sim_url,
-                "pedestal_service_email": SIM_EMAIL, "pedestal_service_password": SIM_PASSWORD,
-            }, token=token)
-            if code not in (200, 201):
-                fail(2, f"marina: {code} {body[:300]}")
-            mid = json.loads(body)["id"]
-            code, body = http("POST", f"{erp_url}/api/marinas/{mid}/cabinets", {
-                "pedestal_pk": 1, "display_id": "MAR_KRK_ORM_01", "device_type": device_type,
-            }, token=token)
-            if code != 201:
-                fail(2, f"cabinet: {code} {body[:300]}")
-            cab_id = json.loads(body)["id"]
-            for cab_berth, outlets in mapping.items():
-                code, body = http("POST", f"{erp_url}/api/marinas/{mid}/berth-registry", {
-                    "berth_number": f"A-{cab_berth:02d}", "cabinet_id": cab_id,
-                    "cabinet_berth_id": cab_berth}, token=token)
-                if code != 201:
-                    fail(2, f"berth: {code} {body[:300]}")
-                bid = json.loads(body)["id"]
-                code, body = http("PUT", f"{erp_url}/api/marinas/{mid}/berth-registry/{bid}/outlets",
-                                  {"outlets": outlets}, token=token)
-                if code != 200:
-                    fail(2, f"mapping: {code} {body[:300]}")
-            return mid
-
-        def profile(name):
-            http("POST", f"{sim_url}/__sim/profile/{name}")
-
-        marina_id = marina("Krk (sim)", "full", {1: ["Q1"], 2: ["Q2"], 3: ["Q3", "V1"], 4: ["Q4", "V1"]})
-        retrofit_id = marina("Retrofit (sim)", "retrofit", {1: ["Q1"], 2: ["Q2"], 3: ["Q3"], 4: ["Q4"]})
-        ok(2)
+        import first_admin
+        link = first_admin.link_token(erp_env, ADMIN_EMAIL, cwd=tmp.name)
+        token = None   # the full token comes from the browser, after 2FA
 
         # ── the real bundle ────────────────────────────────────────────────
         spa_port = free_port()
         spa_url = f"http://127.0.0.1:{spa_port}"
         server = serve_in_thread(spa_app(erp_url), spa_port)
         if not wait_port(spa_port, None, "spa"):
-            fail(3, "spa proxy did not come up")
+            fail(2, "spa proxy did not come up")
         code, body = http("GET", spa_url + "/")
         if code != 200 or "<div id=\"root\"" not in body:
-            fail(3, f"{code} {body[:200]}")
-        ok(3)
+            fail(2, f"{code} {body[:200]}")
+        ok(2)
 
         # ── browser ────────────────────────────────────────────────────────
         from playwright.sync_api import sync_playwright
@@ -258,15 +228,105 @@ def main() -> int:
                     and "Failed to load resource" not in m.text
                     and problems.append(f"console: {m.text}"))
 
-            page.goto(spa_url + "/login")
+            # ── D20: the one-time link, in the browser ──────────────────────
+            page.goto(f"{spa_url}/setup#token={link}")
+            try:
+                page.wait_for_selector("[data-setup-email]", timeout=15000)
+                if page.inner_text("[data-setup-email]") != ADMIN_EMAIL:
+                    fail(3, "the link page shows the wrong account")
+                page.fill("#new-password", ADMIN_PASSWORD)
+                page.fill("#repeat-password", ADMIN_PASSWORD)
+                page.click("button[type=submit]")
+                page.wait_for_selector("[data-totp-secret]", timeout=15000)
+                if page.locator("img[alt^='QR code']").count() != 1:
+                    fail(3, "no QR code on the linking step")
+                secret = page.inner_text("[data-totp-secret]").strip()
+                page.fill("#code", first_admin.code_now(secret))
+                page.click("button[type=submit]")
+                page.wait_for_selector("[data-backup-code]", timeout=15000)
+                codes = page.locator("[data-backup-code]").all_inner_texts()
+                if len(codes) != 10:
+                    fail(3, f"expected 10 backup codes, got {len(codes)}")
+                page.check("input[type=checkbox]")
+                page.click("button:has-text('Continue')")
+                page.wait_for_url("**/marinas", timeout=15000)
+            except SystemExit:
+                raise
+            except Exception as exc:  # noqa: BLE001
+                fail(3, f"{type(exc).__name__}: {exc}")
+            if "#token" in page.url or link in page.url:
+                fail(3, "the used link is still in the address bar")
+            ok(3)
+
+            # ── D20: sign out, sign in again with password + backup code ─────
+            page.click("button:has-text('Sign out')")
+            page.wait_for_url("**/login", timeout=15000)
             page.fill("input[type=email]", ADMIN_EMAIL)
             page.fill("input[type=password]", ADMIN_PASSWORD)
             page.click("button[type=submit]")
             try:
+                page.wait_for_selector("[data-step='mfa-code']", timeout=15000)
+                page.fill("#code", "000000")              # wrong first: the answer is shown
+                page.click("button[type=submit]")
+                page.wait_for_selector("[data-error]", timeout=15000)
+                if "/login" not in page.url:
+                    fail(4, "a wrong code threw the user out of the sign-in page")
+                page.fill("#code", codes[0])
+                page.click("button[type=submit]")
                 page.wait_for_url("**/marinas", timeout=15000)
+            except SystemExit:
+                raise
             except Exception as exc:  # noqa: BLE001
-                fail(4, f"no redirect after login: {exc}")
+                fail(4, f"{type(exc).__name__}: {exc}")
             ok(4)
+            token = page.evaluate(
+                "() => JSON.parse(localStorage.getItem('erp-iot-auth')).state.token")
+
+            page.goto(f"{spa_url}/users")
+            try:
+                page.wait_for_selector(f"[data-user='{ADMIN_EMAIL}']", timeout=15000)
+            except Exception as exc:  # noqa: BLE001
+                fail(5, f"Users screen: {exc}")
+            if "linked" not in page.inner_text(f"[data-user='{ADMIN_EMAIL}']"):
+                fail(5, "the admin's 2FA is not shown as linked")
+            ok(5)
+
+            # ── provisioning through the phase-3 admin API, with the browser's token ──
+            def marina(name, device_type, mapping):
+                """A marina on the simulator, provisioned through the phase-3 admin API:
+                cabinet, one ERP berth per cabinet berth, and the berth -> outlet mapping."""
+                code, body = http("POST", f"{erp_url}/api/marinas", {
+                    "name": name, "pedestal_api_base_url": sim_url,
+                    "pedestal_service_email": SIM_EMAIL, "pedestal_service_password": SIM_PASSWORD,
+                }, token=token)
+                if code not in (200, 201):
+                    fail(6, f"marina: {code} {body[:300]}")
+                mid = json.loads(body)["id"]
+                code, body = http("POST", f"{erp_url}/api/marinas/{mid}/cabinets", {
+                    "pedestal_pk": 1, "display_id": "MAR_KRK_ORM_01", "device_type": device_type,
+                }, token=token)
+                if code != 201:
+                    fail(6, f"cabinet: {code} {body[:300]}")
+                cab_id = json.loads(body)["id"]
+                for cab_berth, outlets in mapping.items():
+                    code, body = http("POST", f"{erp_url}/api/marinas/{mid}/berth-registry", {
+                        "berth_number": f"A-{cab_berth:02d}", "cabinet_id": cab_id,
+                        "cabinet_berth_id": cab_berth}, token=token)
+                    if code != 201:
+                        fail(6, f"berth: {code} {body[:300]}")
+                    bid = json.loads(body)["id"]
+                    code, body = http("PUT", f"{erp_url}/api/marinas/{mid}/berth-registry/{bid}/outlets",
+                                      {"outlets": outlets}, token=token)
+                    if code != 200:
+                        fail(6, f"mapping: {code} {body[:300]}")
+                return mid
+
+            def profile(name):
+                http("POST", f"{sim_url}/__sim/profile/{name}")
+
+            marina_id = marina("Krk (sim)", "full", {1: ["Q1"], 2: ["Q2"], 3: ["Q3", "V1"], 4: ["Q4", "V1"]})
+            retrofit_id = marina("Retrofit (sim)", "retrofit", {1: ["Q1"], 2: ["Q2"], 3: ["Q3"], 4: ["Q4"]})
+            ok(6)
 
             def load(mid=None):
                 page.goto(f"{spa_url}/marinas/{mid or marina_id}/berths")
@@ -275,31 +335,31 @@ def main() -> int:
             try:
                 load()
             except Exception as exc:  # noqa: BLE001
-                fail(5, f"no berth rows: {exc}")
+                fail(7, f"no berth rows: {exc}")
             n = page.locator("[data-berth]").count()
             if n != 4:
-                fail(5, f"expected 4 berth rows from the simulator, got {n}")
-            ok(5)
+                fail(7, f"expected 4 berth rows from the simulator, got {n}")
+            ok(7)
 
             if page.locator("[data-outlet]").count() < 5 or page.locator("[data-control]").count() == 0:
-                fail(6, "full cabinet: outlets or controls missing")
-            ok(6)
+                fail(8, "full cabinet: outlets or controls missing")
+            ok(8)
 
             profile("smart_off")
             http("PATCH", f"{sim_url}/__sim/credentials", {"email": SIM_EMAIL, "password": SIM_PASSWORD})
             load()
             if page.locator("[data-outlet]").count() == 0:
-                fail(7, "Smart Mode OFF: readings must still render")
+                fail(9, "Smart Mode OFF: readings must still render")
             if page.locator("[data-control]").count() != 0 or page.locator("button:has-text('Upali')").count():
-                fail(7, "Smart Mode OFF: a control element exists in the DOM")
-            ok(7)
+                fail(9, "Smart Mode OFF: a control element exists in the DOM")
+            ok(9)
 
             profile("retrofit")
             http("PATCH", f"{sim_url}/__sim/credentials", {"email": SIM_EMAIL, "password": SIM_PASSWORD})
             load(retrofit_id)
             if page.locator("[data-outlet^='V']").count() or "voda" in page.inner_text("[data-page]"):
-                fail(8, "retrofit: a water element is in the DOM")
-            ok(8)
+                fail(10, "retrofit: a water element is in the DOM")
+            ok(10)
 
             profile("silent")
             http("PATCH", f"{sim_url}/__sim/credentials", {"email": SIM_EMAIL, "password": SIM_PASSWORD})
@@ -307,37 +367,42 @@ def main() -> int:
             colours = set(page.locator("[data-berth]").evaluate_all(
                 "els => els.map(e => e.dataset.colour)"))
             if colours != {"grey"}:
-                fail(9, f"silent cabinet: colours {colours}")
-            ok(9)
+                fail(11, f"silent cabinet: colours {colours}")
+            ok(11)
 
             profile("full")
             http("PATCH", f"{sim_url}/__sim/credentials", {"email": SIM_EMAIL, "password": SIM_PASSWORD})
             http("PATCH", f"{sim_url}/__sim/socket/2", {"plug_inserted": False})
             load()
-            # phase 4: every operator command asks for a reason first (§5.3, command_audit)
-            asked = []
-
-            def answer(d):
-                asked.append(d.type)
-                d.accept("provjera iz preglednika") if d.type == "prompt" else d.dismiss()
-            page.on("dialog", answer)
+            # phase 4: every operator command asks for a reason first (§5.3, command_audit);
+            # since D20 in a real dialog (O38) — a native prompt/alert is now a failure
+            native = []
+            page.on("dialog", lambda d: native.append(d.type) or d.dismiss())
             page.click("[data-control='Q2:activate']")
+            try:
+                page.wait_for_selector("[data-reason-dialog]", timeout=10000)
+            except Exception as exc:  # noqa: BLE001
+                fail(12, f"the command was not preceded by the reason dialog: {exc}")
+            if page.is_enabled("[data-reason-ok]"):
+                fail(12, "the dialog accepts an empty reason")
+            page.fill("[data-reason-input]", "provjera iz preglednika")
+            page.click("[data-reason-ok]")
             try:
                 page.wait_for_selector("[data-message]", timeout=10000)
             except Exception as exc:  # noqa: BLE001
-                fail(10, f"no sentence shown: {exc}")
+                fail(12, f"no sentence shown: {exc}")
             text = page.inner_text("[data-message]")
             if "kabel" not in text.lower():
-                fail(10, f"expected the no-plug sentence, got {text!r}")
-            if asked != ["prompt"]:
-                fail(10, f"the command was not preceded by a reason prompt: {asked}")
-            ok(10)
+                fail(12, f"expected the no-plug sentence, got {text!r}")
+            if native:
+                fail(12, f"a native browser dialog appeared: {native}")
+            ok(12)
 
             browser.close()
 
         if problems:
-            fail(11, "\n         ".join(problems[:10]))
-        ok(11)
+            fail(13, "\n         ".join(problems[:10]))
+        ok(13)
         server.should_exit = True
     except Exception as exc:  # noqa: BLE001 — a step that blew up: say which, with the ERP's log
         erp_log = t / "erp.log"

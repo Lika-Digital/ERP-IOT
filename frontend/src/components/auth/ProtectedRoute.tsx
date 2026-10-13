@@ -3,12 +3,12 @@ import { useAuthStore } from '../../store/authStore'
 
 interface ProtectedRouteProps {
   children: React.ReactNode
-  superAdminOnly?: boolean
+  adminOnly?: boolean
 }
 
 export default function ProtectedRoute({
   children,
-  superAdminOnly = false,
+  adminOnly = false,
 }: ProtectedRouteProps) {
   const { isAuthenticated, role } = useAuthStore()
 
@@ -16,7 +16,7 @@ export default function ProtectedRoute({
     return <Navigate to="/login" replace />
   }
 
-  if (superAdminOnly && role !== 'super_admin') {
+  if (adminOnly && role !== 'admin') {
     return <Navigate to="/marinas" replace />
   }
 

@@ -1,77 +1,49 @@
 """
-test_auth.py — Authentication tests.
+test_auth.py — sign-in (D20, spec §7.1): password, then TOTP, for every user.
 
 Verifies:
-- Login returns JWT with correct role + marina_ids
-- super_admin gets marina_ids=[] (signals all marinas)
-- marina_manager gets only their assigned marina IDs
+- a correct password gives only an mfa token; the full JWT needs the code
+- admin gets marina_ids=[] (all marinas); marina_manager only assigned ones
+- every refusal at the password step is the same 401 (O14), costs one bcrypt (O15)
 - 401 on unauthenticated endpoints
-- 401 on wrong password
-- Inactive user cannot login
 """
+import base64
+import json as _json
+
+from tests.conftest import TOTP_SECRETS, full_login, totp_now
 
 
-def test_super_admin_login_returns_jwt(client):
+def _claims(token: str) -> dict:
+    payload_b64 = token.split(".")[1]
+    payload_b64 += "=" * (-len(payload_b64) % 4)
+    return _json.loads(base64.urlsafe_b64decode(payload_b64))
+
+
+def test_password_alone_gives_only_an_mfa_token(client):
     r = client.post("/api/auth/login", json={
         "email": "superadmin@test.erp",
         "password": "superadmin1234",
     })
     assert r.status_code == 200
     data = r.json()
-    assert "access_token" in data
-    assert data["token_type"] == "bearer"
+    assert "access_token" not in data
+    assert data["token_type"] == "mfa" and data["mfa_enrolled"] is True
+    claims = _claims(data["mfa_token"])
+    assert claims["scope"] == "mfa"
+    assert "role" not in claims and "marina_ids" not in claims
 
 
-def test_super_admin_jwt_has_correct_role(client):
-    r = client.post("/api/auth/login", json={
-        "email": "superadmin@test.erp",
-        "password": "superadmin1234",
-    })
-    token = r.json()["access_token"]
-    # Decode without verifying (just inspect claims) — use base64 decode
-    import base64, json as _json
-    payload_b64 = token.split(".")[1]
-    # Add padding if needed
-    payload_b64 += "=" * (4 - len(payload_b64) % 4)
-    payload = _json.loads(base64.urlsafe_b64decode(payload_b64))
-    assert payload["role"] == "super_admin"
-
-
-def test_super_admin_marina_ids_empty(client):
-    """super_admin gets marina_ids=[] meaning all marinas."""
-    r = client.post("/api/auth/login", json={
-        "email": "superadmin@test.erp",
-        "password": "superadmin1234",
-    })
-    token = r.json()["access_token"]
-    import base64, json as _json
-    payload_b64 = token.split(".")[1]
-    payload_b64 += "=" * (4 - len(payload_b64) % 4)
-    payload = _json.loads(base64.urlsafe_b64decode(payload_b64))
-    assert payload["marina_ids"] == []
-
-
-def test_marina_manager_login_returns_jwt(client):
-    r = client.post("/api/auth/login", json={
-        "email": "manager@test.erp",
-        "password": "manager1234",
-    })
-    assert r.status_code == 200
+def test_admin_full_token_has_role_and_all_marinas(client):
+    claims = _claims(full_login(client, "superadmin@test.erp", "superadmin1234"))
+    assert claims["role"] == "admin"
+    assert claims["scope"] == "full"
+    assert claims["marina_ids"] == []      # empty = all marinas
 
 
 def test_marina_manager_sees_only_assigned_marinas(client, marina_id):
-    r = client.post("/api/auth/login", json={
-        "email": "manager@test.erp",
-        "password": "manager1234",
-    })
-    token = r.json()["access_token"]
-    import base64, json as _json
-    payload_b64 = token.split(".")[1]
-    payload_b64 += "=" * (4 - len(payload_b64) % 4)
-    payload = _json.loads(base64.urlsafe_b64decode(payload_b64))
-    assert marina_id in payload["marina_ids"]
-    # Should NOT contain the restricted marina (which manager has no access to)
-    assert len(payload["marina_ids"]) == 1
+    claims = _claims(full_login(client, "manager@test.erp", "manager1234"))
+    assert claims["role"] == "marina_manager"
+    assert claims["marina_ids"] == [marina_id]
 
 
 def test_wrong_password_returns_401(client):
@@ -80,6 +52,7 @@ def test_wrong_password_returns_401(client):
         "password": "wrongpassword",
     })
     assert r.status_code == 401
+    _unlock("superadmin@test.erp")
 
 
 def test_unknown_email_returns_401(client):
@@ -88,6 +61,19 @@ def test_unknown_email_returns_401(client):
         "password": "whatever",
     })
     assert r.status_code == 401
+
+
+def _unlock(email):
+    """Wrong passwords count toward the lockout; keep the shared seed users usable."""
+    from tests.conftest import TestSession
+    from app.models.user import User
+    db = TestSession()
+    try:
+        u = db.query(User).filter(User.email == email).first()
+        u.failed_count, u.locked_until = 0, None
+        db.commit()
+    finally:
+        db.close()
 
 
 def test_inactive_user_login_is_indistinguishable_from_wrong_password(client, caplog):
@@ -112,6 +98,7 @@ def test_inactive_user_login_is_indistinguishable_from_wrong_password(client, ca
         "email": "nobody@test.erp",
         "password": "whatever1234",
     })
+    _unlock("superadmin@test.erp")
     assert disabled.status_code == wrong_pw.status_code == unknown.status_code == 401
     assert disabled.json() == wrong_pw.json() == unknown.json() == {
         "detail": "Invalid email or password"
@@ -136,12 +123,12 @@ def test_every_login_refusal_costs_exactly_one_bcrypt_check(client, monkeypatch)
     broji provjere umjesto da mjeri vrijeme — mjerenje vremena u CI-ju je
     krhko, a broj provjera je tocno ono sto vrijeme odreduje.
     """
-    from app.routers import auth
+    from app.services import accounts
 
     calls = []
-    real_verify = auth._pwd_ctx.verify
+    real_verify = accounts.pwd_ctx.verify
     monkeypatch.setattr(
-        auth._pwd_ctx, "verify",
+        accounts.pwd_ctx, "verify",
         lambda pw, h: calls.append(h) or real_verify(pw, h),
     )
 
@@ -154,14 +141,15 @@ def test_every_login_refusal_costs_exactly_one_bcrypt_check(client, monkeypatch)
         r = client.post("/api/auth/login", json={"email": email, "password": pw})
         assert r.status_code == 401
         assert len(calls) == 1, f"{email}: {len(calls)} bcrypt provjera, ocekivana 1"
+    _unlock("superadmin@test.erp")
 
 
 def test_dummy_hash_has_the_same_cost_as_real_hashes():
     """Lazni hash s nizim cost faktorom bio bi brzi — i opet bi odao racun."""
-    from app.routers import auth
+    from app.services import accounts
 
-    real = auth._pwd_ctx.hash("x")
-    assert auth._DUMMY_HASH.split("$")[2] == real.split("$")[2]
+    real = accounts.pwd_ctx.hash("x")
+    assert accounts.DUMMY_HASH.split("$")[2] == real.split("$")[2]
 
 
 def test_unauthenticated_me_returns_401(client):
@@ -173,7 +161,7 @@ def test_me_returns_user_info(client, admin_headers):
     r = client.get("/api/auth/me", headers=admin_headers)
     assert r.status_code == 200
     data = r.json()
-    assert data["role"] == "super_admin"
+    assert data["role"] == "admin"
     assert data["email"] == "superadmin@test.erp"
     assert "marina_ids" in data
 
@@ -196,8 +184,19 @@ def test_unauthenticated_dashboard_returns_401(client, marina_id):
 
 
 def test_refresh_token(client, admin_headers):
-    """Refresh should return a new valid token."""
+    """Refresh returns a new full token, and only for a full token."""
     r = client.post("/api/auth/refresh", headers=admin_headers)
     assert r.status_code == 200
-    data = r.json()
-    assert "access_token" in data
+    assert _claims(r.json()["access_token"])["scope"] == "full"
+
+
+def test_refresh_refuses_an_mfa_token(client):
+    mfa = client.post("/api/auth/login", json={"email": "superadmin@test.erp",
+                                               "password": "superadmin1234"}).json()["mfa_token"]
+    r = client.post("/api/auth/refresh", headers={"Authorization": f"Bearer {mfa}"})
+    assert r.status_code == 401
+
+
+def test_totp_secrets_in_the_fixture_are_valid_base32():
+    for secret in TOTP_SECRETS.values():
+        assert len(totp_now(secret)) == 6

@@ -1,5 +1,6 @@
 """Application settings loaded from environment variables / .env file."""
 import logging
+import os
 from typing import Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -25,9 +26,15 @@ class Settings(BaseSettings):
     jwt_secret: Optional[str] = None
     jwt_expire_minutes: int = 480  # 8 hours
 
-    # ── Seeding ───────────────────────────────────────────────────────────────
-    default_admin_email: str = "admin@erp-iot.local"
-    default_admin_password: Optional[str] = None
+    # ── Users, 2FA, one-time links (D20, spec §4.9, §7.1) ─────────────────────
+    # There is no DEFAULT_ADMIN_PASSWORD: the first admin comes from a one-time
+    # link printed by `python -m app.setup_admin` (D20.3).
+    public_base_url: str = "http://localhost:5173"   # where the UI is reached; goes into links
+    setup_link_minutes: int = 30          # first admin, from the command line
+    invite_link_hours: int = 24           # links an Admin issues on the Users screen
+    mfa_token_minutes: int = 5            # the token between password and code
+    lockout_threshold: int = 5            # failures in a row (password and 2FA add up)
+    lockout_minutes: int = 15
 
     # ── Pedestal API ──────────────────────────────────────────────────────────
     pedestal_api_timeout_seconds: int = 10
@@ -46,6 +53,8 @@ class Settings(BaseSettings):
     retention_audit_log_days: int = 730        # the older control audit, same weight
     retention_reconciliation_days: int = 90
     retention_cache_days: int = 30             # cache rows nobody refreshed
+    retention_auth_audit_days: int = 730       # sign-in evidence, like command_audit
+    retention_setup_tokens_days: int = 30      # counted from the link's expiry
 
     # ── Webhook receiver ──────────────────────────────────────────────────────
     webhook_max_body_bytes: int = 65536
@@ -97,11 +106,13 @@ if _is_blank(settings.database_url):
         "  Produkcija: systemd LoadCredential (spec 8.3), nikad u datoteku uz aplikaciju"
     )
 
-# ── Admin password check ──────────────────────────────────────────────────────
-if _is_blank(settings.default_admin_password):
+# ── DEFAULT_ADMIN_PASSWORD is gone (D20.3) ────────────────────────────────────
+# A leftover in an old .env is ignored, and said so: nobody should think it
+# still creates an account.
+if os.environ.get("DEFAULT_ADMIN_PASSWORD") is not None:
     _config_logger.warning(
-        "DEFAULT_ADMIN_PASSWORD is not set. Default super_admin will NOT be seeded. "
-        "Set DEFAULT_ADMIN_PASSWORD in your .env file."
+        "DEFAULT_ADMIN_PASSWORD is set but no longer used (D20): nothing is seeded. "
+        "First admin: python -m app.setup_admin --email <e-mail>"
     )
 
 # ── Encryption key check ──────────────────────────────────────────────────────

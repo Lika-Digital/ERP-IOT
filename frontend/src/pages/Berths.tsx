@@ -98,7 +98,7 @@ export default function Berths() {
 
   const onCommand = async (berth: BerthView, outlet: Outlet, action: 'activate' | 'stop') => {
     if (berth.pedestal.pk === null) return
-    const reason = askReason(`${outlet.name} ${action === 'activate' ? 'uključi' : 'isključi'}`)
+    const reason = await askReason(`${outlet.name} ${action === 'activate' ? 'uključi' : 'isključi'}`)
     if (!reason) { setMessage(NO_REASON); return }
     setBusy(true)
     setMessage(null)

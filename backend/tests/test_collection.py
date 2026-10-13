@@ -523,6 +523,8 @@ def test_every_growing_table_has_a_window_or_is_named_as_kept():
         "berths", "berth_outlets", "berth_outlets_cabinet", "mapping_comparison",
         "outlet_nfc_tags", "outlet_meter_state", "customers", "contracts", "tariffs",
         "marina_billing_policy",
+        # D20: at most ten per user, replaced as a set (spec §4.9)
+        "user_backup_codes",
         # tiny aggregate
         "consumption_monthly",
     }

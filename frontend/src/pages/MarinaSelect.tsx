@@ -147,7 +147,7 @@ export default function MarinaSelect() {
           <h1 className="text-2xl font-bold text-gray-900">Marinas</h1>
           <p className="text-gray-500 text-sm mt-1">Select a marina to manage</p>
         </div>
-        {role === 'super_admin' && (
+        {role === 'admin' && (
           <button className="btn-primary" onClick={() => setShowCreate(true)}>
             + Add Marina
           </button>
@@ -182,7 +182,7 @@ export default function MarinaSelect() {
       {marinas.length === 0 ? (
         <div className="card text-center py-12">
           <p className="text-gray-500">No marinas assigned to your account.</p>
-          {role === 'super_admin' && (
+          {role === 'admin' && (
             <button className="btn-primary mt-4" onClick={() => setShowCreate(true)}>
               Add your first marina
             </button>
@@ -221,7 +221,7 @@ export default function MarinaSelect() {
               </button>
 
               {/* Admin actions */}
-              {role === 'super_admin' && (
+              {role === 'admin' && (
                 <div className="mt-3 pt-3 border-t border-gray-100 flex gap-2">
                   <button
                     className="btn-secondary text-xs flex-1"

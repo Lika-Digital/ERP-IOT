@@ -10,7 +10,7 @@ from ..models.marina import Marina
 from ..models.user import User, UserMarinaAccess
 from ..schemas.marina import MarinaCreate, MarinaUpdate, MarinaResponse, MarinaAccessGrant
 from ..utils.encryption import encrypt_password
-from .auth import get_current_user, require_super_admin, require_marina_access
+from .auth import get_current_user, require_admin, require_marina_access
 from ..utils.time import utcnow
 
 log = logging.getLogger(__name__)
@@ -26,14 +26,24 @@ def _get_authorized_marina(marina_id: int, user: User, db: Session) -> Marina:
     return marina
 
 
+def _for(user: User, marina: Marina) -> MarinaResponse:
+    """Where the cabinets are and which service account is used is configuration:
+    a Marina Manager gets the marina without it (D20)."""
+    out = MarinaResponse.model_validate(marina)
+    if user.role != "admin":
+        out.pedestal_api_base_url = None
+        out.pedestal_service_email = None
+    return out
+
+
 @router.get("", response_model=List[MarinaResponse])
 def list_marinas(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """List all marinas the current user can access."""
-    if user.role == "super_admin":
-        return db.query(Marina).order_by(Marina.name).all()
+    if user.role == "admin":
+        return [_for(user, m) for m in db.query(Marina).order_by(Marina.name)]
     access_rows = (
         db.query(UserMarinaAccess)
         .filter(UserMarinaAccess.user_id == user.id)
@@ -42,7 +52,8 @@ def list_marinas(
     ids = [row.marina_id for row in access_rows]
     if not ids:
         return []
-    return db.query(Marina).filter(Marina.id.in_(ids)).order_by(Marina.name).all()
+    return [_for(user, m) for m in
+            db.query(Marina).filter(Marina.id.in_(ids)).order_by(Marina.name)]
 
 
 @router.get("/{marina_id}", response_model=MarinaResponse)
@@ -51,16 +62,16 @@ def get_marina(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    return _get_authorized_marina(marina_id, user, db)
+    return _for(user, _get_authorized_marina(marina_id, user, db))
 
 
 @router.post("", response_model=MarinaResponse, status_code=201)
 def create_marina(
     body: MarinaCreate,
-    user: User = Depends(require_super_admin),
+    user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    """Create a new marina — super_admin only."""
+    """Create a new marina — admin only."""
     now = utcnow()
     # Encrypt the service account password before storing
     encrypted_password = encrypt_password(body.pedestal_service_password)
@@ -89,10 +100,10 @@ def create_marina(
 def update_marina(
     marina_id: int,
     body: MarinaUpdate,
-    user: User = Depends(require_super_admin),
+    user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    """Update marina details — super_admin only."""
+    """Update marina details — admin only."""
     marina = db.get(Marina, marina_id)
     if not marina:
         raise HTTPException(status_code=404, detail="Marina not found")
@@ -123,10 +134,10 @@ def update_marina(
 @router.delete("/{marina_id}", status_code=204)
 def delete_marina(
     marina_id: int,
-    user: User = Depends(require_super_admin),
+    user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    """Delete a marina — super_admin only."""
+    """Delete a marina — admin only."""
     marina = db.get(Marina, marina_id)
     if not marina:
         raise HTTPException(status_code=404, detail="Marina not found")
@@ -138,7 +149,7 @@ def delete_marina(
 def grant_access(
     marina_id: int,
     body: MarinaAccessGrant,
-    user: User = Depends(require_super_admin),
+    user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     """Grant a marina_manager access to a marina."""
@@ -173,7 +184,7 @@ def grant_access(
 def revoke_access(
     marina_id: int,
     target_user_id: int,
-    user: User = Depends(require_super_admin),
+    user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     """Revoke a marina_manager's access to a marina."""
@@ -195,7 +206,7 @@ def revoke_access(
 @router.post("/{marina_id}/test-connection")
 async def test_connection(
     marina_id: int,
-    user: User = Depends(require_super_admin),
+    user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     """

@@ -162,6 +162,29 @@ def _p_alarm_twice(c, i):
                        "'poll')"), dict(m=i["marina"], t=NOW, c=i["cabinet"]))
 
 
+def _p_user(c, role="admin", confirmed=None, secret=None, failed=0, email="probe@d20"):
+    """D20 (spec §4.9): two roles, 2FA confirmed only with a secret."""
+    return c.execute(text(
+        "INSERT INTO users (email, role, is_active, created_at, totp_secret_enc, "
+        "totp_confirmed_at, failed_count) VALUES (:e, :r, true, :t, :s, :conf, :f) RETURNING id"),
+        dict(e=email, r=role, t=NOW, s=secret, conf=confirmed, f=failed)).scalar_one()
+
+
+def _setup_token(c, uid, h="a" * 64, expires=None):
+    c.execute(text("INSERT INTO setup_tokens (token_hash, user_id, created_at, expires_at) "
+                   "VALUES (:h, :u, :t, :x)"), dict(h=h, u=uid, t=NOW, x=expires or NOW.replace(hour=13)))
+
+
+def _p_setup_backwards(c, i):
+    _setup_token(c, _p_user(c), expires=NOW.replace(hour=11))
+
+
+def _p_setup_twice(c, i):
+    uid = _p_user(c)
+    _setup_token(c, uid)
+    _setup_token(c, uid)
+
+
 MUST_REFUSE: list[tuple[str, Callable]] = [
     ("credit_ledger: UPDATE is refused (append-only)", _p_ledger_update),
     ("credit_ledger: DELETE is refused (append-only)", _p_ledger_delete),
@@ -180,6 +203,11 @@ MUST_REFUSE: list[tuple[str, Callable]] = [
     ("consumption_intervals: a negative register difference", _p_interval_negative),
     ("cabinets: HMAC switched on without a secret", _p_hmac_without_secret),
     ("alarm_log: the same cabinet alarm stored twice", _p_alarm_twice),
+    ("users: a role D20 does not know (super_admin is gone)", lambda c, i: _p_user(c, role="super_admin")),
+    ("users: 2FA confirmed without a secret", lambda c, i: _p_user(c, confirmed=NOW)),
+    ("users: a negative failure count", lambda c, i: _p_user(c, failed=-1)),
+    ("setup_tokens: a link that expires before it is made", _p_setup_backwards),
+    ("setup_tokens: the same token hash twice", _p_setup_twice),
 ]
 
 
@@ -217,6 +245,10 @@ MUST_ALLOW: list[tuple[str, Callable]] = [
     ("consumption_intervals: standalone consumption WITHOUT a session is kept (D19)",
      _p_interval_standalone),
     ("sessions: billed once reconciled, with a figure", _p_billed_reconciled),
+    ("users: an admin with no password yet (one-time link, D20.3) and no 2FA",
+     lambda c, i: _p_user(c)),
+    ("users: a marina manager with 2FA confirmed", lambda c, i: _p_user(
+        c, role="marina_manager", secret="enc", confirmed=NOW)),
 ]
 
 

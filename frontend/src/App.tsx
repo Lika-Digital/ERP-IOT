@@ -2,6 +2,9 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import ProtectedRoute from './components/auth/ProtectedRoute'
 import Layout from './components/layout/Layout'
 import Login from './pages/Login'
+import Setup from './pages/Setup'
+import Users from './pages/Users'
+import { ReasonDialogHost } from './components/ui/ReasonDialog'
 import MarinaSelect from './pages/MarinaSelect'
 import Dashboard from './pages/Dashboard'
 import PedestalControl from './pages/PedestalControl'
@@ -15,6 +18,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/setup" element={<Setup />} />
 
         <Route
           path="/"
@@ -28,6 +32,7 @@ export default function App() {
           <Route index element={<Navigate to="/marinas" replace />} />
 
           <Route path="marinas" element={<MarinaSelect />} />
+          <Route path="users" element={<ProtectedRoute adminOnly><Users /></ProtectedRoute>} />
 
           <Route path="marinas/:marinaId">
             <Route index element={<Navigate to="dashboard" replace />} />
@@ -43,6 +48,7 @@ export default function App() {
         {/* Catch-all */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      <ReasonDialogHost />
     </BrowserRouter>
   )
 }

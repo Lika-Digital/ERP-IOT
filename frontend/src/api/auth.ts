@@ -5,9 +5,26 @@ export interface LoginRequest {
   password: string
 }
 
+/** A correct password opens only the 2FA step (D20). */
+export interface MfaChallenge {
+  mfa_token: string
+  token_type: 'mfa'
+  mfa_enrolled: boolean
+}
+
 export interface TokenResponse {
   access_token: string
   token_type: string
+}
+
+export interface EnrollStart {
+  secret: string
+  otpauth_uri: string
+  qr_svg: string
+}
+
+export interface EnrollDone extends TokenResponse {
+  backup_codes: string[]
 }
 
 export interface UserMeResponse {
@@ -19,11 +36,39 @@ export interface UserMeResponse {
   is_active: boolean
 }
 
-export const login = (data: LoginRequest) =>
-  api.post<TokenResponse>('/auth/login', data).then((r) => r.data)
+const asMfa = (mfaToken: string) => ({ headers: { Authorization: `Bearer ${mfaToken}` } })
 
-export const getMe = () =>
-  api.get<UserMeResponse>('/auth/me').then((r) => r.data)
+export const login = (data: LoginRequest) =>
+  api.post<MfaChallenge>('/auth/login', data).then((r) => r.data)
+
+export const verifyMfa = (mfaToken: string, code: string) =>
+  api.post<TokenResponse>('/auth/mfa/verify', { code }, asMfa(mfaToken)).then((r) => r.data)
+
+export const startEnrolment = (mfaToken: string) =>
+  api.post<EnrollStart>('/auth/mfa/enroll/start', null, asMfa(mfaToken)).then((r) => r.data)
+
+export const confirmEnrolment = (mfaToken: string, code: string) =>
+  api.post<EnrollDone>('/auth/mfa/enroll/confirm', { code }, asMfa(mfaToken)).then((r) => r.data)
+
+export const checkSetupLink = (token: string) =>
+  api.post<{ email: string }>('/auth/setup/check', { token }).then((r) => r.data)
+
+export const completeSetup = (token: string, password: string) =>
+  api.post<MfaChallenge>('/auth/setup', { token, password }).then((r) => r.data)
+
+export const regenerateBackupCodes = (code: string) =>
+  api.post<{ backup_codes: string[] }>('/auth/mfa/backup-codes', { code }).then((r) => r.data)
+
+export const getMe = (token?: string) =>
+  api
+    .get<UserMeResponse>('/auth/me', token ? { headers: { Authorization: `Bearer ${token}` } } : undefined)
+    .then((r) => r.data)
 
 export const refreshToken = () =>
   api.post<TokenResponse>('/auth/refresh').then((r) => r.data)
+
+/** The server's sentence, or the fallback. */
+export function detailOf(err: unknown, fallback: string): string {
+  const d = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
+  return typeof d === 'string' && d ? d : fallback
+}

@@ -1,6 +1,6 @@
 """Admin of the phase-3 model: cabinets, the berth registry, the mapping, NFC tags.
 
-Writes are super_admin only (D18: "Admin (Lika) enters it"). The actor of every
+Writes are admin only (D18: "Admin (Lika) enters it"). The actor of every
 mapping change and every tag import is the signed-in user — never a value from
 the request body, never a default (D1, D6.1, D18).
 """
@@ -19,7 +19,7 @@ from ..models.user import User
 from ..services import cabinets as svc
 from ..services import nfc_tags
 from ..utils.encryption import decrypt_password
-from .auth import get_current_user, require_marina_access, require_super_admin
+from .auth import require_admin
 
 router = APIRouter(prefix="/api/marinas", tags=["cabinet-admin"])
 
@@ -91,7 +91,7 @@ def _cabinet_out(db: Session, c: Cabinet) -> dict:
 
 @router.post("/{marina_id}/cabinets", status_code=201)
 def create_cabinet(marina_id: int, body: CabinetIn, db: Session = Depends(get_db),
-                   _: User = Depends(require_super_admin)):
+                   _: User = Depends(require_admin)):
     m = _marina(db, marina_id)
     password = body.service_password
     if password is None and m.pedestal_service_password_encrypted:
@@ -114,9 +114,9 @@ def create_cabinet(marina_id: int, body: CabinetIn, db: Session = Depends(get_db
 
 @router.get("/{marina_id}/cabinets")
 def list_cabinets(marina_id: int, db: Session = Depends(get_db),
-                  user: User = Depends(get_current_user)):
+                  user: User = Depends(require_admin)):
+    # configuration: Admin only (D20 — Marina Manager neither sees nor changes it)
     _marina(db, marina_id)
-    require_marina_access(marina_id, user, db)
     return {"cabinets": [_cabinet_out(db, c) for c in
                          db.query(Cabinet).filter(Cabinet.marina_id == marina_id)
                          .order_by(Cabinet.id)]}
@@ -141,7 +141,7 @@ def _berth_out(db: Session, b: Berth) -> dict:
 
 @router.post("/{marina_id}/berth-registry", status_code=201)
 def create_berth(marina_id: int, body: BerthIn, db: Session = Depends(get_db),
-                 _: User = Depends(require_super_admin)):
+                 _: User = Depends(require_admin)):
     _marina(db, marina_id)
     try:
         b = svc.create_berth(db, marina_id=marina_id, berth_number=body.berth_number,
@@ -155,9 +155,9 @@ def create_berth(marina_id: int, body: BerthIn, db: Session = Depends(get_db),
 
 @router.get("/{marina_id}/berth-registry")
 def list_berth_registry(marina_id: int, db: Session = Depends(get_db),
-                        user: User = Depends(get_current_user)):
+                        user: User = Depends(require_admin)):
+    # the mapping is configuration: Admin only (D20)
     _marina(db, marina_id)
-    require_marina_access(marina_id, user, db)
     return {"berths": [_berth_out(db, b) for b in
                        db.query(Berth).filter(Berth.marina_id == marina_id)
                        .order_by(Berth.berth_number)]}
@@ -169,7 +169,7 @@ class OutletsIn(BaseModel):
 
 @router.put("/{marina_id}/berth-registry/{berth_id}/outlets")
 def set_outlets(marina_id: int, berth_id: int, body: OutletsIn, db: Session = Depends(get_db),
-                user: User = Depends(require_super_admin)):
+                user: User = Depends(require_admin)):
     b = db.get(Berth, berth_id)
     if b is None or b.marina_id != marina_id:
         raise HTTPException(status_code=404, detail="Berth not found in this marina")
@@ -187,7 +187,7 @@ def set_outlets(marina_id: int, berth_id: int, body: OutletsIn, db: Session = De
 @router.post("/{marina_id}/cabinets/{cabinet_id}/nfc-tags/import")
 def import_nfc_tags(marina_id: int, cabinet_id: int,
                     csv_text: str = Body(..., media_type="text/csv"),
-                    db: Session = Depends(get_db), user: User = Depends(require_super_admin)):
+                    db: Session = Depends(get_db), user: User = Depends(require_admin)):
     """nfc_tags_<display_id>.csv — import, never overwrite; all-or-nothing (D6.1)."""
     cab = _cabinet(db, marina_id, cabinet_id)
     report = nfc_tags.import_csv(db, cab, csv_text, provisioned_by=user.email)
@@ -198,10 +198,10 @@ def import_nfc_tags(marina_id: int, cabinet_id: int,
 
 @router.get("/{marina_id}/nfc-tags/lookup")
 def lookup_nfc_tag(marina_id: int, uid: str = Query(..., min_length=2),
-                   db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """The installation test: the EXACT outlet for a scanned UID, either byte order."""
+                   db: Session = Depends(get_db), user: User = Depends(require_admin)):
+    """The installation test: the EXACT outlet for a scanned UID, either byte order.
+    Part of the NFC import, so Admin only (D20)."""
     _marina(db, marina_id)
-    require_marina_access(marina_id, user, db)
     try:
         hit = nfc_tags.lookup(db, uid)
     except ValueError as exc:

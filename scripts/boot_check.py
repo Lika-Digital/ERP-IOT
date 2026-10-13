@@ -1,7 +1,8 @@
 """TC-ERP-BOOT-01a / BOOT-02 — the application actually starts.
 
 Not a component test. A real migration on an empty database, a real uvicorn
-process, real HTTP: health, login, an authenticated route. Spec §9.
+process, real HTTP: health, the first admin through the one-time link and 2FA
+(D20), password + second factor, an authenticated route. Spec §9.
 
 It cannot pass empty:
   - every check is counted, and the script exits 0 only if ALL expected checks
@@ -36,6 +37,8 @@ BACKEND = ROOT / "backend"
 
 ADMIN_EMAIL = "boot@check.erp"
 ADMIN_PASSWORD = "boot-check-password"  # noqa: S105 — throwaway, temp DB only
+# D20.3: a leftover DEFAULT_ADMIN_PASSWORD must seed NOTHING; the check sets one on purpose
+LEFTOVER_EMAIL, LEFTOVER_PASSWORD = "seed@check.erp", "leftover-seed-pass"  # noqa: S105
 STARTUP_TIMEOUT_S = 40
 
 EXPECTED_CHECKS = [
@@ -45,7 +48,10 @@ EXPECTED_CHECKS = [
     "negative: without JWT_SECRET the server does not come up",
     "server: uvicorn comes up",
     "GET /api/health -> 200, status ok",
-    "POST /api/auth/login -> 200 + access_token",
+    "D20: DEFAULT_ADMIN_PASSWORD in the environment seeds nobody",
+    "D20: first admin - one-time link -> password -> 2FA linked -> full token",
+    "D20: password alone -> mfa token only, and it opens nothing (401)",
+    "D20: password + backup code -> full token; the same code again -> 401",
     "GET /api/auth/me with token -> 200, same user",
     "GET /api/marinas with token -> 200",
     "GET /api/auth/me without token -> 401",
@@ -190,8 +196,8 @@ def main() -> int:
         env = {
             **base_env(db_url),
             "JWT_SECRET": "boot-check-secret-" + os.urandom(8).hex(),
-            "DEFAULT_ADMIN_EMAIL": ADMIN_EMAIL,
-            "DEFAULT_ADMIN_PASSWORD": ADMIN_PASSWORD,
+            "DEFAULT_ADMIN_EMAIL": LEFTOVER_EMAIL,
+            "DEFAULT_ADMIN_PASSWORD": LEFTOVER_PASSWORD,
             "ERP_ENCRYPTION_KEY": "ZmDfcTF7_60GrrY167zsiPd67pEvs0aGOv2oasOM1Pg=",
         }
         log_path = Path(tmp) / "uvicorn.log"
@@ -223,27 +229,67 @@ def main() -> int:
                 fail(name, f"{code} {body[:300]}")
             ok(name)
 
+            import first_admin
+
+            def post(path, body, bearer):
+                code, text = http("POST", f"{base}{path}", body, token=bearer)
+                try:
+                    return code, json.loads(text)
+                except ValueError:
+                    return code, text
+
             name = EXPECTED_CHECKS[6]
             code, body = http("POST", f"{base}/api/auth/login",
-                              {"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD})
-            token = json.loads(body).get("access_token") if code == 200 else None
-            if not token:
-                fail(name, f"{code} {body[:300]}")
+                              {"email": LEFTOVER_EMAIL, "password": LEFTOVER_PASSWORD})
+            if code != 401:
+                fail(name, f"a leftover DEFAULT_ADMIN_PASSWORD signed in: {code} {body[:300]}")
             ok(name)
 
             name = EXPECTED_CHECKS[7]
+            try:
+                link = first_admin.link_token(env, ADMIN_EMAIL, cwd=tmp)
+                admin = first_admin.enrol(post, link, ADMIN_PASSWORD)
+            except RuntimeError as exc:
+                fail(name, str(exc))
+            ok(name)
+
+            name = EXPECTED_CHECKS[8]
+            code, body = post("/api/auth/login", {"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
+                              None)
+            mfa = body.get("mfa_token") if code == 200 and isinstance(body, dict) else None
+            if not mfa or "access_token" in body:
+                fail(name, f"{code} {body}")
+            code2, _ = http("GET", f"{base}/api/marinas", token=mfa)
+            if code2 != 401:
+                fail(name, f"an mfa token opened /api/marinas: {code2}")
+            ok(name)
+
+            name = EXPECTED_CHECKS[9]
+            backup = admin["backup_codes"][0]
+            code, body = post("/api/auth/mfa/verify", {"code": backup}, mfa)
+            token = body.get("access_token") if code == 200 and isinstance(body, dict) else None
+            if not token:
+                fail(name, f"{code} {body}")
+            _, again = post("/api/auth/login", {"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
+                            None)
+            code, body = post("/api/auth/mfa/verify", {"code": backup}, again["mfa_token"])
+            if code != 401:
+                fail(name, f"a used backup code worked again: {code} {body}")
+            ok(name)
+
+            name = EXPECTED_CHECKS[10]
             code, body = http("GET", f"{base}/api/auth/me", token=token)
             if code != 200 or json.loads(body).get("email") != ADMIN_EMAIL:
                 fail(name, f"{code} {body[:300]}")
             ok(name)
 
-            name = EXPECTED_CHECKS[8]
+            name = EXPECTED_CHECKS[11]
             code, body = http("GET", f"{base}/api/marinas", token=token)
             if code != 200:
                 fail(name, f"{code} {body[:300]}")
             ok(name)
 
-            name = EXPECTED_CHECKS[9]
+            name = EXPECTED_CHECKS[12]
             code, body = http("GET", f"{base}/api/auth/me")
             if code != 401:
                 fail(name, f"{code} {body[:300]}")
@@ -251,7 +297,7 @@ def main() -> int:
 
             # phase 4: the collector starts with the app (spec §5.2) — not a flag someone
             # has to remember on the VPS
-            name = EXPECTED_CHECKS[10]
+            name = EXPECTED_CHECKS[13]
             deadline = time.monotonic() + 15
             col = {}
             while time.monotonic() < deadline:
@@ -264,7 +310,7 @@ def main() -> int:
                 fail(name, f"collector state: {col}")
             ok(name)
 
-            name = EXPECTED_CHECKS[11]
+            name = EXPECTED_CHECKS[14]
             code, body = http("POST", f"{base}/api/webhooks/cabinet/1",
                               {"event": "hardware_alarm", "data": {"id": 1}})
             if code != 401:

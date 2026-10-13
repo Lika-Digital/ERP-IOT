@@ -276,8 +276,16 @@ def test_api_a_marina_manager_cannot_change_the_mapping(client, manager_headers,
     r = client.put(f"/api/marinas/{marina_id}/berth-registry/{b.id}/outlets",
                    headers=manager_headers, json={"outlets": ["Q1"]})
     assert r.status_code == 403
+    # D20: the mapping is configuration — a Marina Manager does not even see it
     r = client.get(f"/api/marinas/{marina_id}/berth-registry", headers=manager_headers)
-    assert r.status_code == 200          # reading is fine
+    assert r.status_code == 403
+    r = client.get(f"/api/marinas/{marina_id}/cabinets", headers=manager_headers)
+    assert r.status_code == 403
+    r = client.get(f"/api/marinas/{marina_id}/nfc-tags/lookup", params={"uid": "04A1"},
+                   headers=manager_headers)
+    assert r.status_code == 403
+    m = client.get(f"/api/marinas/{marina_id}", headers=manager_headers).json()
+    assert m["pedestal_api_base_url"] is None and m["pedestal_service_email"] is None
 
 
 def test_api_bad_csv_is_422_with_line_numbers(client, admin_headers, marina_id, db):

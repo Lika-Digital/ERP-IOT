@@ -35,7 +35,7 @@ class MarinaResponse(BaseModel):
     location: Optional[str]
     timezone: str
     logo_url: Optional[str]
-    pedestal_api_base_url: str
+    pedestal_api_base_url: Optional[str]     # None for a Marina Manager (D20)
     pedestal_service_email: Optional[str]
     # Encrypted password is never returned to the client
     status: str

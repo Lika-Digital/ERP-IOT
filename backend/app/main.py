@@ -12,7 +12,7 @@ from .middleware.security import SecurityMiddleware
 from .services.collector import CollectorThread, collector
 from .services.websocket_manager import ws_manager
 from .routers import (auth, marinas, dashboard, controls, energy, alarms, webhooks, pedestal_ext,
-                      cabinet_admin)
+                      cabinet_admin, users)
 from .routers.auth import _decode_token
 
 logging.basicConfig(
@@ -70,6 +70,7 @@ app.include_router(alarms.router)
 app.include_router(pedestal_ext.router)
 app.include_router(webhooks.router)
 app.include_router(cabinet_admin.router)
+app.include_router(users.router)
 
 
 # ── Health endpoint ───────────────────────────────────────────────────────────
@@ -95,14 +96,19 @@ async def websocket_endpoint(
     WebSocket endpoint. Clients can subscribe to a specific marina by passing
     marina_id as a query param. Without marina_id they receive all broadcasts.
 
-    Authentication: pass token=<JWT> query param.
+    Authentication: token=<JWT> query param — a FULL token (password and 2FA).
+    Until D20 the token was optional and anyone reaching /ws got every broadcast.
     """
-    # Optional auth check
-    if token:
-        payload = _decode_token(token)
-        if not payload:
-            await websocket.close(code=4001)
-            return
+    payload = _decode_token(token) if token else None
+    if not payload:
+        await websocket.close(code=4001)
+        return
+    # A Marina Manager hears only an assigned marina, and must say which one:
+    # without marina_id the manager would hear every marina's broadcasts (D20).
+    if payload.get("role") != "admin" and (
+            marina_id is None or marina_id not in (payload.get("marina_ids") or [])):
+        await websocket.close(code=4003)
+        return
 
     await ws_manager.connect(websocket, marina_id)
     try:

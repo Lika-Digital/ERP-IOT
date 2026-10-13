@@ -42,40 +42,9 @@ def get_db():
 
 
 def init_db():
-    """Create all tables and seed default data."""
+    """Create all tables. Nothing is seeded (D20.3)."""
     from . import models  # noqa: F401  — registers every model
 
     Base.metadata.create_all(bind=engine)
     log.info("Database tables created/verified.")
-    _seed_defaults()
-
-
-def _seed_defaults():
-    """Seed the super_admin user on first run if DEFAULT_ADMIN_PASSWORD is set."""
-    if not settings.default_admin_password:
-        return
-
-    from .models.user import User
-    from passlib.context import CryptContext
-
-    pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-    db = SessionLocal()
-    try:
-        existing = db.query(User).filter(User.email == settings.default_admin_email).first()
-        if not existing:
-            user = User(
-                email=settings.default_admin_email,
-                password_hash=pwd_ctx.hash(settings.default_admin_password),
-                full_name="Super Admin",
-                role="super_admin",
-                is_active=True,
-            )
-            db.add(user)
-            db.commit()
-            log.info(f"Seeded default super_admin: {settings.default_admin_email}")
-    except Exception as exc:
-        log.error(f"Failed to seed default admin: {exc}")
-        db.rollback()
-    finally:
-        db.close()
+    # No seeded user (D20.3): the first admin comes from `python -m app.setup_admin`.

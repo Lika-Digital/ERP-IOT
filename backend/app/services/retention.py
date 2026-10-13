@@ -22,6 +22,7 @@ from ..config import settings
 from ..models.cache import AlarmLog, AuditLog, PedestalCache, SessionLog, SyncLog
 from ..models.metering import (CommandAudit, ConsumptionInterval, ConsumptionMonthly,
                                ReconciliationRun)
+from ..models.user import AuthAudit, SetupToken
 from ..utils.time import utcnow
 
 log = logging.getLogger(__name__)
@@ -41,6 +42,10 @@ def windows() -> dict:
         "reconciliation_runs": (ReconciliationRun, ReconciliationRun.started_at,
                                 s.retention_reconciliation_days),
         "pedestal_cache": (PedestalCache, PedestalCache.last_synced_at, s.retention_cache_days),
+        # D20 (spec §4.9): sign-in evidence weighs like command_audit; a setup link
+        # is useless once expired and kept a while only to explain "my link failed"
+        "auth_audit": (AuthAudit, AuthAudit.created_at, s.retention_auth_audit_days),
+        "setup_tokens": (SetupToken, SetupToken.expires_at, s.retention_setup_tokens_days),
     }
 
 

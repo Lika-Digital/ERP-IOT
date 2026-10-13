@@ -55,7 +55,7 @@ export default function PedestalControl() {
   }, [fetchData])
 
   const handleAllow = async (sessionId: number, pedestalId: number) => {
-    const reason = askReason(`dopusti sesiju #${sessionId}`)
+    const reason = await askReason(`dopusti sesiju #${sessionId}`)
     if (!reason) { setError(NO_REASON); return }
     setActionLoading(sessionId)
     try {
@@ -86,7 +86,7 @@ export default function PedestalControl() {
 
   const handleStop = async () => {
     if (!stopDialog) return
-    const reason = askReason(`zaustavi sesiju #${stopDialog.sessionId}`)
+    const reason = await askReason(`zaustavi sesiju #${stopDialog.sessionId}`)
     if (!reason) { setError(NO_REASON); return }
     setActionLoading(stopDialog.sessionId)
     try {

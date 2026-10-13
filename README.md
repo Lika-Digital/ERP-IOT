@@ -20,7 +20,7 @@ Pedestal SW instances (one per marina)
 
 ## Phase 1 Features
 
-- Multi-marina management (super_admin sees all, marina_manager sees assigned)
+- Multi-marina management (Admin sees all, Marina Manager sees assigned; password + TOTP 2FA for everyone)
 - JWT authentication with role-based access control
 - Pedestal API proxy with caching and stale-data fallback
 - Webhook receiver with HMAC-SHA256 signature validation
@@ -77,8 +77,7 @@ pip install -r requirements.txt
 # Configure environment — create backend/.env with:
 #   DATABASE_URL=postgresql://erp_user:erp_password@localhost:5432/erp_iot
 #   JWT_SECRET=<random hex>
-#   DEFAULT_ADMIN_EMAIL=admin@erp-iot.local
-#   DEFAULT_ADMIN_PASSWORD=<your password>
+#   PUBLIC_BASE_URL=http://localhost:5173
 #   ALLOWED_ORIGINS=http://localhost:5173
 #   ERP_ENCRYPTION_KEY=<generate: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())">
 
@@ -108,11 +107,18 @@ Frontend runs at http://localhost:5173
 docker compose up -d
 ```
 
-## Default Login
+## First Login (D20)
 
-After seeding (set `DEFAULT_ADMIN_PASSWORD` in `.env`):
-- Email: `admin@erp-iot.local` (or `DEFAULT_ADMIN_EMAIL`)
-- Password: whatever you set in `DEFAULT_ADMIN_PASSWORD`
+There is no default password. Create the first admin with a one-time link (valid 30 min):
+
+```bash
+cd backend
+python -m app.setup_admin --email you@example.com
+```
+
+Open the printed link, set a password (12+ characters) and link two-factor authentication
+(any TOTP app). Every sign-in is password + 6-digit code; the ten backup codes are shown once.
+Further users are created on the **Users** screen (Admin only), each with their own link.
 
 ## Running Tests
 
@@ -177,7 +183,7 @@ CLOUD_IOT_RELEASE=1 git push origin main
 | GET | `/api/auth/me` | Current user info |
 | POST | `/api/auth/refresh` | Refresh token |
 
-### Marinas (super_admin only for write)
+### Marinas (Admin only for write)
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/marinas` | List accessible marinas |
