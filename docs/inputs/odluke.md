@@ -1,7 +1,7 @@
 # ERP-IOT — dnevnik odluka
 
-**Verzija 2.4 · 2026-10-12** — zamjenjuje v2.3.
-v2.4 dodaje **D20** (korisnici, prijava i tajne). v2.3 ispravlja mrežna pravila u **D13** (ormar → ERP samo webhook; bez statične IP). v2.2 dodaje **D19** (ventili i utičnice prema Smart Modeu). v2.1 je dodao **D18** (mapiranje na obje strane); prvi isporučeni zip sadržavao je stariju v2 bez njega.
+**Verzija 2.5 · 2026-10-13** — zamjenjuje v2.4.
+v2.5 dodaje **D21** (sigurnosni agent samo čita; mijenja slojeve 3 i 4 u D13 i D14) i **D22** (provjera slike s ormara; zamjenjuje energetskog agenta, koji se briše iz plana), i novi redoslijed faze 5 (5a–5e; faza 4.5 se briše, prvo spajanje na Krk je s VPS-a). v2.4 dodaje **D20** (korisnici, prijava i tajne). v2.3 ispravlja mrežna pravila u **D13** (ormar → ERP samo webhook; bez statične IP). v2.2 dodaje **D19** (ventili i utičnice prema Smart Modeu). v2.1 je dodao **D18** (mapiranje na obje strane); prvi isporučeni zip sadržavao je stariju v2 bez njega.
 Ormar (Cloud_IOT) je druga strana ugovora; ovdje se bilježe odluke koje se tiču ERP-a i ono što ERP traži od ormara.
 
 Izvori, redom po težini:
@@ -175,8 +175,10 @@ Modul platforme, s laganim klijentom na svakom ormaru. Prodaje se kao značajka 
 | 0 Higijena | TLS/WireGuard; MFA na ERP adminu, Tailscale i Teltonika RMS računu; Tailscale odobravanje uređaja + tailnet lock; **Tailscale ACL** (ERP → ormar samo nginx :80, nikad :8000; ormar → ERP **samo port webhook prijemnika**; ormar ↛ ormar — *ispravak 2026-10-12*, spec §7.0); servisni račun po ormaru s minimalnim Gateway pravima; **pinane verzije ovisnosti**; automatska sigurnosna ažuriranja; backup; tajne odvojene od diska aplikacije i jedinstvene po ormaru | — |
 | 1 Klasična obrana | nftables default-deny; SSH samo ključevi; CrowdSec (engine + bouncer) na VPS-u i ormarima; Cloudflare ispred ERP UI-a (WAF, Access za admin); rate limiting; audit log svake upravljačke naredbe; HMAC potpis webhooka | odmah, automatski |
 | 2 Mamci | lažni API ključ u konfiguraciji; lažni Gateway endpoint (npr. `/api/ext/admin/debug`); lažni servisni račun; lažni ormar u Tailscale mreži. Nitko legitiman ih ne dira — svaki dodir je napadač | tiho bilježi |
-| 3 Agent | ponašanje servisnih računa i naredbi **po domeni marine**: `socket_cmd` u neobično vrijeme ili s nove adrese, serija nepoznatih NFC tagova (pogađanje), Smart Mode izvan radnog vremena, račun koji zove endpointe koje nikad nije zvao, vrata ormara + novi uređaj u LAN-u (D16); povezivanje događaja preko slojeva | šuti, slaže slučaj, javlja s dokazima |
-| 4 Živo znanje | strukturirani izvori: CISA KEV, NVD / GitHub Security Advisories za naš stack **i Teltonika firmware**, CrowdSec blocklista, abuse.ch → IOC-ovi i CVE-ovi u bazu, usporedba s pinanim verzijama | predlaže pravila, čovjek odobrava |
+| 3 Agent *(izmijenjeno D21)* | ponašanje servisnih računa i naredbi **po domeni marine**: `socket_cmd` u neobično vrijeme ili s nove adrese, serija nepoznatih NFC tagova (pogađanje), Smart Mode izvan radnog vremena, račun koji zove endpointe koje nikad nije zvao, vrata ormara + novi uređaj u LAN-u (D16); povezivanje događaja preko slojeva. **Samo čita interne podatke; jedini upis je alarm s dokazima; akciju izvršava ili naređuje Admin (D21)** | šuti, slaže slučaj, **otvara alarm s dokazima i čeka Admina** |
+| ~~4 Živo znanje~~ *(otpada, D21)* | ~~strukturirani izvori s weba: CISA KEV, NVD / GHSA, CrowdSec blocklista, abuse.ch~~ — agent ne izlazi na internet. Ako zatreba, **Admin ručno uvozi datoteku** (npr. KEV JSON), agent je čita kao interni podatak | — |
+
+**Izmjena D21 (2026-10-13).** Reakciju „uspjeli napad → odmah zadržati" (opoziv tokena, gašenje endpointa) ne izvršava agent: agent otvara alarm s dokazima, korak izvršava ili naređuje Admin. Automatska blokada šuma ostaje u sloju 1 (CrowdSec, rate limiting — kod i konfiguracija, ne agent).
 
 **Ispravak 2026-10-12 · mreža.** Statična IP nije potrebna: ERP ↔ ormar preko Tailscalea (stalne 100.x adrese, radi iza NAT-a/5G-a), javni UI kroz Cloudflare tunel (odlazna veza, nema otvorenih ulaznih portova). ERP → ormar samo nginx :80 na Tailscale adresi ormara, nikad izravno :8000. Ormar → ERP samo port webhook prijemnika preko Tailscale adrese ERP-a; sve ostalo zabranjeno. Ormar ↛ ormar. SSH na VPS samo preko Tailscalea; na VPS-u javno nema otvorenih ulaznih portova. Detalji: spec §7.0.
 
@@ -190,15 +192,17 @@ Ormar: Gateway ne poštuje mod na direktnim write rutama (2.3), match ne gleda m
 ### Veličina
 Wazuh (4–8 GB RAM za server) ne stane uz ERP na 2 GB VPS-u. CrowdSec + vlastiti agent stanu. Slojevi 0 i 1 su dio postavljanja VPS-a — VPS se ne izlaže bez njih.
 
-## D14 · Zajednička platforma agenata
-Sigurnosni i energetski agent dijele: registar izvora i mogućnosti, alate izložene kao MCP server, sloj pravila (policy) u kodu, odobrenje čovjeka, audit log. Gradi se jednom.
-Razine autonomije za oba: savjetuje → čovjek odobri pa izvrši → samostalno samo unutar granica za niskorizične akcije.
+## D14 · Zajednička platforma agenata  *(izmijenjeno D21 i D22, 2026-10-13)*
+Sigurnosni agent (D21) i agent za provjeru slike (D22) dijele: registar izvora, sloj pravila (policy) **u kodu**, odobrenje čovjeka (Admin), audit log. Gradi se jednom.
+~~Razine autonomije: savjetuje → čovjek odobri pa izvrši → samostalno samo unutar granica za niskorizične akcije.~~ **Nema samostalnog izvršavanja:** agent savjetuje (alarm, ocjena); korak izvršava ili naređuje isključivo Admin.
 Brojke računa kod, ne LLM; LLM povezuje, prioritizira i objašnjava.
 
-### Energetski agent (drugi po redu)
-Slojevi: adapteri po izvoru → zajednički model (uređaj / mjerna točka / mogućnost upravljanja) u Postgresu (TimescaleDB ekstenzija kad zatreba) → izračun u kodu (baseline, profili, vršna snaga, tarifa, anomalije) → agent → izvršenje kroz pravila → provjera uštede prema baselineu.
-Stvarne poluge u marini: vršna (obračunska) snaga, curenje prihoda (izmjereno a nenaplaćeno, kabel nakon odlaska), vlastita potrošnja marine, VT/NT.
-**Prikupljanje podataka o struji počinje odmah, pasivno** (poller + retencija) — agent bez povijesti nema što analizirati.
+### ~~Energetski agent (drugi po redu)~~ — briše se iz plana (D22, 2026-10-13)
+Drugi agent je provjera slike s ormara (D22). Što ostaje od podataka koje je energetski agent tražio, s novim razlogom:
+- retencija `consumption_intervals` 400 dana — **ostaje**: naplata i sporovi s gostima;
+- polling `load.*` svakih 300 s — **ostaje**: stanje struje uživo za 2D prikaz i signal „struja bez plovila" (D2);
+- `load.socket_history_ext` — **nije u uporabi**;
+- brojilo na glavnom priključku marine (vršna snaga) — **odgođeno**.
 
 ## D15 · Regulatorni okvir
 | Sustav | CRA status (procjena, potvrditi s laboratorijem/pravnikom) | Napomena |
@@ -256,11 +260,13 @@ Redoslijed je obvezujući. Svaka faza završava nečim što se može provjeriti,
 | 2 | **Ugovor s ormarom**: klijent prema D8; rukovanje 409 po `detail`; Smart Mode iz health; PK vs `display_id`; `device_connected`; `berths.list`; `is_stale`; NFC kanal s `X-API-Key`; **stub/simulator ormara** iz snimljenih odgovora Krka (puni ormar 4+2, retrofit samo utičnice, trofazna Q1, dijeljeni ventil, tihi ormar) | ugovorni testovi zeleni protiv simulatora; Berths/409/is_stale ispravljeni |
 | 3 | **Model podataka**: vezovi, priključci, mapiranje (prema rješenju BLOK-1), NFC tagovi s dva zapisa + CSV uvoz, tip uređaja i mogućnosti, korisnici, ugovori, način naplate (default prepaid), knjiga kredita, `consumption_source` | migracije; uvoz Krk CSV-a pogađa točan priključak |
 | 4 | **Prikupljanje + retencija** u istom commitu: poller (health, sesije, berths.list, potrošnja), pull-usklađivanje sesija, prijemnik webhooka (danas X-API-Key, pripremljen za HMAC), audit log naredbi | podaci teku; rast baze izmjeren i ograničen |
-| 5 | **VPS**: način isporuke odlučen u specifikaciji (Docker s ispravnim Dockerfileovima ili systemd — jedan, ne oba), 2 GB / 20 GB, Postgres, nginx, cloudflared samo za UI, Tailscale prema ormarima, **slojevi 0 i 1 iz D13 prije javnog izlaganja**, backup, runbook | ERP javno dostupan iza Cloudflare Accessa; runbook proveden na čistom VPS-u |
+| 5 | **VPS**: način isporuke odlučen u specifikaciji (Docker s ispravnim Dockerfileovima ili systemd — jedan, ne oba), 2 GB / 20 GB, Postgres, nginx, cloudflared samo za UI, Tailscale prema ormarima, **slojevi 0 i 1 iz D13 prije javnog izlaganja**, backup, runbook. *Od 2026-10-13 u pet koraka:* **5a** D20 lokalno (prvo, prije svega) → **5b** VPS onboarding, samo Tailscale → **5c** Cloudflare tunel, tek kad je 5a zelen i na VPS-u → **5d** priprema Krka + spajanje VPS → Krk (LIVE-01 samo čitanje, poller preko noći, kontrolni testovi samo na OK) → **5e** tjedan stvarnog rada, uz fazu 6 lokalno. **Faza 4.5 (LIVE s PC-a) se briše**; njezina priprema prelazi u 5d | ERP javno dostupan iza Cloudflare Accessa; runbook proveden na čistom VPS-u |
 | 6 | **Zauzeće vezova** (D2) + **2D SVG prikaz** marine (plan nacrtan jednom, svaki vez ima id, aplikacija mijenja klasu) | Krk na karti, četiri signala, sivo za tiho |
 | 7 | **Poslovna logika i NFC tok** (D6, D9, D10), prihvatni testovi D11 | D11 1–6 prolaze na pravom ormaru |
-| 8 | **Sigurnosni modul v1**: mamci, domenske detekcije, signali vrata i novog uređaja (kad ih ormar šalje), CVE/KEV prema pinanim verzijama, prikaz "sigurnost" | prvi stvarni nalazi na VPS-u i Krku |
-| 9 | **Energetski agent** — tek kad postoji povijest iz faze 4 | — |
+| 8 | **Sigurnosni agent (D21)**: mamci, domenske detekcije, signali vrata i novog uređaja (kad ih ormar šalje), prikaz "sigurnost"; samo čita interne podatke, jedini upis je alarm. ~~CVE/KEV prema pinanim verzijama~~ (otpada s weba; ručni uvoz datoteke ako zatreba). Implementacija smije krenuti nakon 5a, na vlastitoj grani, samo na internim podacima | prvi stvarni nalazi na VPS-u i Krku |
+| 9 | ~~**Energetski agent**~~ → **Provjera slike s ormara (D22)** — nakon 5e | — |
+
+Agenti (faze 8 i 9) dolaze nakon 5e, kad ERP stabilno radi s pravim ormarom.
 
 Što ERP ne radi: ne gradi vlastiti MQTT, ne mijenja kod ormara (zahtjevi prema ormaru idu kroz zaseban chat), ne prikazuje imena kupaca na zaslonima marine, ne uključuje automatsko izvršavanje agenata.
 
@@ -295,7 +301,37 @@ Odluka 2026-10-12. Mora biti gotovo i u gateu **prije** nego je ERP UI javno dos
 4. **Baza bez lozinke:** na VPS-u Postgres sluša samo Unix socket (bez TCP porta), backend radi kao sistemski korisnik `erp`, peer autentifikacija. Nema lozinke baze ni u `.env` ni igdje. Lokalni razvoj i CI smiju imati testnu lozinku, nikad u repou.
 5. **Ljudske lozinke postoje samo za prijavu u UI.** Sve ostale tajne (servisni računi ormara, ključ šifriranja, JWT tajna) su strojne: generiraju se pri instalaciji ili ih Admin unosi kroz UI, spremaju se šifrirano, nikad se ne prikazuju natrag.
 
-Redoslijed: D20 se radi zajedno s kodom faze 5, dok traje noćno mjerenje faze 4.5.
+Redoslijed: ~~D20 se radi zajedno s kodom faze 5, dok traje noćno mjerenje faze 4.5.~~ *(2026-10-13)* D20 je korak **5a** — kreće odmah, prije svega ostalog, lokalno, gate zelen.
+
+## D21 · Sigurnosni agent — samo čitanje
+Odluka 2026-10-13. Mijenja D13 (slojevi 3 i 4) i D14.
+
+- Agent je primarno **read-only**: analizira interne ulaze — audit log naredbi, logove prijava, ERP logove, poller/sync podatke, logove ormara koje ERP već prima, mamce iz sloja 2.
+- **Jedini dopušteni upis:** otvaranje alarma u bazi ERP-a, s dokazima (koji podaci, kada, zašto). Agent zatim **čeka** — konkretan korak izvršava ili naređuje isključivo korisnik (Admin).
+- **Strogo zabranjeno i izvan opsega:** otvaranje portova, mrežnih veza ili linkova; mijenjanje firewalla, konfiguracije, korisnika ili ormara; bilo kakav odlazni mrežni promet. Agent ne izlazi na internet.
+- Agent radi isključivo na internim podacima. **Sloj 4 iz D13 (CVE/KEV s weba) otpada**; ako zatreba, Admin ručno uvozi datoteku.
+- **Ograničenje provodi KOD, ne prompt:** agent ima samo DB pravo čitanja na izvore + INSERT u tablicu alarma; nema mrežnih alata. Test pada ako agent ima bilo koji drugi upis ili odlazni poziv.
+- Sadržaj logova je podatak, nikad uputa (prompt injection).
+- Prodaje se kao značajka platforme, ne samostalni IDS (D15/CRA).
+
+## D22 · Drugi agent — provjera slike s ormara
+Odluka 2026-10-13. **Zamjenjuje energetskog agenta; energetski agent se briše iz plana.**
+
+Proširenje agenta na ormaru (detekcija plovila, guard, zauzeće veza). Kad je agent na ormaru nesiguran u ocjenu:
+1. Ormar javi ERP-u događaj **„nesigurna ocjena"** (vez, vrijeme, razlog, ocjena) — mali podatak, bez slike, bez streama.
+2. ERP u 2D prikazu marine otvara **zahtjev za pregled** na tom vezu.
+3. **Admin odobrava** (na početku isključivo uz odobrenje Admina; odobrenje i odbijanje idu u audit).
+4. Tek nakon odobrenja ERP **povlači** snimljenu media datoteku s ormara (ERP → ormar, nginx :80). Ormar nikad ne šalje stream ni datoteku sam; ACL ormar → ERP ostaje samo webhook.
+5. ERP vlastitim modelom na VPS-u provjeri što je na slici i prikaže rezultat u 2D prikazu, uz ocjenu ormara.
+6. ERP ništa ne šalje natrag ormaru — istina o zauzeću se gleda u ERP-u, ne na ormaru.
+
+- **Premisa:** VPS ima više podataka i CPU-a od ormara. Trenutni VPS nije dovoljan; proširuje se kad dođe do implementacije.
+- **Model:** otvoren i lokalan (vision model, npr. Pixtral / Qwen-VL, ili namjenski detektor). **Odluka o modelu: otvoreno, kasnije.**
+- Slike ne napuštaju naš VPS (bez vanjskih AI servisa).
+- **GDPR (D15):** ljudi na datoteci zamagljeni na ormaru prije slanja; retencija datoteka na ERP-u ograničena i zapisana; pristup u audit.
+- **Zahtjevi prema ormaru:** događaj „nesigurna ocjena" u katalogu webhooka; ext endpoint za dohvat snimljene datoteke po ID-u događaja (GET, monitor), s autentifikacijom `api_client`.
+
+**Raspored agenata:** dolaze nakon 5e (ERP stabilno radi s pravim ormarom). Implementacija D21 smije krenuti nakon 5a, na vlastitoj grani, u vremenu čekanja na VPS — samo dijelovi na internim podacima, bez utjecaja na 5b.
 
 ---
 
@@ -307,6 +343,7 @@ Redoslijed: D20 se radi zajedno s kodom faze 5, dok traje noćno mjerenje faze 4
 - Dokument MarinaMaster kaže da ERP potrošnju za vrijeme prekida "dobije naknadno"; webhook nema retry. Koji pull endpoint vraća sesije i potrošnju za vremenski raspon?
 - Koji EVENT_CATALOG id-evi odgovaraju početku sesije, potrošnji ~60 s i kraju sesije? `meter_telemetry_received` se emitira, ali nije u katalogu.
 - Kojom ulogom i ključem ERP zove `/api/nfc/*` (izravni kanal s `X-API-Key`) i kad se taj ključ rotira (ugrađen je u mobilnu aplikaciju)?
-- Postoji li brojilo na glavnom priključku marine ili podaci s računa (za vršnu snagu)?
+- ~~Postoji li brojilo na glavnom priključku marine ili podaci s računa (za vršnu snagu)?~~ — **odgođeno** (energetski agent obrisan, D22).
+- Model za provjeru slike (D22) — otvoreno, odlučuje se pri implementaciji.
 - Ormar: popravci 2.3, 1.3, 3.1, 2.1. `breakers.socket_reset_ext` i `load.auto_stop_ack_ext` ne uključivati prije 2.3.
 - Činjenice iz D16 "Najprije provjeriti".
