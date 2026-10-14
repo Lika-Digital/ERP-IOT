@@ -484,7 +484,9 @@ def test_retention_deletes_by_window_and_rolls_intervals_into_months(cab):
     db = _db()
     try:
         q1 = db.query(Outlet).filter_by(cabinet_id=cab, outlet_name="Q1").one()
-        old = now - timedelta(days=settings.retention_intervals_days + 40)
+        # 10:00 that day: three hourly rows must never straddle a month boundary
+        old = (now - timedelta(days=settings.retention_intervals_days + 40)).replace(
+            hour=10, minute=0, second=0, microsecond=0)
         for i, kwh in enumerate(("1.25", "2.50", "0.25")):
             f = old + timedelta(hours=i)
             db.add(ConsumptionInterval(outlet_id=q1.id, from_at=f, to_at=f + timedelta(hours=1),
