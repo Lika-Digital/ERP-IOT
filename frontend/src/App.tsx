@@ -4,6 +4,7 @@ import Layout from './components/layout/Layout'
 import Login from './pages/Login'
 import Setup from './pages/Setup'
 import Users from './pages/Users'
+import Security from './pages/Security'
 import { ReasonDialogHost } from './components/ui/ReasonDialog'
 import MarinaSelect from './pages/MarinaSelect'
 import Dashboard from './pages/Dashboard'
@@ -33,6 +34,7 @@ export default function App() {
 
           <Route path="marinas" element={<MarinaSelect />} />
           <Route path="users" element={<ProtectedRoute adminOnly><Users /></ProtectedRoute>} />
+          <Route path="security" element={<ProtectedRoute adminOnly><Security /></ProtectedRoute>} />
 
           <Route path="marinas/:marinaId">
             <Route index element={<Navigate to="dashboard" replace />} />

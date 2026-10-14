@@ -270,6 +270,12 @@ _PUBLIC_ROUTES = {
     ("POST", "/api/webhooks/pedestal/{marina_id}"),  # vlastita provjera HMAC-a
     ("POST", "/api/webhooks/cabinet/{cabinet_id}"),  # faza 4: vlastita provjera X-API-Key ormara
     ("GET", "/api/health"),
+    # D21 layer 2: decoys — public on purpose, answer 404 like a missing route and
+    # record the touch (test_d21.py); left out of the OpenAPI schema
+    ("GET", "/api/ext/admin/debug"),
+    ("POST", "/api/ext/admin/debug"),
+    ("GET", "/api/admin/debug"),
+    ("POST", "/api/admin/debug"),
 }
 
 
@@ -321,10 +327,13 @@ def test_tc_erp_auth_01_protected_count_matches_graph():
     pet novih JAVNIH: 2FA korak s kratkim mfa tokenom (verify, enroll start/confirm)
     i stranica jednokratnog linka (setup/check, setup). test_d20 tvrdi da mfa token
     ne otvara nijednu zasticenu rutu.
+    Faza 8 (D21): 53 od 66 — devet ruta /api/security (alarmi, pravila, servisni
+    prozori, uvoz datoteka; sve samo Admin) i četiri JAVNA mamca (GET i POST na
+    /api/ext/admin/debug i /api/admin/debug), koji odgovaraju 404 kao nepostojeća ruta.
     Broj se mijenja samo svjesno, u istom commitu kao ruta.
     """
     rs = _routes()
-    assert (sum(p for _, _, p in rs), len(rs)) == (44, 53)
+    assert (sum(p for _, _, p in rs), len(rs)) == (53, 66)
 
 
 def test_tc_erp_auth_01_no_credentials_is_strictly_401(client):
@@ -546,7 +555,7 @@ def test_tc_erp_boot_02_boot_check_fails_loudly_when_nothing_comes_up():
         capture_output=True, text=True, env=e, timeout=120,
     )
     assert r.returncode != 0
-    assert "BOOT: 0/15 checks passed" in r.stdout
+    assert "BOOT: 0/16 checks passed" in r.stdout   # PostgreSQL: + D21 role check
 
 
 def _junit(tmp_path, tests: int, skipped: int, failures: int = 0) -> Path:

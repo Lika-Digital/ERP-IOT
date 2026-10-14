@@ -185,6 +185,25 @@ def _p_setup_twice(c, i):
     _setup_token(c, uid)
 
 
+# ─── D21 (spec §13.1) ────────────────────────────────────────────────────────
+
+def _alarm(c, state="open", by=None, at=None, severity="warning", fp="f" * 64):
+    c.execute(text("INSERT INTO security_alarms (rule_id, fingerprint, severity, title, why, "
+                   "evidence, created_at, state, decided_by, decided_at) VALUES ('probe', :fp, "
+                   ":sev, 't', 'w', '[]', :t, :st, :by, :at)"),
+              dict(fp=fp, sev=severity, t=NOW, st=state, by=by, at=at))
+
+
+def _p_security_alarm_twice(c, i):
+    _alarm(c)
+    _alarm(c)          # same fingerprint: the agent's ON CONFLICT relies on this UNIQUE
+
+
+def _p_window_backwards(c, i):
+    c.execute(text("INSERT INTO service_windows (cabinet_id, from_at, to_at, announced_by, "
+                   "created_at) VALUES (:c, :t, :t, 'serviser', :t)"), dict(c=i["cabinet"], t=NOW))
+
+
 MUST_REFUSE: list[tuple[str, Callable]] = [
     ("credit_ledger: UPDATE is refused (append-only)", _p_ledger_update),
     ("credit_ledger: DELETE is refused (append-only)", _p_ledger_delete),
@@ -208,6 +227,13 @@ MUST_REFUSE: list[tuple[str, Callable]] = [
     ("users: a negative failure count", lambda c, i: _p_user(c, failed=-1)),
     ("setup_tokens: a link that expires before it is made", _p_setup_backwards),
     ("setup_tokens: the same token hash twice", _p_setup_twice),
+    ("security_alarms: the same fingerprint twice (D21: one case, one alarm)",
+     _p_security_alarm_twice),
+    ("security_alarms: a severity the agent does not know", lambda c, i: _alarm(c, severity="high")),
+    ("security_alarms: closed without who and when", lambda c, i: _alarm(c, state="closed")),
+    ("security_alarms: open but carrying a decision",
+     lambda c, i: _alarm(c, at=NOW)),
+    ("service_windows: a window that ends when it starts", _p_window_backwards),
 ]
 
 
@@ -249,6 +275,7 @@ MUST_ALLOW: list[tuple[str, Callable]] = [
      lambda c, i: _p_user(c)),
     ("users: a marina manager with 2FA confirmed", lambda c, i: _p_user(
         c, role="marina_manager", secret="enc", confirmed=NOW)),
+    ("security_alarms: an open alarm, with no decision", lambda c, i: _alarm(c)),
 ]
 
 

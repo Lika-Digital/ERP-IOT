@@ -119,5 +119,9 @@ def test_no_cabinet_path_is_built_outside_the_contract_module():
             continue
         for i, line in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):
             if re.search(r"""["']/api/(ext|nfc)/""", line):
+                # D21 layer 2: the ERP's OWN decoy route mirrors the gateway's decoy
+                # path — an inbound path that no client ever calls on a cabinet
+                if f.name == "decoys.py" and '"/api/ext/admin/debug"' in line:
+                    continue
                 offenders.append(f"{f.relative_to(app)}:{i}")
     assert offenders == []

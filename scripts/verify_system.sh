@@ -234,6 +234,25 @@ else
 fi
 echo ""
 
+# ── 11. Security agent (D21, TC-ERP-AGT-05) ───────────────────────────────────
+# The RUNNING unit, not the file in the repo: someone may have edited it on the VPS.
+echo -e "${BOLD}[11] Security agent erp-agent.service (D21)${NC}"
+if command -v systemctl &>/dev/null && systemctl cat erp-agent.service &>/dev/null; then
+    if systemctl is-active --quiet erp-agent.service; then
+        pass "erp-agent.service is active"
+    else
+        fail "erp-agent.service is not active"
+    fi
+    AGT_SHOW="$(systemctl show erp-agent.service -p User -p PrivateNetwork -p IPAddressDeny -p RestrictAddressFamilies)"
+    grep -qx 'User=erp-agent' <<<"$AGT_SHOW" && pass "runs as erp-agent"         || fail "erp-agent.service does not run as erp-agent"
+    grep -qx 'PrivateNetwork=yes' <<<"$AGT_SHOW" && pass "PrivateNetwork=yes"         || fail "erp-agent.service has a network namespace (PrivateNetwork is not yes)"
+    grep -Eq '^IPAddressDeny=(0\.0\.0\.0/0 ::/0|::/0 0\.0\.0\.0/0)$' <<<"$AGT_SHOW"         && pass "IPAddressDeny=any" || fail "erp-agent.service may reach an IP (IPAddressDeny is not any)"
+    grep -qx 'RestrictAddressFamilies=AF_UNIX' <<<"$AGT_SHOW" && pass "RestrictAddressFamilies=AF_UNIX"         || fail "erp-agent.service may open sockets other than AF_UNIX"
+else
+    warn "systemd unit erp-agent.service not found - expected only on the VPS (spec §13.1)"
+fi
+echo ""
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 echo "──────────────────────────────────────────────────────"
 echo -e "  ${GREEN}Passed${NC}: ${PASS}  |  ${RED}Failed${NC}: ${FAIL}  |  ${YELLOW}Warnings${NC}: ${WARN}"

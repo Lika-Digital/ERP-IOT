@@ -12,7 +12,7 @@ from .middleware.security import SecurityMiddleware
 from .services.collector import CollectorThread, collector
 from .services.websocket_manager import ws_manager
 from .routers import (auth, marinas, dashboard, controls, energy, alarms, webhooks, pedestal_ext,
-                      cabinet_admin, users)
+                      cabinet_admin, users, security)
 from .routers.auth import _decode_token
 
 logging.basicConfig(
@@ -71,6 +71,8 @@ app.include_router(pedestal_ext.router)
 app.include_router(webhooks.router)
 app.include_router(cabinet_admin.router)
 app.include_router(users.router)
+app.include_router(security.router)
+app.include_router(security.decoy_router)   # layer 2: answers like a missing route
 
 
 # ── Health endpoint ───────────────────────────────────────────────────────────

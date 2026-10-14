@@ -25,7 +25,7 @@ from ..models.user import ROLES, User, UserMarinaAccess
 from ..schemas.auth import (BackupCodes, CodeRequest, EnrollDone, EnrollStart, LoginRequest,
                             MfaChallenge, SetupCheck, SetupCheckResponse, SetupRequest,
                             TokenResponse, UserMeResponse)
-from ..services import accounts
+from ..services import accounts, decoys
 from ..utils.time import utcnow
 
 log = logging.getLogger(__name__)
@@ -139,6 +139,8 @@ def login(body: LoginRequest, request: Request, db: Session = Depends(get_db)):
     if reason:
         accounts.audit(db, "login_failed", user=user, email=body.email, detail=reason, ip=ip)
         db.commit()
+        if user is None and decoys.is_decoy_account(body.email):
+            decoys.record(db, "account", body.email.strip().lower(), request)   # layer 2
         log.warning("[AUTH] Login refused: %s (%s)", body.email, reason)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=BAD_LOGIN)
 

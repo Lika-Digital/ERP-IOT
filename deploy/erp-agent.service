@@ -1,0 +1,64 @@
+# ERP-IOT security agent (D21, spec §13.1) — reads, never acts.
+#
+# The limits below are the point of the unit, not hardening on top of it:
+# a fully compromised agent — or a prompt injection in a log line — cannot open
+# a single connection (the kernel refuses), and can write nothing but an alarm
+# (the database role erp_agent refuses). TC-ERP-AGT-05 fails if any of the four
+# lines marked [AGT-05] is removed; scripts/verify_system.sh checks the RUNNING
+# unit on the VPS with `systemctl show`.
+#
+# Not installed by the repo. On the VPS (5b runbook, paths fixed there):
+#   useradd --system --no-create-home --shell /usr/sbin/nologin erp-agent
+#   pg_hba.conf:   local  erp_iot  erp_agent  peer map=erpagent
+#   pg_ident.conf: erpagent  erp-agent  erp_agent
+#   install -m 0644 deploy/erp-agent.service /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now erp-agent
+
+[Unit]
+Description=ERP-IOT security agent (read-only, D21)
+After=postgresql.service
+Requires=postgresql.service
+
+[Service]
+Type=simple
+# [AGT-05] its own system user, mapped by peer auth to the role erp_agent
+User=erp-agent
+Group=erp-agent
+WorkingDirectory=/opt/erp-iot/backend
+Environment=AGENT_DATABASE_URL=postgresql+psycopg2://erp_agent@/erp_iot?host=/var/run/postgresql
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/erp-iot/backend/.venv/bin/python -m app.agent --every 300
+Restart=on-failure
+RestartSec=30
+
+# [AGT-05] no network: its own empty network namespace ...
+PrivateNetwork=yes
+# [AGT-05] ... no IP at all, even if the namespace were shared ...
+IPAddressDeny=any
+# [AGT-05] ... and no socket family but Unix (the Postgres socket is a file)
+RestrictAddressFamilies=AF_UNIX
+
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

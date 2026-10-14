@@ -529,6 +529,8 @@ def test_every_growing_table_has_a_window_or_is_named_as_kept():
         "user_backup_codes",
         # tiny aggregate
         "consumption_monthly",
+        # D21: files an Admin imported on purpose; one row per agent rule
+        "admin_imports", "security_rule_settings",
     }
     managed = set(retention.windows()) | {"consumption_intervals"}
     tables = set(Base.metadata.tables)

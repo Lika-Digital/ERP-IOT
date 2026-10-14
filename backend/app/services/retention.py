@@ -3,7 +3,8 @@
 Every window is one number in app/config.py. What is not here is kept for good
 on purpose: sessions, credit_ledger, billing_records (accounting), the monthly
 consumption aggregate (tiny), outlet_meter_state and cabinet rows (one per
-outlet / cabinet, updated in place).
+outlet / cabinet, updated in place), admin_imports (files an Admin chose to
+import) and security_rule_settings (one row per rule).
 
 consumption_intervals are not just deleted: rows older than the window are
 first added into consumption_monthly, in the same transaction as their delete,
@@ -22,6 +23,7 @@ from ..config import settings
 from ..models.cache import AlarmLog, AuditLog, PedestalCache, SessionLog, SyncLog
 from ..models.metering import (CommandAudit, ConsumptionInterval, ConsumptionMonthly,
                                ReconciliationRun)
+from ..models.security import DecoyHit, SecurityAlarm, ServiceWindow
 from ..models.user import AuthAudit, SetupToken
 from ..utils.time import utcnow
 
@@ -46,6 +48,12 @@ def windows() -> dict:
         # is useless once expired and kept a while only to explain "my link failed"
         "auth_audit": (AuthAudit, AuthAudit.created_at, s.retention_auth_audit_days),
         "setup_tokens": (SetupToken, SetupToken.expires_at, s.retention_setup_tokens_days),
+        # D21 (spec §13.1): the agent's alarms and the decoys' touches are evidence;
+        # a service window is only needed to explain the door signals around it
+        "security_alarms": (SecurityAlarm, SecurityAlarm.created_at,
+                            s.retention_security_alarms_days),
+        "decoy_hits": (DecoyHit, DecoyHit.observed_at, s.retention_decoy_hits_days),
+        "service_windows": (ServiceWindow, ServiceWindow.to_at, s.retention_service_windows_days),
     }
 
 

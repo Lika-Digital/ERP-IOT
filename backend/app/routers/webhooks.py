@@ -35,7 +35,7 @@ from ..database import get_db
 from ..models.cabinet import Cabinet
 from ..models.marina import Marina
 from ..models.cache import AlarmLog, SessionLog, PedestalCache
-from ..services import session_sync
+from ..services import decoys, session_sync
 from ..services.websocket_manager import ws_manager
 from ..utils.encryption import decrypt_password
 from ..utils.time import utcnow
@@ -357,6 +357,9 @@ async def receive_cabinet_webhook(
     db: Session = Depends(get_db),
 ):
     body = await _capped_body(request)
+    decoy = decoys.decoy_key_name(x_api_key)
+    if decoy:                         # layer 2: recorded, then refused like any wrong key
+        decoys.record(db, "api_key", decoy, request)
     cab = _cabinet_authenticated(db, cabinet_id, x_api_key, x_webhook_signature, body)
     try:
         payload = json.loads(body)

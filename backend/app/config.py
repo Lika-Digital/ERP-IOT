@@ -55,6 +55,17 @@ class Settings(BaseSettings):
     retention_cache_days: int = 30             # cache rows nobody refreshed
     retention_auth_audit_days: int = 730       # sign-in evidence, like command_audit
     retention_setup_tokens_days: int = 30      # counted from the link's expiry
+    # D21 (spec §13.1): alarms and decoy touches are evidence, like command_audit
+    retention_security_alarms_days: int = 730
+    retention_decoy_hits_days: int = 730
+    retention_service_windows_days: int = 400  # counted from the window's end
+
+    # ── Decoys, layer 2 (spec §7.1, D13) — comma-separated; empty = that decoy is off ──
+    # Nobody legitimate uses these: a sign-in with a decoy e-mail, or a webhook
+    # carrying a decoy key, is recorded in decoy_hits and answered exactly like
+    # any other failure. The decoy endpoints are in app/services/decoys.py.
+    decoy_account_emails: str = ""
+    decoy_api_keys: str = ""
 
     # ── Webhook receiver ──────────────────────────────────────────────────────
     webhook_max_body_bytes: int = 65536

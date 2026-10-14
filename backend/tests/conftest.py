@@ -291,8 +291,9 @@ def _clear_cabinets(marina_id):
                                   OutletNfcTag)
     from app.models.cabinet import Cabinet, CabinetCapability, Outlet
     from app.models.cache import AlarmLog
-    from app.models.metering import (CommandAudit, ConsumptionInterval, ErpSession,
-                                     OutletMeterState, ReconciliationRun)
+    from app.models.metering import (CommandAudit, ConsumptionInterval, ConsumptionMonthly,
+                                     ErpSession, OutletMeterState, ReconciliationRun)
+    from app.models.security import ServiceWindow
 
     db = TestSession()
     try:
@@ -302,13 +303,16 @@ def _clear_cabinets(marina_id):
         # phase 4 rows hang off cabinets and outlets too
         db.query(ConsumptionInterval).filter(ConsumptionInterval.outlet_id.in_(out_ids)).delete()
         db.query(OutletMeterState).filter(OutletMeterState.outlet_id.in_(out_ids)).delete()
+        # the monthly aggregate is kept in production, but in tests an outlet id is
+        # reused after the delete below, and a stale month would land on the new outlet
+        db.query(ConsumptionMonthly).filter(ConsumptionMonthly.outlet_id.in_(out_ids)).delete()
         for model in (ErpSession, CommandAudit, ReconciliationRun, AlarmLog):
             db.query(model).filter(model.cabinet_id.in_(cab_ids)).delete()
         db.query(BerthOutlet).filter(BerthOutlet.berth_id.in_(berth_ids)).delete()
         db.query(Berth).filter(Berth.id.in_(berth_ids)).delete()
         db.query(OutletNfcTag).filter(OutletNfcTag.outlet_id.in_(out_ids)).delete()
         db.query(Outlet).filter(Outlet.id.in_(out_ids)).delete()
-        for model in (CabinetCapability, MappingComparison, BerthOutletCabinet):
+        for model in (CabinetCapability, MappingComparison, BerthOutletCabinet, ServiceWindow):
             db.query(model).filter(model.cabinet_id.in_(cab_ids)).delete()
         db.query(Cabinet).filter(Cabinet.id.in_(cab_ids)).delete()
         db.commit()

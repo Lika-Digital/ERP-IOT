@@ -17,7 +17,8 @@ what the gate's environment says, nothing else.
 
 Usage:  backend/.venv/Scripts/python.exe scripts/boot_check.py
 Env:    BOOT_DATABASE_URL  optional; default is a fresh SQLite file in a temp dir
-                           (CI passes a Postgres URL)
+                           (CI passes a Postgres URL; then the D21 role check,
+                           AGT-01/02, runs too: 16 checks instead of 15)
 """
 from __future__ import annotations
 
@@ -58,6 +59,10 @@ EXPECTED_CHECKS = [
     "collector: runs, and is the leader (PostgreSQL: advisory lock)",
     "POST /api/webhooks/cabinet/1 without the cabinet's key -> 401",
 ]
+
+# D21 (spec §13.1): the database role of the security agent. PostgreSQL only —
+# SQLite has no roles — so the boot check on PostgreSQL (CI) has one check more.
+AGT_CHECK = "D21: erp_agent - exact grants (AGT-01), every other write refused (AGT-02)"
 
 _passed: list[str] = []
 
@@ -134,6 +139,8 @@ def main() -> int:
     # a leftover temp file is not a boot failure.
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         db_url = os.environ.get("BOOT_DATABASE_URL") or f"sqlite:///{Path(tmp) / 'boot.db'}"
+        if db_url.startswith("postgresql"):
+            EXPECTED_CHECKS.append(AGT_CHECK)
 
         # ── 1. real migration on an empty database ───────────────────────────
         name = EXPECTED_CHECKS[0]
@@ -174,6 +181,20 @@ def main() -> int:
             fail(name, "\n         ".join(bad) or "no probes ran")
         ok(name)
         print(f"         {len(results)} probes, all held", flush=True)
+
+        # ── 1d. D21: the agent's role, read back from the catalog and tried ──
+        if AGT_CHECK in EXPECTED_CHECKS:
+            import agent_db_check
+            eng = create_engine(db_url)
+            try:
+                results = agent_db_check.run(eng)
+            finally:
+                eng.dispose()
+            bad = [f"{n}: {d}" for n, good, d in results if not good]
+            if bad or not results:
+                fail(AGT_CHECK, "\n         ".join(bad) or "no agent checks ran")
+            ok(AGT_CHECK)
+            print(f"         {len(results)} catalog and privilege checks, all held", flush=True)
 
         # ── 2. negative: no JWT_SECRET -> must not come up ───────────────────
         name = EXPECTED_CHECKS[3]
@@ -325,7 +346,8 @@ def main() -> int:
             log_f.close()
 
     summary()
-    return 0 if _passed == EXPECTED_CHECKS else 1
+    # every expected check passed exactly once (the D21 check runs 4th, listed last)
+    return 0 if sorted(_passed) == sorted(EXPECTED_CHECKS) else 1
 
 
 if __name__ == "__main__":
