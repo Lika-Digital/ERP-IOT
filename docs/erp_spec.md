@@ -2222,6 +2222,9 @@ završetak faze 5:
 
 ```
 1  OS, korisnik, SSH samo ključevi, nftables default-deny
+1a DNS: /etc/systemd/resolved.conf.d/dns.conf — DNS=1.1.1.1 9.9.9.9, FallbackDNS=8.8.8.8,
+   DNSSEC=no (slika plusvps.com dolazi s DNSSEC=yes, koji ruši SVE upite: missing-key);
+   provjera: `resolvectl query deb.debian.org` i `apt update` prolaze
 2  Tailscale + ACL po §7.0; provjeri: ormar → ERP SAMO :8081 webhook, ormar ↛ ormar,
    javno sučelje bez ijednog otvorenog ulaznog porta (nmap izvana), SSH samo preko Tailscalea
 3  PostgreSQL samo na Unix socketu (listen_addresses = ''), sistemski korisnik erp, peer auth;
