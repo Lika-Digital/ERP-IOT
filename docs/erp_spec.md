@@ -3,10 +3,11 @@
 Što se gradi, u kojem redoslijedu, i svaka odluka izrečena tako da ispravak
 košta jedan redak, a ne razgovor.
 
-    Verzija 12 — zamjenjuje v11 od 2026-10-14
-    Datum 2026-10-14
+    Verzija 13 — zamjenjuje v12 od 2026-10-14
+    Datum 2026-10-15
     Status faze 1–4 ZAVRŠENE i PRIHVAĆENE (§10.1–§10.4); korak 5a (D20) PRIHVAĆEN
-           2026-10-14, na `main` (§10.7); 5b čeka tvoju listu (§10.7); agenti D21/D22 dizajnirani (§13);
+           2026-10-14, na `main` (§10.7); faza 8 (D21) ZAVRŠENA na grani `faza/8-d21`,
+           čeka prihvaćanje (§10.8); 5b čeka tvoju listu (§10.7); agenti D21/D22 dizajnirani (§13);
            §1 je prazan
 
 Čita se uz `docs/inputs/odluke.md` **v2.5** (odluke, obvezujuće — v2.1 dodaje **D18**, v2.2 **D19**,
@@ -16,6 +17,16 @@ v2.3 ispravak mreže u **D13**, v2.4 **D20**, v2.5 **D21**, **D22** i redoslijed
 `docs/inputs/ormar_ui_v2_spec.txt` (specifikacija ormara — uzor forme i izvor rječnika stanja).
 
 **Sve u ovom dokumentu je ODLUČENO. §1 je prazan — nema otvorenih blokatora.**
+
+### Što se promijenilo u verziji 13
+
+| | |
+|---|---|
+| **Faza 8 (D21) izvedena** | na grani `faza/8-d21`, samo interni podaci, bez dodira s 5b; izvještaj s brojkama u **§10.8** |
+| **§13.1 izveden, tri preciziranja** | (1) `cabinets` i `marinas` agent čita **po stupcima**, bez šifriranih lozinki i ključeva; (2) `marinas(id, name, timezone)` je izvor — radno vrijeme je lokalno vrijeme marine; (3) nova tablica `security_rule_settings` (sjena / aktivno po pravilu) je izvor — bez nje agent ne bi znao koje je pravilo Admin uključio |
+| **AGT-01/02 na PostgreSQL-u u bootu** | `scripts/agent_db_check.py`; boot na PostgreSQL-u (CI) ima **16** provjera, na SQLite-u 15 |
+| **Sloj 2 na ERP-u** | mamci: dvije rute (`/api/ext/admin/debug`, `/api/admin/debug`), lažni račun i lažni API ključ iz konfiguracije; bilježe u `decoy_hits` |
+| **§11** | O46–O50 novi |
 
 ### Što se promijenilo u verziji 12
 
@@ -2326,7 +2337,7 @@ završava zelenim gateom i ažuriranom ovom specifikacijom (verzija +1, što se 
 | **5e** | **Tjedan stvarnog rada**, uz fazu 6 lokalno protiv simulatora | izvještaj: stvarni rast prije/poslije 7 dana (O35), greške u `sync_log`, usporedba sa simulacijom |
 | **6** | **Zauzeće vezova + 2D SVG** — četiri signala iz §3.1, tablica stanja §3.2, statični SVG s `svg_id` po vezu | **Krk na karti, četiri signala, sivo za tiho** |
 | **7** | **Poslovna logika i NFC tok** — §5.1, §5.4, tarifa (§4.5), `billing_records`, izvoz za blagajnu, knjiga kredita u iznosima | **TC-ERP-ACC-01..06 prolaze na pravom ormaru**; potrošnja se slaže na obje strane |
-| **8** | **Sigurnosni agent (D21)** — mamci, domenske detekcije, signali vrata i novog uređaja, servisni prozori, zaslon §6.5; **samo čita, jedini upis je alarm** (§13.1). ~~CVE/KEV s weba~~ otpada (D21) | prvi stvarni nalazi na VPS-u i Krku; testovi ograničenja AGT-01..05 zeleni |
+| **8** | **Sigurnosni agent (D21)** — mamci, domenske detekcije, signali vrata i novog uređaja, servisni prozori, zaslon §6.5; **samo čita, jedini upis je alarm** (§13.1). ~~CVE/KEV s weba~~ otpada (D21) | prvi stvarni nalazi na VPS-u i Krku; testovi ograničenja AGT-01..05 zeleni — **izvedeno v13 (§10.8): AGT-01..06 zeleni; „prvi stvarni nalazi" čekaju VPS** |
 | **9** | ~~Energetski agent~~ → **Provjera slike s ormara (D22)** — §13.2; traži R17, R18 i veći VPS | zahtjev za pregled od događaja ormara do rezultata u 2D, uz Adminovo odobrenje |
 
 **Agenti (8 i 9) dolaze nakon 5e** — kad ERP stabilno radi s pravim ormarom. Izvedba D21 **smije
@@ -2490,6 +2501,46 @@ VPS-a se preklapaju); 5c odmah nakon 5b ako je domena spremna; 5d 2–3 dana; 5e
 (ERP-ove sesije nastaju tek NFC tokom u fazi 7, pa usklađivač vidi samo „tuđe" sesije, D19);
 faza 6 lokalno protiv simulatora za vrijeme tog tjedna; faza 7 poslije njega. Prijedlog v9
 „faza 5 se piše dok teče 4.5 c" je bespredmetan — 4.5 je obrisana, a 5a kreće odmah.
+
+### §10.8 · Faza 8 (D21) — izvještaj (2026-10-15)
+
+**Grana `faza/8-d21`**, od `3736f89`. Samo interni podaci ERP-a; ništa od 5b (VPS, nginx,
+nftables, Tailscale) ni ormara nije dirano.
+
+**Kriterij faze — testovi ograničenja AGT-01..05 zeleni: DA** (i AGT-06). „Prvi stvarni nalazi
+na VPS-u i Krku" — tek kad agent radi na VPS-u (5b/5d).
+
+| Mjera | Kraj 5a | Kraj faze 8 | Kako izmjereno |
+|---|---|---|---|
+| Backend testova | 377 | **442**, 0 preskočenih | `scripts/pytest_counts.py` |
+| Tablica | 31 | **36** (+ `security_alarms`, `service_windows`, `decoy_hits`, `admin_imports`, `security_rule_settings`) | modeli |
+| Migracija | 010 | **011** — tablice i, na PostgreSQL-u, uloga `erp_agent` s pravima | `alembic check` u bootu |
+| Sondi u bazi | 29 | **35** (27 odbijanja, 8 dopuštenja) | `scripts/schema_probes.py` |
+| Boot provjera | 15 | **16 na PostgreSQL-u** (+ AGT-01/02), 15 na SQLite-u | `scripts/boot_check.py` |
+| AGT-01/02 | — | **12/12**: prava točno = `sources.py` (17 na relacijama, 13 po stupcima), ništa PUBLIC-u, bez zadanih prava, bez `SECURITY DEFINER`; **193** pokušaja upisa i čitanja tajni kao `erp_agent` → svaki `42501`; `INSERT … ON CONFLICT DO NOTHING` u alarme prolazi | `scripts/agent_db_check.py`, lokalno na zasebnom PostgreSQL 17 klasteru, kao ne-superuser s CREATEROLE i kao superuser |
+| Provjera u pregledniku | 14 | **15** — dodir mamca → prolaz agenta → alarm na zaslonu Sigurnost, HTML iz User-Agenta prikazan kao tekst, Admin potvrđuje uz bilješku | `scripts/browser_check.py` |
+| Ruta zaštićenih / ukupno | 44 / 53 | **53 / 66** — 9 ruta `/api/security` (samo Admin), 4 javna mamca | TC-ERP-AUTH-01 |
+| Bundle | 662,71 kB | **669,76 kB** (+7 kB: zaslon Sigurnost) | `vite build` |
+
+**Mutacije (20):** svih 20 uhvaćeno, jedna tek nakon pooštrenja testa. Uhvaćeno odmah:
+`import socket` u agentu; pravilo u sjeni otvara alarm; otisak ovisi o prolazu (dvostruki alarm);
+radno vrijeme od 05 h; vrata bez provjere prozora; isti e-mail različitim slovima broji se kao
+više računa; nova adresa bez povijesti; mamac odgovara 403; mamac vidljiv u OpenAPI-ju; pravi
+ključ upisan u `decoy_hits`; zaslon otvoren Manageru; odluka bez audita; zatvoreni alarm ponovo
+otvoren; otkazan prozor koji je već počeo; unit bez `PrivateNetwork`; agent pada na `DATABASE_URL`
+backenda; `users` u `sources.py`; dodatni `GRANT UPDATE` i cijela tablica `cabinets` u migraciji
+(AGT-01/02 na PostgreSQL-u). **Promaknula:** tekst iz loga u naslovu alarma. Test je uspoređivao
+točan niz, a naslov ga je imao malim slovima. Sada traži da tekst nije u naslovu ni u
+obrazloženju, bez obzira na veličinu slova.
+
+**Usput:** `test_retention_deletes_by_window_and_rolls_intervals_into_months` pada između ~22 i
+24 h UTC 14. 10., jer tri satna intervala na „sada − 440 dana" prelaze u novi mjesec. Nije kod
+faze 8. Ispravak testa preuzet je s `faza/5b-vps` (`46c6034`, bez speca) kao zaseban commit
+`faza8(0)`.
+
+**Što faza 8 nije mogla:** pokrenuti agenta na VPS-u (unit, sistemski korisnik, `pg_hba`/`pg_ident`
+— artefakt je `deploy/erp-agent.service`, instalira se u 5b); pravila bez izvora (O46); lažni
+ormar u Tailscaleu (O49).
 
 ### §10.7 · Korak 5a (D20) — izvještaj (2026-10-14)
 
@@ -2719,6 +2770,11 @@ Nađeno usput. Nije u izvedbi gore; tvoje je da odlučiš prioritet.
 | O38 | ~~uloge `admin`/`operator` iz §5.3 ne postoje~~ — **zatvoreno odlukom D20** (§5.3: Admin i Marina Manager); ~~razlog naredbe u `window.prompt`~~ — **5a: pravi dijalog** (`ReasonDialog`), i za reset 2FA | zatvoreno |
 | O43 | Ograničenje pokušaja prijave **po IP-u** — u 5a je samo po računu (5 → 15 min) | nginx `limit_req` + CrowdSec, 5b |
 | O45 | ~~Pokretanje backenda na PostgreSQL bazi **prije** `alembic upgrade head` rušilo se: `create_all` je okidač knjige kredita slao kroz `DDL()`, koji tekst formatira s `%`, pa je plpgsql-ov `% refused` postao rječnik i SQL je pukao~~ — **nađeno pri lokalnom testu 5a, ispravljeno 2026-10-14:** `%` se u `DDL()` escapea (`backend/app/models/billing.py`); migracija `007` je bila ispravna jer `op.execute` ne formatira. Test: `create_all` šalje bazi isti tekst kao migracija; provjereno i na pravom PostgreSQL-u (prazna shema, transakcija vraćena). CI ga nije vidio jer uvijek migrira prije pokretanja | zatvoreno |
+| O46 | Pravila D21 **bez izvora u ERP-u**: serija nepoznatih NFC tagova (ERP ne prima neuspjela očitanja), Smart Mode izvan radnog vremena (ERP ne bilježi promjenu, samo stanje), vrata + novi uređaj u LAN-u (ormar ne šalje DHCP zakupe, D16) | zahtjev ormaru kad se odluči; do tada se pravila **ne pišu** |
+| O47 | Uloga `erp_agent` može stvoriti **privremenu** tablicu (PostgreSQL daje `TEMPORARY` PUBLIC-u na bazi). Nestaje sa sesijom i nije upis u podatke ERP-a | ako želiš i to: `REVOKE TEMPORARY ON DATABASE erp_iot FROM PUBLIC` u runbooku 5b, uz `GRANT` vlasniku aplikacije |
+| O48 | Radno vrijeme za `socket_cmd_odd_hour` je **06–22 h, isto za sve marine**, po `marinas.timezone`. Windows bez paketa `tzdata` ne zna zone, pa računa u UTC-u i to piše u dokaz. Linux (VPS, CI) ih zna | po marini kad zatreba; `tzdata` nije dodan kao ovisnost |
+| O49 | Mamci: `DECOY_ACCOUNT_EMAILS` i `DECOY_API_KEYS` **prazni su po defaultu**, vrijednosti se upisuju na VPS-u. Lažni ormar u Tailscale mreži je infrastruktura, ne kod | 5b |
+| O50 | Pragovi pravila su u kodu (`rules.py`), isti za sve marine; novo pravilo je kod s testom, kako D13 traži | namjerno |
 | O44 | `SecurityMiddleware` bilježi 403 kao „Unauthorised access" — s D20 je 403 i običan Manager na Admin ruti | šum u logu; rješava se s O2 (CrowdSec) |
 | O39 | Koja verzija ormara vrti na Krku — R14 b/c i loopback backend objavljeni su na `main` `eac7aa2`, Krk nepoznat | LIVE-01 (§10.5 b1, b7) |
 | O40 | Faza 4 tjedan stvarnog rada ne mjeri naplatu (ERP-ove sesije nastaju tek u fazi 7) | §10.6, prijedlog 2 |
@@ -2865,6 +2921,29 @@ adrese. Pravila su kod s testom; novo pravilo radi prvo **u sjeni** (bilježi u 
 alarm) dok ga Admin ne uključi.
 
 > **Odlučeno** · **Prodaje se kao značajka platforme**, ne kao samostalni IDS (D15, CRA klasa).
+
+**Izvedeno u fazi 8 (v13)** — kod: `backend/app/agent/` (proces), `backend/app/models/security.py`,
+migracija `011`, `backend/app/routers/security.py` (zaslon i mamci), `deploy/erp-agent.service`.
+
+| Pravilo | Ozbiljnost | Izvor | Prag (u kodu, `rules.py`) |
+|---|---|---|---|
+| `decoy_touch` | critical | `decoy_hits` | svaki dodir; jedan alarm po (mamac, adresa, dan) |
+| `login_spray` | warning | `auth_audit` | ≥ 3 različita e-maila s iste adrese u 15 min |
+| `socket_cmd_odd_hour` | warning | `command_audit` + `marinas.timezone` | operaterova naredba utičnici/ventilu izvan 06–22 h lokalno |
+| `socket_cmd_new_ip` | warning | `command_audit` | adresa koju račun nije koristio 30 dana (samo ako ima povijest) |
+| `account_new_endpoint` | info | `command_audit` | endpoint koji račun nije zvao 30 dana (samo ako ima povijest) |
+| `door_no_window` | warning | `alarm_log` (`marina_door`), `pedestal_cache` (`status_ext.door_state`) | vrata bez servisnog prozora |
+
+Svako pravilo počinje **u sjeni** (samo log); alarme otvara tek kad ga Admin uključi na zaslonu
+Sigurnost. Pravila bez izvora u ERP-u nisu napisana kao da rade — O46.
+
+> **Odlučeno (v13)** · `cabinets` i `marinas` agent čita **po stupcima**: bez `service_pw_enc`,
+> `erp_api_key_enc`, `webhook_*_enc`, `base_url`, `service_email` i starog servisnog računa marine.
+>
+> **Zašto** · Šifrirano nije isto što i nedostupno: ključ je na istom stroju (D13 „poznate rupe").
+> Agentu za pravila treba samo ime ormara i zona marine.
+>
+> **Ako griješim** · Jedan `GRANT` po stupcu više; AGT-01 tada traži i taj redak u `sources.py`.
 
 ### §13.2 · D22 — provjera slike s ormara
 
