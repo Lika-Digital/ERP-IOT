@@ -216,6 +216,25 @@ def test_credit_ledger_rows_are_each_checkable(db, marina_id):
         prev = Decimal(str(row.balance_after))
 
 
+def test_create_all_emits_the_ledger_guard_verbatim():
+    """create_all on PostgreSQL ran the guard through DDL's % formatting and
+    crashed on an unmigrated database (plpgsql's `% refused` became a dict).
+    The SQL create_all emits must be exactly what the migration's op.execute
+    (a text() clause) sends to the driver."""
+    from sqlalchemy import text
+    from sqlalchemy.dialects import postgresql
+    from app.models.billing import (
+        CREDIT_LEDGER_GUARD_PG, CREDIT_LEDGER_GUARD_SQLITE, CreditLedger,
+    )
+    pg = postgresql.dialect()
+    table = CreditLedger.__table__
+    hooks = [fn for fn in table.dispatch.after_create if hasattr(fn, "statement")]
+    emitted = [str(h.against(table).compile(dialect=pg)) for h in hooks]
+    migration = [str(text(s).compile(dialect=pg))
+                 for s in CREDIT_LEDGER_GUARD_PG + CREDIT_LEDGER_GUARD_SQLITE]
+    assert emitted == migration
+
+
 @pytest.mark.parametrize("kw,msg", [
     (dict(delta="5", reason="topup", created_by=""), "created_by"),
     (dict(delta="-5", reason="topup", created_by="r"), "positive"),

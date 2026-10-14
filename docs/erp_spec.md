@@ -3,10 +3,10 @@
 Što se gradi, u kojem redoslijedu, i svaka odluka izrečena tako da ispravak
 košta jedan redak, a ne razgovor.
 
-    Verzija 11 — zamjenjuje v10 od 2026-10-13
+    Verzija 12 — zamjenjuje v11 od 2026-10-14
     Datum 2026-10-14
-    Status faze 1–4 ZAVRŠENE i PRIHVAĆENE (§10.1–§10.4); korak 5a (D20) ZAVRŠEN, čeka
-           prihvaćanje (§10.7); 5b čeka tvoju listu (§10.7); agenti D21/D22 dizajnirani (§13);
+    Status faze 1–4 ZAVRŠENE i PRIHVAĆENE (§10.1–§10.4); korak 5a (D20) PRIHVAĆEN
+           2026-10-14, na `main` (§10.7); 5b čeka tvoju listu (§10.7); agenti D21/D22 dizajnirani (§13);
            §1 je prazan
 
 Čita se uz `docs/inputs/odluke.md` **v2.5** (odluke, obvezujuće — v2.1 dodaje **D18**, v2.2 **D19**,
@@ -16,6 +16,13 @@ v2.3 ispravak mreže u **D13**, v2.4 **D20**, v2.5 **D21**, **D22** i redoslijed
 `docs/inputs/ormar_ui_v2_spec.txt` (specifikacija ormara — uzor forme i izvor rječnika stanja).
 
 **Sve u ovom dokumentu je ODLUČENO. §1 je prazan — nema otvorenih blokatora.**
+
+### Što se promijenilo u verziji 12
+
+| | |
+|---|---|
+| **5a prihvaćen** | lokalni test prijave i 2FA (koraci 1–8) prošao 2026-10-14; `faza/5a-d20` na `main` |
+| **O45 nađen i zatvoren** | backend se rušio pri pokretanju na nemigriranoj PostgreSQL bazi (`create_all` i `%` u okidaču knjige kredita) |
 
 ### Što se promijenilo u verziji 11
 
@@ -2711,6 +2718,7 @@ Nađeno usput. Nije u izvedbi gore; tvoje je da odlučiš prioritet.
 | O37 | Stari `POST /api/webhooks/pedestal/{marina}` (HMAC po marini) ostaje uz novi po ormaru, sada zatvoren bez tajne | obrisati kad Krk šalje na `/api/webhooks/cabinet/{id}` |
 | O38 | ~~uloge `admin`/`operator` iz §5.3 ne postoje~~ — **zatvoreno odlukom D20** (§5.3: Admin i Marina Manager); ~~razlog naredbe u `window.prompt`~~ — **5a: pravi dijalog** (`ReasonDialog`), i za reset 2FA | zatvoreno |
 | O43 | Ograničenje pokušaja prijave **po IP-u** — u 5a je samo po računu (5 → 15 min) | nginx `limit_req` + CrowdSec, 5b |
+| O45 | ~~Pokretanje backenda na PostgreSQL bazi **prije** `alembic upgrade head` rušilo se: `create_all` je okidač knjige kredita slao kroz `DDL()`, koji tekst formatira s `%`, pa je plpgsql-ov `% refused` postao rječnik i SQL je pukao~~ — **nađeno pri lokalnom testu 5a, ispravljeno 2026-10-14:** `%` se u `DDL()` escapea (`backend/app/models/billing.py`); migracija `007` je bila ispravna jer `op.execute` ne formatira. Test: `create_all` šalje bazi isti tekst kao migracija; provjereno i na pravom PostgreSQL-u (prazna shema, transakcija vraćena). CI ga nije vidio jer uvijek migrira prije pokretanja | zatvoreno |
 | O44 | `SecurityMiddleware` bilježi 403 kao „Unauthorised access" — s D20 je 403 i običan Manager na Admin ruti | šum u logu; rješava se s O2 (CrowdSec) |
 | O39 | Koja verzija ormara vrti na Krku — R14 b/c i loopback backend objavljeni su na `main` `eac7aa2`, Krk nepoznat | LIVE-01 (§10.5 b1, b7) |
 | O40 | Faza 4 tjedan stvarnog rada ne mjeri naplatu (ERP-ove sesije nastaju tek u fazi 7) | §10.6, prijedlog 2 |

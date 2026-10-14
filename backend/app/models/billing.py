@@ -86,12 +86,14 @@ BEGIN SELECT RAISE(ABORT, 'credit_ledger is append-only (spec 4.5): UPDATE refus
     """CREATE TRIGGER credit_ledger_no_delete BEFORE DELETE ON credit_ledger
 BEGIN SELECT RAISE(ABORT, 'credit_ledger is append-only (spec 4.5): DELETE refused'); END""",
 ]
+# DDL() formats its text with %, so plpgsql's own `%` is escaped here; the
+# migration runs the same text through op.execute, which does not format.
 for _stmt in CREDIT_LEDGER_GUARD_PG:
     event.listen(CreditLedger.__table__, "after_create",
-                 DDL(_stmt).execute_if(dialect="postgresql"))
+                 DDL(_stmt.replace("%", "%%")).execute_if(dialect="postgresql"))
 for _stmt in CREDIT_LEDGER_GUARD_SQLITE:
     event.listen(CreditLedger.__table__, "after_create",
-                 DDL(_stmt).execute_if(dialect="sqlite"))
+                 DDL(_stmt.replace("%", "%%")).execute_if(dialect="sqlite"))
 
 
 class Tariff(Base):
