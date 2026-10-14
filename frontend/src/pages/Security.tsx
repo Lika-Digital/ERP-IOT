@@ -12,17 +12,11 @@ import {
   type SecurityAlarm,
   type SecurityRule,
   type ServiceWindow,
-  type Severity,
 } from '../api/security'
 import { listMarinas } from '../api/marinas'
 import { detailOf } from '../api/auth'
 import { askReason } from '../components/ui/ReasonDialog'
-
-const SEVERITY_BADGE: Record<Severity, string> = {
-  critical: 'badge-red',
-  warning: 'badge-yellow',
-  info: 'badge-gray',
-}
+import Status, { SEVERITY, ALARM_STATE, RULE_MODE } from '../components/ui/Status'
 
 const utc = (s: string | null) => (s ? new Date(s + 'Z').toLocaleString() : '—')
 
@@ -31,11 +25,11 @@ function EvidenceList({ alarm }: { alarm: SecurityAlarm }) {
   return (
     <ul className="mt-2 space-y-1 text-xs" data-evidence>
       {alarm.evidence.map((e, i) => (
-        <li key={i} className="p-2 bg-gray-50 border rounded">
-          <div className="text-gray-500">
+        <li key={i} className="p-3 bg-surface-2 border border-line rounded-control">
+          <div className="text-fg-muted mb-1">
             {e.source} · rows {e.row_ids.join(', ')}{e.observed_at ? ` · ${utc(e.observed_at)}` : ''}
           </div>
-          <code className="block whitespace-pre-wrap break-all">{JSON.stringify(e.fields, null, 2)}</code>
+          <code className="block whitespace-pre-wrap break-all font-mono text-fg">{JSON.stringify(e.fields, null, 2)}</code>
         </li>
       ))}
     </ul>
@@ -98,101 +92,115 @@ export default function Security() {
   const shown = alarms.filter((a) => showClosed || a.state !== 'closed')
 
   return (
-    <div className="p-6 space-y-6" data-page="security">
-      <h1 className="text-2xl font-bold text-gray-900">Security</h1>
-      <p className="text-sm text-gray-500">
-        The security agent only reads and opens alarms with evidence. It never acts: every step is yours.
-      </p>
+    <div className="page space-y-6" data-page="security">
+      <div>
+        <h1 className="page-title">Security</h1>
+        <p className="page-lead">
+          The security agent only reads and opens alarms with evidence. It never acts: every step is yours.
+        </p>
+      </div>
 
-      {error && <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700" data-error>{error}</div>}
+      {error && <div className="notice-danger" role="alert" data-error>{error}</div>}
 
-      <section className="card space-y-3" data-alarms>
-        <div className="flex items-center justify-between">
-          <h2 className="font-semibold text-gray-900">Alarms</h2>
-          <label className="text-sm flex items-center gap-1">
-            <input type="checkbox" checked={showClosed} onChange={() => setShowClosed(!showClosed)} />
+      <section className="card space-y-4" data-alarms>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-lg font-bold tracking-tight">Alarms</h2>
+          <label className="text-sm text-fg-muted flex items-center gap-2">
+            <input type="checkbox" className="accent-current" checked={showClosed} onChange={() => setShowClosed(!showClosed)} />
             show closed
           </label>
         </div>
-        {shown.length === 0 && <p className="text-sm text-gray-500" data-no-alarms>No alarms.</p>}
-        {shown.map((a) => (
-          <div key={a.id} className="border-t pt-3" data-alarm={a.rule_id}>
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <span className={SEVERITY_BADGE[a.severity]}>{a.severity}</span>{' '}
-                <span className="font-medium">{a.title}</span>
-                <div className="text-xs text-gray-500">{utc(a.created_at)} · {a.rule_id} · {a.state}</div>
-                <p className="text-sm text-gray-700 mt-1">{a.why}</p>
-                {a.decision_note && <p className="text-xs text-gray-500 mt-1">Note: {a.decision_note}</p>}
+        {shown.length === 0 && <p className="text-sm text-fg-muted" data-no-alarms>No alarms.</p>}
+        {shown.map((a) => {
+          const sev = SEVERITY[a.severity] ?? SEVERITY.info
+          const st = ALARM_STATE[a.state] ?? ALARM_STATE.open
+          return (
+            <article key={a.id} className="border-t border-line pt-4" data-alarm={a.rule_id}>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Status tone={sev.tone} icon={sev.icon} word={sev.word} />
+                    <Status tone={st.tone} icon={st.icon} word={st.word} />
+                  </div>
+                  <h3 className="mt-2 font-semibold">{a.title}</h3>
+                  <p className="text-xs text-fg-muted">{utc(a.created_at)} · <code>{a.rule_id}</code></p>
+                  <p className="text-sm mt-1">{a.why}</p>
+                  {a.decision_note && <p className="text-xs text-fg-muted mt-1">Note: {a.decision_note}</p>}
+                </div>
+                <div className="flex gap-2">
+                  {a.state === 'open' && (
+                    <button className="btn-primary btn-sm" onClick={() => decide(a, 'acknowledged')}>Acknowledge</button>
+                  )}
+                  {a.state !== 'closed' && (
+                    <button className="btn-secondary btn-sm" onClick={() => decide(a, 'closed')}>Close</button>
+                  )}
+                </div>
               </div>
-              <div className="space-x-2 whitespace-nowrap">
-                {a.state === 'open' && (
-                  <button className="btn-secondary py-1 text-xs" onClick={() => decide(a, 'acknowledged')}>Acknowledge</button>
-                )}
-                {a.state !== 'closed' && (
-                  <button className="btn-secondary py-1 text-xs" onClick={() => decide(a, 'closed')}>Close</button>
-                )}
-              </div>
-            </div>
-            <EvidenceList alarm={a} />
-          </div>
-        ))}
+              <EvidenceList alarm={a} />
+            </article>
+          )
+        })}
       </section>
 
-      <section className="card space-y-3" data-service-windows>
-        <h2 className="font-semibold text-gray-900">Service windows</h2>
-        <p className="text-xs text-gray-500">Without an announced window the door signal cannot be used.</p>
-        <form onSubmit={announce} className="grid sm:grid-cols-5 gap-2" data-announce>
-          <select className="input" required value={form.cabinet_id}
+      <section className="card space-y-4" data-service-windows>
+        <div>
+          <h2 className="text-lg font-bold tracking-tight">Service windows</h2>
+          <p className="text-xs text-fg-muted">Without an announced window the door signal cannot be used.</p>
+        </div>
+        <form onSubmit={announce} className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5" data-announce>
+          <select className="input" required value={form.cabinet_id} aria-label="cabinet"
             onChange={(e) => setForm({ ...form, cabinet_id: Number(e.target.value) })}>
             <option value={0} disabled>cabinet</option>
             {cabinets.map((c) => <option key={c.id} value={c.id}>{c.display_id}</option>)}
           </select>
-          <input className="input" type="datetime-local" required value={form.from}
+          <input className="input" type="datetime-local" required value={form.from} aria-label="from"
             onChange={(e) => setForm({ ...form, from: e.target.value })} />
-          <input className="input" type="datetime-local" required value={form.to}
+          <input className="input" type="datetime-local" required value={form.to} aria-label="to"
             onChange={(e) => setForm({ ...form, to: e.target.value })} />
-          <input className="input" placeholder="who comes" required value={form.announced_by}
+          <input className="input" placeholder="who comes" required value={form.announced_by} aria-label="who comes"
             onChange={(e) => setForm({ ...form, announced_by: e.target.value })} />
           <button className="btn-primary" type="submit" disabled={!form.cabinet_id}>Announce</button>
         </form>
-        <table className="w-full text-sm">
-          <tbody>
-            {windows.map((w) => (
-              <tr key={w.id} className="border-t" data-window={w.id}>
-                <td className="py-2">{w.display_id}</td>
-                <td>{utc(w.from_at)} – {utc(w.to_at)}</td>
-                <td>{w.announced_by}</td>
-                <td className="text-right">
-                  <button className="btn-secondary py-1 text-xs" onClick={() => act(() => cancelWindow(w.id))}>Cancel</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <ul className="divide-y divide-line">
+          {windows.map((w) => (
+            <li key={w.id} className="py-3 flex flex-wrap items-center justify-between gap-2 text-sm" data-window={w.id}>
+              <div className="min-w-0">
+                <p className="font-mono font-semibold">{w.display_id}</p>
+                <p className="text-fg-muted">{utc(w.from_at)} – {utc(w.to_at)} · {w.announced_by}</p>
+              </div>
+              <button className="btn-secondary btn-sm" onClick={() => act(() => cancelWindow(w.id))}>Cancel</button>
+            </li>
+          ))}
+        </ul>
       </section>
 
-      <section className="card space-y-2" data-rules>
-        <h2 className="font-semibold text-gray-900">Rules</h2>
-        <p className="text-xs text-gray-500">A rule in the shadow only logs what it would open. It opens alarms once you switch it on.</p>
-        <table className="w-full text-sm">
-          <tbody>
-            {rules.map((r) => (
-              <tr key={r.rule_id} className="border-t" data-rule={r.rule_id}>
-                <td className="py-2"><code>{r.rule_id}</code></td>
-                <td><span className={SEVERITY_BADGE[r.severity]}>{r.severity}</span></td>
-                <td className="text-gray-700">{r.describe}</td>
-                <td>{r.mode === 'active' ? <span className="badge-green">active</span> : <span className="badge-gray">shadow</span>}</td>
-                <td className="text-right">
-                  <button className="btn-secondary py-1 text-xs" data-toggle-rule={r.rule_id}
+      <section className="card space-y-4" data-rules>
+        <div>
+          <h2 className="text-lg font-bold tracking-tight">Rules</h2>
+          <p className="text-xs text-fg-muted">A rule in the shadow only logs what it would open. It opens alarms once you switch it on.</p>
+        </div>
+        <ul className="divide-y divide-line">
+          {rules.map((r) => {
+            const sev = SEVERITY[r.severity] ?? SEVERITY.info
+            const mode = RULE_MODE[r.mode] ?? RULE_MODE.shadow
+            return (
+              <li key={r.rule_id} className="py-3 flex flex-wrap items-center gap-x-4 gap-y-2" data-rule={r.rule_id}>
+                <div className="min-w-0 flex-1 basis-64">
+                  <code className="text-sm font-semibold">{r.rule_id}</code>
+                  <p className="text-sm text-fg-muted">{r.describe}</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Status tone={sev.tone} icon={sev.icon} word={sev.word} />
+                  <Status tone={mode.tone} icon={mode.icon} word={mode.word} />
+                  <button className="btn-secondary btn-sm" data-toggle-rule={r.rule_id}
                     onClick={() => act(() => setRuleMode(r.rule_id, r.mode === 'active' ? 'shadow' : 'active'))}>
                     {r.mode === 'active' ? 'Back to shadow' : 'Switch on'}
                   </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                </div>
+              </li>
+            )
+          })}
+        </ul>
       </section>
     </div>
   )

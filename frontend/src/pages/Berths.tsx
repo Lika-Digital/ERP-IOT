@@ -4,17 +4,17 @@ import { getBerths, outletCommand, BerthView, BerthsResponse, Outlet, BerthColou
 import { askReason, NO_REASON } from '../api/controls'
 import { cabinetSentence } from '../api'
 import StaleDataBanner from '../components/ui/StaleDataBanner'
+import Status, { BERTH_STATUS } from '../components/ui/Status'
 import { useWebSocket } from '../hooks/useWebSocket'
 
-// Colour key from the server -> CSS. This is a lookup, not a decision: the
-// server already decided the colour (spec §3.2).
-const COLOUR_CLASS: Record<BerthColour, string> = {
-  grey: 'border-gray-300 bg-gray-100',
-  red: 'border-red-300 bg-red-50',
-  orange: 'border-orange-300 bg-orange-50',
-  yellow: 'border-yellow-300 bg-yellow-50',
-  blue: 'border-blue-300 bg-blue-50',
-  green: 'border-green-300 bg-green-50',
+// berth_colour from the server -> tone of the same name (a lookup, spec §3.2)
+const STRIPE: Record<BerthColour, string> = {
+  grey: 'border-l-st-grey-line',
+  red: 'border-l-st-red-line',
+  orange: 'border-l-st-orange-line',
+  yellow: 'border-l-st-yellow-line',
+  blue: 'border-l-st-blue-line',
+  green: 'border-l-st-green-line',
 }
 
 function fmt(v: number | null | undefined, digits = 1): string {
@@ -34,30 +34,32 @@ function OutletRow({
   onCommand: (outlet: Outlet, action: 'activate' | 'stop') => void
 }) {
   return (
-    <li className="flex items-center justify-between gap-2 text-sm" data-outlet={outlet.name}>
-      <div>
-        <span className="font-mono font-semibold">{outlet.name}</span>
+    <li className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 py-2 text-sm border-t border-line first:border-t-0"
+      data-outlet={outlet.name}>
+      <div className="min-w-0">
+        <span className="inline-flex items-center justify-center min-w-[2.25rem] px-1.5 py-0.5 rounded bg-surface-2 font-mono text-xs font-bold">
+          {outlet.name}
+        </span>
         {outlet.medium === 'electricity' ? (
-          <span className="ml-2 text-gray-600">
-            {outlet.phases === 3 ? '3~' : '1~'} {fmt(outlet.power_kw, 2)} kW ·{' '}
+          <span className="ml-2 text-fg-muted tabular-nums">
+            {outlet.phases === 3 ? '3~' : '1~'} <span className="text-fg font-semibold">{fmt(outlet.power_kw, 2)} kW</span> ·{' '}
             {(outlet.current_amps ?? []).map((a) => fmt(a)).join(' / ')} A
           </span>
         ) : (
-          <span className="ml-2 text-gray-600">voda</span>
+          <span className="ml-2 text-fg-muted">voda</span>
         )}
         {outlet.shared_with_berths && outlet.shared_with_berths.length > 0 && (
-          <span className="ml-2 text-xs text-gray-500">
-            (dijeli {outlet.name} s vezom{' '}
-            {outlet.shared_with_berths.map((b) => berths.get(b) ?? b).join(', ')})
+          <span className="block mt-1 text-xs text-fg-muted">
+            dijeli {outlet.name} s vezom {outlet.shared_with_berths.map((b) => berths.get(b) ?? b).join(', ')}
           </span>
         )}
       </div>
       {outlet.controls && (
-        <div className="flex gap-1">
+        <div className="flex gap-2">
           {outlet.controls.map((action) => (
             <button
               key={action}
-              className={action === 'activate' ? 'btn-primary py-1 text-xs' : 'btn-secondary py-1 text-xs'}
+              className={action === 'activate' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'}
               disabled={busy}
               onClick={() => onCommand(outlet, action)}
               data-control={`${outlet.name}:${action}`}
@@ -115,7 +117,7 @@ export default function Berths() {
   if (loading && !view) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-600" />
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-fg" />
       </div>
     )
   }
@@ -124,11 +126,11 @@ export default function Berths() {
   const names = new Map(berths.map((b) => [b.berth_id, b.name ?? String(b.berth_id)]))
 
   return (
-    <div className="p-6 max-w-7xl mx-auto" data-page="berths">
-      <div className="flex items-center justify-between mb-6">
+    <div className="page" data-page="berths">
+      <div className="flex flex-wrap items-end justify-between gap-3 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Vezovi</h1>
-          <p className="text-sm text-gray-500 mt-1">Stanje svakog veza, izračunato na poslužitelju</p>
+          <h1 className="page-title">Vezovi</h1>
+          <p className="page-lead">Stanje svakog veza, izračunato na poslužitelju</p>
         </div>
         <button onClick={fetchData} className="btn-secondary" disabled={loading}>
           {loading ? 'Osvježavam…' : 'Osvježi'}
@@ -138,61 +140,66 @@ export default function Berths() {
       <StaleDataBanner isStale={!!view?.is_stale} onRefresh={fetchData} />
 
       {error && (
-        <div className="card bg-red-50 border-red-200 mb-6" role="alert">
-          <p className="text-red-700">{error}</p>
-          <button className="btn-primary mt-3" onClick={fetchData}>Pokušaj ponovno</button>
+        <div className="notice-danger mb-6" role="alert">
+          <p>{error}</p>
+          <button className="btn-primary btn-sm mt-3" onClick={fetchData}>Pokušaj ponovno</button>
         </div>
       )}
 
       {message && (
-        <div className="card bg-yellow-50 border-yellow-200 mb-6" role="status" data-message>
-          <p className="text-yellow-800">{message}</p>
-        </div>
+        <div className="notice-warn mb-6" role="status" data-message>{message}</div>
       )}
 
       {view && !view.cabinet.configured && (
-        <p className="text-sm text-gray-500 mb-4">
+        <p className="text-sm text-fg-muted mb-4">
           Ormar ove marine nije opisan u ERP-u (tip uređaja, priključci po vezu) — priključci se ne prikazuju.
         </p>
       )}
 
       {berths.length === 0 && !error ? (
         <div className="card text-center py-10">
-          <p className="text-gray-500">{view?.cabinet.outcome.sentence || 'Nema podataka o vezovima.'}</p>
+          <p className="text-fg-muted">{view?.cabinet.outcome.sentence || 'Nema podataka o vezovima.'}</p>
         </div>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-          {berths.map((berth) => (
-            <div
-              key={berth.berth_id}
-              className={`card flex flex-col gap-2 border ${COLOUR_CLASS[berth.berth_colour] ?? COLOUR_CLASS.grey}`}
-              data-berth={berth.berth_id}
-              data-colour={berth.berth_colour}
-            >
-              <div className="flex items-center justify-between">
-                <h3 className="font-semibold text-gray-900">{berth.name ?? `Vez ${berth.berth_id}`}</h3>
-                {berth.pedestal.display_id && (
-                  <span className="text-xs text-gray-500 font-mono">{berth.pedestal.display_id}</span>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {berths.map((berth) => {
+            const st = BERTH_STATUS[berth.status] ?? BERTH_STATUS.unknown
+            return (
+              <article
+                key={berth.berth_id}
+                className={`card !p-0 overflow-hidden border-l-4 flex flex-col ${STRIPE[berth.berth_colour] ?? STRIPE.grey}`}
+                data-berth={berth.berth_id}
+                data-colour={berth.berth_colour}
+              >
+                <header className="flex items-start justify-between gap-3 px-4 pt-4">
+                  <div className="min-w-0">
+                    <h3 className="text-lg font-bold tracking-tight">{berth.name ?? `Vez ${berth.berth_id}`}</h3>
+                    {berth.pedestal.display_id && (
+                      <p className="text-xs text-fg-muted font-mono truncate">{berth.pedestal.display_id}</p>
+                    )}
+                  </div>
+                  <Status tone={berth.berth_colour} icon={st.icon} word={st.word} />
+                </header>
+                {berth.status_sentence && (
+                  <p className="px-4 pt-2 text-sm" data-sentence>{berth.status_sentence}</p>
                 )}
-              </div>
-              {berth.status_sentence && (
-                <p className="text-sm text-gray-800" data-sentence>{berth.status_sentence}</p>
-              )}
-              {berth.outlets.length > 0 && (
-                <ul className="flex flex-col gap-1 mt-1">
-                  {berth.outlets.map((o) => (
-                    <OutletRow
-                      key={o.name}
-                      outlet={o}
-                      berths={names}
-                      busy={busy}
-                      onCommand={(outlet, action) => onCommand(berth, outlet, action)}
-                    />
-                  ))}
-                </ul>
-              )}
-            </div>
-          ))}
+                {berth.outlets.length > 0 && (
+                  <ul className="flex-1 mt-3 px-4 pb-2 bg-surface-2/60 border-t border-line">
+                    {berth.outlets.map((o) => (
+                      <OutletRow
+                        key={o.name}
+                        outlet={o}
+                        berths={names}
+                        busy={busy}
+                        onCommand={(outlet, action) => onCommand(berth, outlet, action)}
+                      />
+                    ))}
+                  </ul>
+                )}
+                {berth.outlets.length === 0 && <div className="pb-4" />}
+              </article>
+            )
+          })}
         </div>
       )}
     </div>

@@ -45,10 +45,10 @@ function CodeStep({ mfaToken, onDone }: { mfaToken: string; onDone: (t: string) 
 
   return (
     <form onSubmit={submit} className="space-y-4" data-step="mfa-code">
-      <p className="text-sm text-gray-600">
+      <p className="text-sm text-fg-muted">
         Enter the 6-digit code from your authenticator app, or one of your backup codes.
       </p>
-      {error && <p className="text-sm text-red-700" data-error>{error}</p>}
+      {error && <p className="notice-danger" role="alert" data-error>{error}</p>}
       <input
         id="code"
         name="code"
@@ -61,7 +61,7 @@ function CodeStep({ mfaToken, onDone }: { mfaToken: string; onDone: (t: string) 
         required
         autoFocus
       />
-      <button type="submit" className="btn-primary w-full justify-center py-2.5" disabled={busy}>
+      <button type="submit" className="btn-primary w-full py-2.5" disabled={busy}>
         {busy ? 'Checking…' : 'Verify'}
       </button>
     </form>
@@ -72,20 +72,20 @@ export function BackupCodesView({ codes, onContinue }: { codes: string[]; onCont
   const [saved, setSaved] = useState(false)
   return (
     <div className="space-y-4" data-step="backup-codes">
-      <p className="text-sm text-gray-700">
+      <p className="text-sm text-fg">
         <strong>Backup codes — shown only now.</strong> Each works once, if the phone is lost.
         Store them somewhere safe, not on the same phone.
       </p>
-      <ul className="grid grid-cols-2 gap-2 font-mono text-sm bg-gray-50 border rounded-lg p-3">
+      <ul className="grid grid-cols-2 gap-2 font-mono text-sm bg-surface-2 border border-line rounded-control p-3">
         {codes.map((c) => (
           <li key={c} data-backup-code>{c}</li>
         ))}
       </ul>
-      <label className="flex items-center gap-2 text-sm text-gray-700">
+      <label className="flex items-center gap-2 text-sm text-fg">
         <input type="checkbox" checked={saved} onChange={(e) => setSaved(e.target.checked)} />
         I have stored these codes
       </label>
-      <button className="btn-primary w-full justify-center py-2.5" disabled={!saved} onClick={onContinue}>
+      <button className="btn-primary w-full py-2.5" disabled={!saved} onClick={onContinue}>
         Continue
       </button>
     </div>
@@ -124,19 +124,19 @@ function EnrollStep({ mfaToken, onDone }: {
 
   return (
     <div className="space-y-4" data-step="mfa-enroll">
-      <p className="text-sm text-gray-600">
+      <p className="text-sm text-fg-muted">
         Two-factor authentication is required. Scan the code with an authenticator app
         (Google Authenticator, Microsoft Authenticator, Aegis, 1Password…) and enter the code it shows.
       </p>
-      {error && <p className="text-sm text-red-700" data-error>{error}</p>}
+      {error && <p className="notice-danger" role="alert" data-error>{error}</p>}
       {data && (
         <>
           <img
-            className="mx-auto w-48 h-48"
+            className="mx-auto w-52 h-52 bg-white p-2 rounded-control"
             alt="QR code for the authenticator app"
             src={`data:image/svg+xml;utf8,${encodeURIComponent(data.qr_svg)}`}
           />
-          <p className="text-xs text-gray-500 text-center">
+          <p className="text-xs text-fg-muted text-center">
             Cannot scan? Type this key: <code className="font-mono break-all" data-totp-secret>{data.secret}</code>
           </p>
           <form onSubmit={submit} className="space-y-3">
@@ -151,7 +151,7 @@ function EnrollStep({ mfaToken, onDone }: {
               placeholder="123456"
               required
             />
-            <button type="submit" className="btn-primary w-full justify-center py-2.5" disabled={busy}>
+            <button type="submit" className="btn-primary w-full py-2.5" disabled={busy}>
               {busy ? 'Checking…' : 'Link and sign in'}
             </button>
           </form>
@@ -169,7 +169,7 @@ export default function MfaSteps({ challenge }: { challenge: MfaChallenge }) {
 
   const done = (token: string) => finish(token).catch(() => setError('Sign-in failed, try again.'))
 
-  if (error) return <p className="text-sm text-red-700">{error}</p>
+  if (error) return <p className="notice-danger" role="alert">{error}</p>
   if (codes) return <BackupCodesView codes={codes.codes} onContinue={() => done(codes.token)} />
   if (challenge.mfa_enrolled) return <CodeStep mfaToken={challenge.mfa_token} onDone={done} />
   return (

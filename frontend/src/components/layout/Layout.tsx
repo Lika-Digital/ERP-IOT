@@ -1,135 +1,155 @@
-import { Outlet, NavLink, useParams, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Outlet, NavLink, useParams, useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
+import { useThemeStore } from '../../store/themeStore'
+import logo from '../../assets/lika-logo.png'
+
+// 24px stroke icons, one path each
+const ICONS = {
+  marinas: 'M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6',
+  users: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm13 10v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8',
+  security: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10zm-3-10 2 2 4-4',
+  dashboard: 'M3 3h7v9H3zm11 0h7v5h-7zm0 9h7v9h-7zM3 16h7v5H3z',
+  control: 'M13 2 3 14h9l-1 8 10-12h-9l1-8z',
+  energy: 'M18 20V10M12 20V4M6 20v-6',
+  alarms: 'M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0',
+  berths: 'M12 22V8m0 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM5 12H2a10 10 0 0 0 20 0h-3',
+  sun: 'M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM12 1v2m0 18v2M4.2 4.2l1.4 1.4m12.8 12.8 1.4 1.4M1 12h2m18 0h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4',
+  moon: 'M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z',
+  menu: 'M3 6h18M3 12h18M3 18h18',
+  close: 'M18 6 6 18M6 6l12 12',
+}
+
+function Icon({ d, className = 'w-[18px] h-[18px]' }: { d: string; className?: string }) {
+  return (
+    <svg className={`${className} shrink-0`} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d={d} />
+    </svg>
+  )
+}
+
+const navLinkClass = ({ isActive }: { isActive: boolean }) =>
+  `flex items-center gap-3 px-3 py-2.5 rounded-control text-sm font-medium transition-colors border-l-[3px] ${
+    isActive
+      ? 'bg-sidebar-2 text-sidebar-fg border-accent'
+      : 'text-sidebar-muted border-transparent hover:text-sidebar-fg hover:bg-sidebar-2'
+  }`
 
 export default function Layout() {
   const { marinaId } = useParams<{ marinaId?: string }>()
   const { role, email, fullName, logout } = useAuthStore()
+  const { theme, toggle } = useThemeStore()
   const navigate = useNavigate()
+  const location = useLocation()
+
+  // mobile: the sidebar is a drawer behind a hamburger; a nav tap closes it
+  const [open, setOpen] = useState(false)
+  useEffect(() => { setOpen(false) }, [location.pathname])
 
   const handleLogout = () => {
     logout()
     navigate('/login')
   }
 
-  const navLinkClass = ({ isActive }: { isActive: boolean }) =>
-    `flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-      isActive
-        ? 'bg-brand-100 text-brand-700'
-        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-    }`
+  const themeLabel = theme === 'dark' ? 'Svijetla tema' : 'Tamna tema'
+  const who = fullName || email
 
   return (
-    <div className="min-h-screen flex flex-col">
-      {/* Top navbar */}
-      <header className="bg-white border-b border-gray-200 h-16 flex items-center px-6 gap-4 shrink-0">
-        <NavLink to="/marinas" className="text-xl font-bold text-brand-700 tracking-tight">
-          ERP-IOT
-        </NavLink>
+    <div className="flex h-screen bg-canvas">
+      {open && (
+        <div className="fixed inset-0 z-30 bg-black/60 md:hidden" onClick={() => setOpen(false)} aria-hidden="true" />
+      )}
 
-        {marinaId && (
-          <span className="text-gray-400 text-sm hidden sm:block">
-            Marina #{marinaId}
-          </span>
-        )}
-
-        <div className="flex-1" />
-
-        <div className="flex items-center gap-4">
-          <span className="text-sm text-gray-500 hidden md:block">
-            {fullName || email}
-          </span>
-          <span className="badge-gray capitalize">{role?.replace('_', ' ')}</span>
-          <button onClick={handleLogout} className="btn-secondary text-sm py-1.5">
-            Sign out
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 w-60 bg-sidebar text-sidebar-fg flex flex-col transform
+          transition-transform duration-200 md:static md:translate-x-0 ${open ? 'translate-x-0' : '-translate-x-full'}`}
+        data-sidebar
+      >
+        <div className="p-4 flex items-center justify-between gap-2">
+          <NavLink to="/marinas" className="block rounded-control overflow-hidden" aria-label="Lika — početna">
+            <img src={logo} alt="Lika" className="h-9 w-auto" />
+          </NavLink>
+          <button className="md:hidden p-2 text-sidebar-muted hover:text-sidebar-fg" onClick={() => setOpen(false)}
+            aria-label="Zatvori izbornik">
+            <Icon d={ICONS.close} />
           </button>
         </div>
-      </header>
+        <p className="px-5 -mt-1 mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-sidebar-muted">
+          ERP marine
+        </p>
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar */}
-        <nav className="w-56 bg-white border-r border-gray-200 p-4 flex flex-col gap-1 shrink-0 overflow-y-auto">
+        <nav className="flex-1 min-h-0 overflow-y-auto px-3 space-y-1">
           <NavLink to="/marinas" className={navLinkClass} end>
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-            </svg>
-            All Marinas
+            <Icon d={ICONS.marinas} /> All Marinas
           </NavLink>
-
           {role === 'admin' && (
             <NavLink to="/users" className={navLinkClass} data-nav="users">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-              Users
+              <Icon d={ICONS.users} /> Users
             </NavLink>
           )}
-
           {role === 'admin' && (
             <NavLink to="/security" className={navLinkClass} data-nav="security">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.040A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-              </svg>
-              Security
+              <Icon d={ICONS.security} /> Security
             </NavLink>
           )}
 
           {marinaId && (
             <>
-              <div className="mt-3 mb-1 px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                Marina
+              <div className="pt-4 pb-1 px-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-sidebar-muted">
+                Marina #{marinaId}
               </div>
-
               <NavLink to={`/marinas/${marinaId}/dashboard`} className={navLinkClass}>
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                    d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z" />
-                </svg>
-                Dashboard
+                <Icon d={ICONS.dashboard} /> Dashboard
               </NavLink>
-
               <NavLink to={`/marinas/${marinaId}/control`} className={navLinkClass}>
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                    d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-                Pedestal Control
+                <Icon d={ICONS.control} /> Pedestal Control
               </NavLink>
-
               <NavLink to={`/marinas/${marinaId}/energy`} className={navLinkClass}>
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                    d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-                Energy
+                <Icon d={ICONS.energy} /> Energy
               </NavLink>
-
               <NavLink to={`/marinas/${marinaId}/alarms`} className={navLinkClass}>
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                    d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                </svg>
-                Alarms
+                <Icon d={ICONS.alarms} /> Alarms
               </NavLink>
-
               <NavLink to={`/marinas/${marinaId}/berths`} className={navLinkClass}>
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                    d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-                </svg>
-                Berths
+                <Icon d={ICONS.berths} /> Berths
               </NavLink>
             </>
           )}
         </nav>
 
-        {/* Main content */}
-        <main className="flex-1 overflow-y-auto bg-gray-50">
-          <Outlet />
-        </main>
-      </div>
+        <div className="shrink-0 p-4 border-t border-sidebar-2 space-y-3">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-accent text-accent-ink flex items-center justify-center text-xs font-bold">
+              {who?.[0]?.toUpperCase() ?? '?'}
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-sidebar-fg truncate">{who}</p>
+              <p className="text-xs text-sidebar-muted">{role === 'admin' ? 'Admin' : 'Marina Manager'}</p>
+            </div>
+          </div>
+          <button onClick={toggle} className="w-full flex items-center gap-2 text-xs text-sidebar-muted hover:text-sidebar-fg"
+            data-theme-toggle>
+            <Icon d={theme === 'dark' ? ICONS.sun : ICONS.moon} className="w-4 h-4" /> {themeLabel}
+          </button>
+          <button onClick={handleLogout} className="w-full btn btn-sm bg-sidebar-2 text-sidebar-fg hover:bg-accent hover:text-accent-ink">
+            Sign out
+          </button>
+        </div>
+      </aside>
+
+      <main className="flex-1 overflow-auto flex flex-col min-w-0">
+        <header className="md:hidden sticky top-0 z-20 flex items-center gap-3 px-4 h-14 bg-sidebar text-sidebar-fg">
+          <button onClick={() => setOpen(true)} className="p-2 -ml-2" aria-label="Otvori izbornik" data-menu>
+            <Icon d={ICONS.menu} className="w-6 h-6" />
+          </button>
+          <img src={logo} alt="Lika" className="h-7 w-auto rounded" />
+          <button onClick={toggle} className="ml-auto p-2 text-sidebar-muted hover:text-sidebar-fg" aria-label={themeLabel}>
+            <Icon d={theme === 'dark' ? ICONS.sun : ICONS.moon} />
+          </button>
+        </header>
+        <Outlet />
+      </main>
     </div>
   )
 }

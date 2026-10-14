@@ -1,0 +1,85 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   Lika design tokens — the ONLY place colours are defined (spec §6, UI brand).
+
+   Source: the cabinet UI (Lika-Digital/Cloud_IOT @ e80a4c1, frontend/):
+     - brand colours sampled from src/assets/logo.png: lime #C4FF61, ink #2B2A29
+     - dark-first with a light theme for strong sun (src/index.css, themeStore)
+     - card rounded-xl + 1px border, buttons rounded-lg, sidebar w-56,
+       slide-in drawer under md (src/components/layout/Layout.tsx)
+
+   Every value is "R G B" so Tailwind can add alpha. Every text/background pair
+   is checked for WCAG AA (4.5:1) by backend/tests/test_ui_brand.py, both themes.
+   Theme: <html class="dark"> or "light", set before first paint by index.html
+   from the saved choice, else from the system preference.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+:root,
+:root.light {
+  /* surfaces */
+  --canvas: 243 244 240;      /* page background */
+  --surface: 255 255 255;     /* cards, dialogs */
+  --surface-2: 236 238 231;   /* table head, evidence, hover */
+  --line: 214 217 207;        /* borders */
+  /* text */
+  --fg: 28 28 27;
+  --fg-muted: 82 84 76;
+  --link: 61 99 10;           /* lime is unreadable as text on white: its dark shade */
+  /* brand */
+  --accent: 196 255 97;       /* Lika lime */
+  --accent-ink: 43 42 41;     /* Lika ink, text on lime */
+  --accent-hover: 178 240 70;
+  --sidebar: 43 42 41;        /* Lika ink in both themes */
+  --sidebar-2: 58 57 55;
+  --sidebar-fg: 240 240 236;
+  --sidebar-muted: 176 176 168;
+  --danger: 180 35 24;
+  --danger-ink: 255 255 255;
+  --focus: 61 99 10;
+
+  /* status trios: background / text / border, keyed by the server's berth_colour */
+  --st-green-bg: 232 245 224;  --st-green-fg: 30 91 18;    --st-green-line: 155 203 130;
+  --st-yellow-bg: 255 246 214; --st-yellow-fg: 107 78 0;   --st-yellow-line: 229 200 96;
+  --st-orange-bg: 255 235 221; --st-orange-fg: 138 58 0;   --st-orange-line: 240 166 115;
+  --st-red-bg: 253 231 231;    --st-red-fg: 155 28 28;     --st-red-line: 240 154 154;
+  --st-blue-bg: 227 238 252;   --st-blue-fg: 29 78 158;    --st-blue-line: 147 182 234;
+  --st-grey-bg: 236 237 233;   --st-grey-fg: 68 70 63;     --st-grey-line: 191 194 184;
+
+  color-scheme: light;
+}
+
+:root.dark {
+  --canvas: 18 18 17;
+  --surface: 28 28 26;
+  --surface-2: 38 38 36;
+  --line: 58 58 53;
+  --fg: 242 242 238;
+  --fg-muted: 168 169 159;
+  --link: 196 255 97;
+  --accent: 196 255 97;
+  --accent-ink: 43 42 41;
+  --accent-hover: 214 255 140;
+  --sidebar: 24 24 23;
+  --sidebar-2: 43 42 41;
+  --sidebar-fg: 240 240 236;
+  --sidebar-muted: 168 169 159;
+  --danger: 200 45 36;
+  --danger-ink: 255 255 255;
+  --focus: 196 255 97;
+
+  --st-green-bg: 23 48 26;     --st-green-fg: 158 226 154;  --st-green-line: 47 107 52;
+  --st-yellow-bg: 51 42 11;    --st-yellow-fg: 245 215 110; --st-yellow-line: 122 100 23;
+  --st-orange-bg: 58 34 16;    --st-orange-fg: 255 178 122; --st-orange-line: 138 75 31;
+  --st-red-bg: 59 21 23;       --st-red-fg: 255 155 155;    --st-red-line: 142 47 51;
+  --st-blue-bg: 20 40 68;      --st-blue-fg: 156 196 255;   --st-blue-line: 46 90 150;
+  --st-grey-bg: 38 38 36;      --st-grey-fg: 196 197 188;   --st-grey-line: 74 74 68;
+
+  color-scheme: dark;
+}
+
+/* Typography, spacing, shape — the cabinet uses Tailwind's system font stack and
+   its default spacing scale; ERP does the same (no web font, no external request). */
+:root {
+  --radius-card: 0.75rem;   /* rounded-xl */
+  --radius-control: 0.5rem; /* rounded-lg */
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.06), 0 1px 3px rgb(0 0 0 / 0.08);
+}

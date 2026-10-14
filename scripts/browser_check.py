@@ -19,6 +19,11 @@ Then the DOM checks the spec asks to be made in the DOM, not in JSON:
   SIM-07 no plug: the cabinet's sentence is shown, no error page
   D21    a decoy touch -> one agent pass -> the alarm on the Security screen, its
          evidence (markup in a User-Agent) shown as text; the Admin acknowledges
+  UI     at 360 px wide, in the light and the dark theme, sign-in, the 2FA step,
+         berths and Security have no page-level horizontal scroll (TC-UIR-04); the
+         theme switch flips the theme and remembers it.
+         With SCREENSHOT_DIR set, the same screens are saved as PNGs (desktop and
+         360 px, both themes) for a design review.
 
 Like boot_check.py it cannot pass empty: every check is counted and the exit
 code is 0 only when all of them ran and passed. A page error or console error
@@ -63,6 +68,7 @@ EXPECTED = [
     "SIM-05: silent cabinet - every berth grey",
     "SIM-07: no plug - the cabinet's sentence is shown",
     "D21: Security screen - decoy touch -> agent -> alarm, evidence shown as text, Admin decides",
+    "UI: sign-in, 2FA, berths, Security fit 360 px without horizontal scroll, light and dark; theme switch",
     "BOOT-01b: no page errors and no console errors in any scenario",
 ]
 _passed: list[str] = []
@@ -138,7 +144,12 @@ def spa_app(backend: str):
         except Exception:  # noqa: BLE001 — either side closing ends the bridge
             pass
 
-    async def index(_request: Request):
+    async def index(request: Request):
+        # nginx: try_files $uri /index.html — a real file in dist/ (favicon,
+        # theme-init.js) is served as itself, every other path gets the SPA
+        f = (DIST / request.path_params["path"]).resolve()
+        if request.path_params["path"] and f.is_file() and DIST.resolve() in f.parents:
+            return FileResponse(f)
         return FileResponse(DIST / "index.html")
 
     return Starlette(routes=[
@@ -447,11 +458,93 @@ def main() -> int:
                 fail(13, f"the decision did not show: {exc}")
             ok(13)
 
+            # ── UI: 360 px, light and dark, and the theme switch ──────────────
+            shots = os.environ.get("SCREENSHOT_DIR")
+            shot_dir = Path(shots) if shots else None
+            if shot_dir:
+                shot_dir.mkdir(parents=True, exist_ok=True)
+                # an open alarm next to the acknowledged one, for the review only
+                try:
+                    urllib.request.urlopen(urllib.request.Request(  # noqa: S310 — 127.0.0.1 only
+                        f"{erp_url}/api/ext/admin/debug", headers={"User-Agent": "curl/8.5"}), timeout=10)
+                except urllib.error.HTTPError:
+                    pass
+                subprocess.run([sys.executable, "-m", "app.agent", "--once"], cwd=str(BACKEND),
+                               env=agent_env, capture_output=True, text=True, timeout=60)
+            signed_in = page.context.storage_state()
+            wide: list[str] = []
+
+            def watch(pg):
+                pg.on("pageerror", lambda e: problems.append(f"pageerror: {e}"))
+                pg.on("console", lambda m: m.type == "error"
+                      and "Failed to load resource" not in m.text
+                      and problems.append(f"console: {m.text}"))
+
+            def visit(scheme, size, name, pg, ready):
+                pg.wait_for_selector(ready, timeout=15000)
+                pg.wait_for_timeout(150)
+                if size == "mobile":
+                    w = pg.evaluate("() => [document.documentElement.scrollWidth, window.innerWidth]")
+                    if w[0] > w[1]:
+                        wide.append(f"{name} ({scheme}): {w[0]} px in a {w[1]} px window")
+                if shot_dir:
+                    # the app scrolls inside <main>: grow the window to the content for the picture
+                    h = pg.evaluate("() => Math.max(document.documentElement.scrollHeight,"
+                                    " document.querySelector('main')?.scrollHeight ?? 0)")
+                    vp = pg.viewport_size
+                    pg.set_viewport_size({"width": vp["width"], "height": max(vp["height"], h + 60)})
+                    pg.screenshot(path=str(shot_dir / f"{name}-{scheme}-{size}.png"), full_page=True)
+                    pg.set_viewport_size(vp)
+
+            for scheme in ("light", "dark"):
+                for size, vp in (("mobile", {"width": 360, "height": 780}),
+                                 ("desktop", {"width": 1280, "height": 860})):
+                    if size == "desktop" and not shot_dir:
+                        continue
+                    anon = browser.new_context(color_scheme=scheme, viewport=vp)
+                    pg = anon.new_page()
+                    watch(pg)
+                    pg.goto(f"{spa_url}/login")
+                    visit(scheme, size, "1-login", pg, "input[type=email]")
+                    pg.fill("input[type=email]", ADMIN_EMAIL)
+                    pg.fill("input[type=password]", ADMIN_PASSWORD)
+                    pg.click("button[type=submit]")
+                    visit(scheme, size, "2-login-2fa", pg, "[data-step='mfa-code']")
+                    anon.close()
+
+                    ctx = browser.new_context(color_scheme=scheme, viewport=vp, storage_state=signed_in)
+                    pg = ctx.new_page()
+                    watch(pg)
+                    pg.goto(f"{spa_url}/marinas/{marina_id}/berths")
+                    visit(scheme, size, "3-berths", pg, "[data-berth]")
+                    pg.goto(f"{spa_url}/security")
+                    visit(scheme, size, "4-security", pg, "[data-alarm]")
+                    theme = pg.evaluate("() => document.documentElement.className")
+                    if scheme not in theme:
+                        wide.append(f"system {scheme} preference not applied: <html class={theme!r}>")
+                    ctx.close()
+
+            # the switch flips the theme and remembers it across a reload
+            ctx = browser.new_context(color_scheme="light", storage_state=signed_in)
+            pg = ctx.new_page()
+            watch(pg)
+            pg.goto(f"{spa_url}/security")
+            pg.wait_for_selector("[data-theme-toggle]", timeout=15000)
+            pg.click("[data-theme-toggle]")
+            pg.reload()
+            pg.wait_for_selector("[data-theme-toggle]", timeout=15000)
+            if "dark" not in pg.evaluate("() => document.documentElement.className"):
+                wide.append("the theme switch did not flip to dark, or did not remember it")
+            ctx.close()
+            if wide:
+                fail(14, "\n         ".join(wide))
+            ok(14)
+
             browser.close()
 
         if problems:
-            fail(14, "\n         ".join(problems[:10]))
-        ok(14)
+            fail(15, "\n         ".join(problems[:10]))
+        ok(15)
         server.should_exit = True
     except Exception as exc:  # noqa: BLE001 — a step that blew up: say which, with the ERP's log
         erp_log = t / "erp.log"

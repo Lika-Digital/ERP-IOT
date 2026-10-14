@@ -43,14 +43,12 @@ export default function Login() {
   return (
     <AuthCard title="Sign in to your account">
       {error && (
-        <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 rounded-lg">
-          <p className="text-sm text-red-700">{error}</p>
-        </div>
+        <div className="notice-danger mb-4" role="alert" data-error>{error}</div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="email" className="label">
             Email address
           </label>
           <input
@@ -66,7 +64,7 @@ export default function Login() {
         </div>
 
         <div>
-          <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="password" className="label">
             Password
           </label>
           <input
@@ -80,7 +78,7 @@ export default function Login() {
           />
         </div>
 
-        <button type="submit" className="btn-primary w-full justify-center py-2.5" disabled={loading}>
+        <button type="submit" className="btn-primary w-full py-2.5" disabled={loading}>
           {loading ? 'Signing in...' : 'Sign in'}
         </button>
       </form>
