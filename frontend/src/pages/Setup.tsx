@@ -56,8 +56,8 @@ export default function Setup() {
   if (invalid) {
     return (
       <AuthCard title="Set up your account">
-        <p className="text-sm text-red-700" data-error>{invalid}</p>
-        <p className="text-sm text-gray-600 mt-3">Ask an administrator for a new link.</p>
+        <p className="notice-danger" role="alert" data-error>{invalid}</p>
+        <p className="text-sm text-fg-muted mt-3">Ask an administrator for a new link.</p>
       </AuthCard>
     )
   }
@@ -65,14 +65,14 @@ export default function Setup() {
   return (
     <AuthCard title="Set up your account">
       {email === null ? (
-        <p className="text-sm text-gray-500">Checking the link…</p>
+        <p className="text-sm text-fg-muted">Checking the link…</p>
       ) : (
         <form onSubmit={submit} className="space-y-4" data-step="setup">
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-fg-muted">
             Account <strong data-setup-email>{email}</strong>. Choose a password (at least 12 characters);
             next you link two-factor authentication.
           </p>
-          {error && <p className="text-sm text-red-700" data-error>{error}</p>}
+          {error && <p className="notice-danger" role="alert" data-error>{error}</p>}
           <input
             id="new-password"
             type="password"
@@ -96,7 +96,7 @@ export default function Setup() {
             minLength={12}
             required
           />
-          <button type="submit" className="btn-primary w-full justify-center py-2.5" disabled={busy}>
+          <button type="submit" className="btn-primary w-full py-2.5" disabled={busy}>
             {busy ? 'Saving…' : 'Set password'}
           </button>
         </form>

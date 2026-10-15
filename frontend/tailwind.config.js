@@ -25,12 +25,6 @@ export default {
           green: status('green'), yellow: status('yellow'), orange: status('orange'),
           red: status('red'), blue: status('blue'), grey: status('grey'),
         },
-        // Screens not yet moved onto the tokens still use brand-*: same lime/ink
-        // family, so a half-redesigned app does not show two brands.
-        brand: {
-          50: '#f7ffe8', 100: '#ecffcc', 200: '#dcff9e', 300: '#c4ff61', 400: '#aee63f',
-          500: '#8cc21f', 600: '#4d7c0f', 700: '#3d630a', 800: '#2f4b0a', 900: '#2b2a29',
-        },
       },
       fontFamily: {
         // the cabinet's stack: Tailwind's system sans, no web font

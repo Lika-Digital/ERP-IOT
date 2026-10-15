@@ -45,8 +45,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         u = db.query(User).filter(User.email == email).first()
         if u is not None and u.role != "admin":
-            print(f"STOP: {email} postoji i nije admin ({u.role}) — uloga se mijenja na zaslonu "
-                  "Korisnici", file=sys.stderr)
+            print(f"STOP: {email} exists and is not an admin ({u.role}) — change the role on the "
+                  "Users screen", file=sys.stderr)
             return 2
         created = u is None
         if created:
@@ -61,10 +61,10 @@ def main(argv: list[str] | None = None) -> int:
     finally:
         db.close()
 
-    print(("Admin stvoren: " if created else "Novi link za postojećeg admina: ") + email)
-    print(f"Jednokratni link (vrijedi do {expires:%Y-%m-%d %H:%M} UTC):")
+    print(("Admin created: " if created else "New link for an existing admin: ") + email)
+    print(f"One-time link (valid until {expires:%Y-%m-%d %H:%M} UTC):")
     print(f"  {link}")
-    print("Otvori ga preko Tailscalea, postavi lozinku i poveži 2FA prije ičega drugog.")
+    print("Open it over Tailscale, set the password and link 2FA before anything else.")
     return 0
 
 

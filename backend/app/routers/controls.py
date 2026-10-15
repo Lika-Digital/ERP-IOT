@@ -72,13 +72,13 @@ def _cabinet_for(db: Session, marina_id: int, pedestal_pk: Optional[int]) -> Cab
         if len(cabs) > 1:
             raise HTTPException(status_code=422, detail={
                 "code": "pedestal_required",
-                "sentence": "Marina ima više ormara — naredba mora reći kojem ide (pedestal_id)."})
+                "sentence": "The marina has more than one cabinet — the command must say which (pedestal_id)."})
         cab = cabs[0] if cabs else None
     if cab is None:
         raise HTTPException(status_code=409, detail={
             "code": "cabinet_not_configured",
-            "sentence": "Ormar nije podešen u ERP-u. Naredba se ne šalje bez zapisa u "
-                        "command_audit.",
+            "sentence": "The cabinet is not configured in the ERP. No command is sent without a "
+                        "command_audit record.",
             "endpoint": None, "is_stale": False, "data_as_of": None})
     return cab
 

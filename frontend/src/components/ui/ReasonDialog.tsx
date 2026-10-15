@@ -6,7 +6,7 @@ import { create } from 'zustand'
  * command and every 2FA reset carries one — it is written to the audit before
  * anything happens, and the server refuses an action without it (spec §5.3, §7.1).
  *
- *   const reason = await askReason('Upali Q2')   // null = cancelled
+ *   const reason = await askReason('Q2: turn on')   // null = cancelled
  */
 interface Pending {
   what: string
@@ -43,17 +43,17 @@ export function ReasonDialogHost() {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" data-reason-dialog>
-      <div className="absolute inset-0 bg-black/50" onClick={() => close(null)} />
+      <div className="absolute inset-0 bg-black/60" onClick={() => close(null)} />
       <form
-        className="relative bg-white rounded-xl shadow-xl max-w-md w-full p-6 z-10 space-y-4"
+        className="relative bg-surface text-fg border border-line rounded-card shadow-card max-w-md w-full p-6 z-10 space-y-4"
         onSubmit={(e) => {
           e.preventDefault()
           if (ok) close(text.trim())
         }}
       >
-        <h2 className="text-lg font-semibold text-gray-900">Razlog je obvezan</h2>
-        <p className="text-sm text-gray-600">
-          {pending.what} — razlog se zapisuje u audit prije izvršenja (najmanje {MIN_REASON} znaka).
+        <h2 className="text-lg font-bold tracking-tight">A reason is required</h2>
+        <p className="text-sm text-fg-muted">
+          {pending.what} — the reason is written to the audit log before the command runs (at least {MIN_REASON} characters).
         </p>
         <textarea
           className="input"
@@ -65,10 +65,10 @@ export function ReasonDialogHost() {
         />
         <div className="flex justify-end gap-3">
           <button type="button" className="btn-secondary" onClick={() => close(null)}>
-            Odustani
+            Cancel
           </button>
           <button type="submit" className="btn-primary" disabled={!ok} data-reason-ok>
-            Potvrdi
+            Confirm
           </button>
         </div>
       </form>

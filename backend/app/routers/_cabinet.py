@@ -46,7 +46,7 @@ def marina_client(marina_id: int, user: User, db: Session,
     except ValueError as exc:
         raise HTTPException(status_code=409, detail={
             "code": "cabinet_not_configured",
-            "sentence": "Ormar ove marine nije podešen.",
+            "sentence": "This marina's cabinet is not configured.",
             "endpoint": None, "is_stale": False, "data_as_of": None,
             "reason": str(exc),
         }) from exc

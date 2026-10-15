@@ -23,6 +23,7 @@ import {
 } from '../api/pedestalExt'
 import StaleDataBanner from '../components/ui/StaleDataBanner'
 import ConfirmDialog from '../components/ui/ConfirmDialog'
+import Status, { ALARM_STATE, OCCUPANCY, REACH, SESSION } from '../components/ui/Status'
 
 type Tab = 'realtime' | 'berths' | 'controls'
 
@@ -184,7 +185,7 @@ export default function PedestalDetail() {
   // ── Controls handlers ──────────────────────────────────────────────────────
 
   const handleAllow = async (sessionId: number) => {
-    const reason = await askReason(`dopusti sesiju #${sessionId}`)
+    const reason = await askReason(`Allow session #${sessionId}`)
     if (!reason) { setControlError(NO_REASON); return }
     setActionLoading(sessionId)
     try {
@@ -208,7 +209,7 @@ export default function PedestalDetail() {
 
   const handleStop = async () => {
     if (!stopDialog) return
-    const reason = await askReason(`zaustavi sesiju #${stopDialog.sessionId}`)
+    const reason = await askReason(`Stop session #${stopDialog.sessionId}`)
     if (!reason) { setControlError(NO_REASON); return }
     setActionLoading(stopDialog.sessionId)
     try {
@@ -233,37 +234,30 @@ export default function PedestalDetail() {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="page max-w-5xl" data-page="pedestal">
       {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => navigate(`/marinas/${mid}/dashboard`)} className="text-sm text-gray-500 hover:text-gray-700">
+      <div className="flex flex-wrap items-start gap-3 mb-6">
+        <button onClick={() => navigate(`/marinas/${mid}/dashboard`)} className="btn-secondary btn-sm">
           ← Dashboard
         </button>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold text-gray-900">
-            {pedestalInfo?.name ?? `Pedestal ${pid}`}
-          </h1>
-          {pedestalInfo?.location && (
-            <p className="text-sm text-gray-500">{pedestalInfo.location}</p>
-          )}
+        <div className="flex-1 min-w-0">
+          <h1 className="page-title truncate">{pedestalInfo?.name ?? `Pedestal ${pid}`}</h1>
+          {pedestalInfo?.location && <p className="page-lead">{pedestalInfo.location}</p>}
         </div>
-        {health && (
-          <span className={`text-xs font-medium px-2 py-1 rounded-full ${
-            health.opta_connected ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
-          }`}>
-            {health.opta_connected ? 'Online' : 'Offline'}
+        {health?.last_heartbeat && (
+          <span className="text-xs text-fg-muted tabular-nums self-center">
+            last heard {new Date(health.last_heartbeat).toLocaleTimeString()}
           </span>
         )}
       </div>
 
       {/* Tab bar */}
-      <div className="flex gap-1 mb-6 border-b border-gray-200">
-        <TabButton active={tab === 'realtime'} onClick={() => setTab('realtime')}>Real Time</TabButton>
+      <div className="flex gap-1 mb-6 border-b border-line overflow-x-auto">
+        <TabButton active={tab === 'realtime'} onClick={() => setTab('realtime')}>Real time</TabButton>
         <TabButton active={tab === 'berths'} onClick={() => setTab('berths')}>Berths</TabButton>
         <TabButton active={tab === 'controls'} onClick={() => setTab('controls')}>Controls</TabButton>
       </div>
 
-      {/* ── Real Time tab ─────────────────────────────────────────────────── */}
       {tab === 'realtime' && (
         <RealTimeTab
           health={health}
@@ -277,7 +271,6 @@ export default function PedestalDetail() {
         />
       )}
 
-      {/* ── Berths tab ───────────────────────────────────────────────────── */}
       {tab === 'berths' && (
         <BerthsTab
           pedestalId={pid}
@@ -290,7 +283,6 @@ export default function PedestalDetail() {
         />
       )}
 
-      {/* ── Controls tab ─────────────────────────────────────────────────── */}
       {tab === 'controls' && (
         <>
           <ControlsTab
@@ -307,39 +299,32 @@ export default function PedestalDetail() {
             onAckOpen={(alarmId) => setAckDialog({ alarmId })}
           />
 
-          {/* Deny dialog */}
           <ConfirmDialog
             isOpen={!!denyDialog}
-            title="Deny Session"
-            message="Optionally provide a reason for denial."
-            confirmLabel="Deny Session"
+            title="Deny session"
+            message="A reason is required (at least 3 characters). It is written to the audit log."
+            confirmLabel="Deny session"
             confirmVariant="danger"
             onConfirm={handleDeny}
             onCancel={() => { setDenyDialog(null); setDenyReason('') }}
           >
-            <input
-              className="input"
-              placeholder="Reason (optional)"
-              value={denyReason}
-              onChange={(e) => setDenyReason(e.target.value)}
-            />
+            <input className="input" placeholder="Reason" aria-label="reason" value={denyReason}
+              onChange={(e) => setDenyReason(e.target.value)} />
           </ConfirmDialog>
 
-          {/* Stop dialog */}
           <ConfirmDialog
             isOpen={!!stopDialog}
-            title="Stop Session"
-            message={`Stop session #${stopDialog?.sessionId}? This will cut power immediately.`}
-            confirmLabel="Stop Session"
+            title="Stop session"
+            message={`Stop session #${stopDialog?.sessionId}? Power is cut immediately.`}
+            confirmLabel="Stop session"
             confirmVariant="danger"
             onConfirm={handleStop}
             onCancel={() => setStopDialog(null)}
           />
 
-          {/* Acknowledge dialog */}
           <ConfirmDialog
             isOpen={!!ackDialog}
-            title="Acknowledge Alarm"
+            title="Acknowledge alarm"
             message={`Acknowledge alarm #${ackDialog?.alarmId}?`}
             confirmLabel="Acknowledge"
             confirmVariant="primary"
@@ -353,6 +338,57 @@ export default function PedestalDetail() {
 }
 
 // ── Real Time tab ──────────────────────────────────────────────────────────────
+
+function SessionLine({ s, kind, children }: { s: Session; kind: 'pending' | 'active'; children?: React.ReactNode }) {
+  const look = SESSION[kind]
+  return (
+    <li className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="min-w-0 space-y-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <Status tone={look.tone} icon={look.icon} word={look.word} />
+          <span className="font-semibold">Session #{s.id}</span>
+        </div>
+        <p className="text-xs text-fg-muted">
+          {s.socket_id != null ? `socket ${s.socket_id}` : 'no socket'} · {s.type ?? 'unknown type'}
+          {s.customer_name && ` · ${s.customer_name}`}
+          {s.started_at && ` · started ${new Date(s.started_at).toLocaleString()}`}
+        </p>
+      </div>
+      {children}
+    </li>
+  )
+}
+
+function AlarmLine({ a, children }: { a: AlarmLogEntry; children?: React.ReactNode }) {
+  const look = ALARM_STATE[a.acknowledged_at ? 'acknowledged' : 'open']
+  const fields = a.alarm_data && typeof a.alarm_data === 'object'
+    ? Object.entries(a.alarm_data).filter(([k]) => k !== 'id').slice(0, 3).map(([k, v]) => `${k}: ${v}`).join(' · ')
+    : ''
+  return (
+    <li className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="min-w-0 space-y-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <Status tone={look.tone} icon={look.icon} word={look.word} />
+          <span className="font-semibold">Alarm #{a.id}</span>
+        </div>
+        <p className="text-xs text-fg-muted">{new Date(a.received_at).toLocaleString()}{fields && ` · ${fields}`}</p>
+      </div>
+      {children}
+    </li>
+  )
+}
+
+function Section({ title, count, children }: { title: string; count?: number; children: React.ReactNode }) {
+  return (
+    <section className="card mb-4">
+      <h2 className="text-lg font-bold tracking-tight mb-2 flex items-center gap-2">
+        {title}
+        {count !== undefined && <span className="text-sm font-semibold text-fg-muted tabular-nums">{count}</span>}
+      </h2>
+      {children}
+    </section>
+  )
+}
 
 function RealTimeTab({
   health,
@@ -377,105 +413,54 @@ function RealTimeTab({
     <div>
       <div className="flex justify-end mb-4">
         <button className="btn-secondary" onClick={onRefresh} disabled={loading}>
-          {loading ? 'Refreshing...' : 'Refresh'}
+          {loading ? 'Refreshing…' : 'Refresh'}
         </button>
       </div>
 
       <StaleDataBanner isStale={isStale} onRefresh={onRefresh} />
 
       {error && (
-        <div className="card bg-red-50 border-red-200 mb-4">
-          <p className="text-red-700">{error}</p>
-          <button className="btn-primary mt-2" onClick={onRefresh}>Retry</button>
+        <div className="notice-danger mb-4" role="alert">
+          <p>{error}</p>
+          <button className="btn-primary btn-sm mt-2" onClick={onRefresh}>Retry</button>
         </div>
       )}
 
-      {/* Health */}
       {health && (
-        <div className="card mb-4">
-          <h2 className="text-base font-semibold mb-3">Health</h2>
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <HealthRow label="OPTA Connected" ok={health.opta_connected} />
-            <HealthRow label="Camera Reachable" ok={health.camera_reachable} />
-            <HealthRow label="Temp Sensor" ok={health.temp_sensor_reachable} />
-            {health.last_heartbeat && (
-              <div className="col-span-2 text-xs text-gray-500">
-                Last heartbeat: {new Date(health.last_heartbeat).toLocaleString()}
-              </div>
-            )}
+        <Section title="Devices">
+          <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+            <HealthRow label="Camera" ok={health.camera_reachable} />
+            <HealthRow label="Temperature sensor" ok={health.temp_sensor_reachable} />
           </div>
-        </div>
+          {health.last_heartbeat && (
+            <p className="mt-2 text-xs text-fg-muted">Last heartbeat {new Date(health.last_heartbeat).toLocaleString()}</p>
+          )}
+        </Section>
       )}
 
-      {/* Pending sessions */}
-      <div className="card mb-4">
-        <h2 className="text-base font-semibold mb-3 text-yellow-700">
-          Pending Approvals
-          {pendingSessions.length > 0 && (
-            <span className="ml-2 badge-yellow">{pendingSessions.length}</span>
-          )}
-        </h2>
+      <Section title="Waiting for approval" count={pendingSessions.length}>
         {pendingSessions.length === 0 ? (
-          <p className="text-sm text-gray-400">No pending sessions for this pedestal.</p>
+          <p className="text-sm text-fg-muted">No sessions are waiting on this pedestal.</p>
         ) : (
-          <div className="space-y-2">
-            {pendingSessions.map((s) => (
-              <div key={s.id} className="px-3 py-2 bg-yellow-50 rounded-lg border border-yellow-200 text-sm">
-                <p className="font-medium">Session #{s.id}{s.socket_id != null && ` · Socket ${s.socket_id}`}</p>
-                <p className="text-xs text-gray-500">Type: {s.type ?? '—'}</p>
-              </div>
-            ))}
-          </div>
+          <ul className="divide-y divide-line">{pendingSessions.map((s) => <SessionLine key={s.id} s={s} kind="pending" />)}</ul>
         )}
-      </div>
+      </Section>
 
-      {/* Active sessions */}
-      <div className="card mb-4">
-        <h2 className="text-base font-semibold mb-3">
-          Active Sessions
-          {activeSessions.length > 0 && (
-            <span className="ml-2 badge-green">{activeSessions.length}</span>
-          )}
-        </h2>
+      <Section title="Active sessions" count={activeSessions.length}>
         {activeSessions.length === 0 ? (
-          <p className="text-sm text-gray-400">No active sessions for this pedestal.</p>
+          <p className="text-sm text-fg-muted">No active sessions on this pedestal.</p>
         ) : (
-          <div className="space-y-2">
-            {activeSessions.map((s) => (
-              <div key={s.id} className="px-3 py-2 bg-green-50 rounded-lg border border-green-200 text-sm">
-                <p className="font-medium">Session #{s.id}{s.socket_id != null && ` · Socket ${s.socket_id}`}</p>
-                {s.started_at && (
-                  <p className="text-xs text-gray-500">Started: {new Date(s.started_at).toLocaleString()}</p>
-                )}
-              </div>
-            ))}
-          </div>
+          <ul className="divide-y divide-line">{activeSessions.map((s) => <SessionLine key={s.id} s={s} kind="active" />)}</ul>
         )}
-      </div>
+      </Section>
 
-      {/* Alarm log */}
-      <div className="card">
-        <h2 className="text-base font-semibold mb-3">Recent Alarms</h2>
+      <Section title="Recent alarms">
         {alarmLog.length === 0 ? (
-          <p className="text-sm text-gray-400">No alarms recorded for this pedestal.</p>
+          <p className="text-sm text-fg-muted">No alarms recorded for this pedestal.</p>
         ) : (
-          <div className="space-y-2">
-            {alarmLog.map((a) => (
-              <div key={a.id} className={`px-3 py-2 rounded-lg border text-sm ${a.acknowledged_at ? 'bg-gray-50 border-gray-200' : 'bg-red-50 border-red-200'}`}>
-                <div className="flex items-center justify-between">
-                  <p className="font-medium">Alarm #{a.id}</p>
-                  {a.acknowledged_at ? (
-                    <span className="text-xs text-gray-500">Acknowledged</span>
-                  ) : (
-                    <span className="text-xs text-red-600 font-medium">Unacknowledged</span>
-                  )}
-                </div>
-                <p className="text-xs text-gray-500">{new Date(a.received_at).toLocaleString()}</p>
-              </div>
-            ))}
-          </div>
+          <ul className="divide-y divide-line">{alarmLog.map((a) => <AlarmLine key={a.id} a={a} />)}</ul>
         )}
-      </div>
+      </Section>
     </div>
   )
 }
@@ -499,35 +484,27 @@ function BerthsTab({
   onGetFrame: (berthId: number) => void
   onGetStream: () => void
 }) {
+  const reach = stream.data ? REACH[stream.data.reachable ? 'yes' : 'no'] : null
   return (
     <div>
-      {/* Occupancy section */}
-      <div className="card mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-semibold">Berth Occupancy</h2>
-          <button
-            className="btn-secondary py-1 text-xs"
-            onClick={onRefreshOccupancy}
-            disabled={occupancy.loading}
-          >
-            {occupancy.loading ? 'Loading...' : 'Refresh'}
+      <section className="card mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <h2 className="text-lg font-bold tracking-tight">Berth occupancy</h2>
+          <button className="btn-secondary btn-sm" onClick={onRefreshOccupancy} disabled={occupancy.loading}>
+            {occupancy.loading ? 'Loading…' : 'Refresh'}
           </button>
         </div>
 
-        {occupancy.featureUnavailable && (
-          <p className="text-sm text-amber-700 bg-amber-50 px-3 py-2 rounded-lg">
-            Feature not available on this pedestal
-          </p>
-        )}
-        {occupancy.error && <p className="text-sm text-red-600">{occupancy.error}</p>}
+        {occupancy.featureUnavailable && <p className="notice-warn">This feature is not available on this pedestal.</p>}
+        {occupancy.error && <p className="notice-danger" role="alert">{occupancy.error}</p>}
         {!occupancy.data && !occupancy.loading && !occupancy.featureUnavailable && !occupancy.error && (
-          <p className="text-sm text-gray-400 italic">Click Refresh to load occupancy data.</p>
+          <p className="text-sm text-fg-muted">Press Refresh to load occupancy.</p>
         )}
 
         {occupancy.data && !occupancy.featureUnavailable && (
           <>
             {occupancy.data.berths.length === 0 ? (
-              <p className="text-sm text-gray-400 italic">No berths configured for this pedestal</p>
+              <p className="text-sm text-fg-muted">No berths are configured for this pedestal.</p>
             ) : (
               <div className="space-y-3">
                 {occupancy.data.berths.map((b) => (
@@ -541,56 +518,45 @@ function BerthsTab({
                 ))}
               </div>
             )}
-            {occupancy.data.message && (
-              <p className="text-xs text-gray-400 mt-2 italic">{occupancy.data.message}</p>
-            )}
+            {occupancy.data.message && <p className="text-xs text-fg-muted mt-2">{occupancy.data.message}</p>}
           </>
         )}
-      </div>
+      </section>
 
-      {/* Camera stream section */}
-      <div className="card">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-semibold">Live Stream</h2>
-          <button
-            className="btn-secondary py-1 text-xs"
-            onClick={onGetStream}
-            disabled={stream.loading}
-          >
-            {stream.loading ? 'Loading...' : 'Get Stream URL'}
+      <section className="card">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <h2 className="text-lg font-bold tracking-tight">Live stream</h2>
+          <button className="btn-secondary btn-sm" onClick={onGetStream} disabled={stream.loading}>
+            {stream.loading ? 'Loading…' : 'Get stream URL'}
           </button>
         </div>
 
-        {stream.error && (
-          <p className="text-sm text-amber-700 bg-amber-50 px-3 py-2 rounded-lg">{stream.error}</p>
-        )}
+        {stream.error && <p className="notice-warn">{stream.error}</p>}
 
-        {stream.data && (
+        {stream.data && reach && (
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className={`w-2 h-2 rounded-full ${stream.data.reachable ? 'bg-green-500' : 'bg-red-400'}`} />
-              <span className="text-xs text-gray-500">
-                {stream.data.reachable ? 'Reachable' : 'Not reachable'}
-                {stream.data.last_checked && ` · checked ${new Date(stream.data.last_checked).toLocaleString()}`}
-              </span>
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <Status tone={reach.tone} icon={reach.icon} word={reach.word} />
+              {stream.data.last_checked && (
+                <span className="text-xs text-fg-muted">checked {new Date(stream.data.last_checked).toLocaleString()}</span>
+              )}
             </div>
             <input
               type="text"
               readOnly
+              aria-label="stream URL"
               value={stream.data.stream_url}
-              className="input font-mono text-xs bg-gray-50"
+              className="input font-mono text-xs bg-surface-2"
               onClick={(e) => (e.target as HTMLInputElement).select()}
             />
-            <p className="text-xs text-gray-400 mt-2">
-              Copy this URL and open it in VLC or any RTSP-compatible player.
-            </p>
+            <p className="text-xs text-fg-muted mt-2">Copy this URL and open it in VLC or any RTSP player.</p>
           </div>
         )}
 
         {!stream.data && !stream.loading && !stream.error && (
-          <p className="text-sm text-gray-400 italic">Click Get Stream URL to fetch the RTSP address.</p>
+          <p className="text-sm text-fg-muted">Press Get stream URL to fetch the RTSP address.</p>
         )}
-      </div>
+      </section>
     </div>
   )
 }
@@ -607,43 +573,36 @@ function BerthDetailRow({
   onGetFrame: () => void
 }) {
   return (
-    <div className="border border-gray-100 rounded-lg p-3">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
+    <div className="border border-line rounded-control p-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <OccupancyBadge occupied={berth.occupied} />
           <div>
-            <p className="text-sm font-medium">{berth.berth_name ?? `Berth ${berth.berth_id}`}</p>
+            <p className="text-sm font-semibold">{berth.berth_name ?? `Berth ${berth.berth_id}`}</p>
             {berth.last_analyzed && (
-              <p className="text-xs text-gray-400">Analyzed: {new Date(berth.last_analyzed).toLocaleString()}</p>
+              <p className="text-xs text-fg-muted">Analysed {new Date(berth.last_analyzed).toLocaleString()}</p>
             )}
-            {berth.note && <p className="text-xs text-gray-400 italic">{berth.note}</p>}
+            {berth.note && <p className="text-xs text-fg-muted">{berth.note}</p>}
           </div>
         </div>
-        <div className="flex gap-2">
-          <button className="btn-secondary py-1 text-xs shrink-0" onClick={onGetFrame} disabled={frame?.loading}>
-            {frame?.loading ? 'Loading...' : 'Get Frame'}
-          </button>
-        </div>
+        <button className="btn-secondary btn-sm shrink-0" onClick={onGetFrame} disabled={frame?.loading}>
+          {frame?.loading ? 'Loading…' : 'Get frame'}
+        </button>
       </div>
 
-      {/* Frame inline */}
       {frame && !frame.loading && (
         <div className="mt-3">
           {frame.error ? (
-            <p className="text-xs text-amber-700 bg-amber-50 px-2 py-1 rounded">
-              Camera feature not available on this pedestal
-            </p>
+            <p className="notice-warn">The camera is not available on this pedestal.</p>
           ) : frame.objectUrl ? (
             <div>
               <img
                 src={frame.objectUrl}
                 alt={`Camera frame — pedestal ${pedestalId}`}
-                className="w-full max-w-lg rounded-lg border border-gray-200"
+                className="w-full max-w-lg rounded-control border border-line"
               />
               {frame.capturedAt && (
-                <p className="text-xs text-gray-400 mt-1">
-                  Captured: {new Date(frame.capturedAt).toLocaleString()}
-                </p>
+                <p className="text-xs text-fg-muted mt-1">Captured {new Date(frame.capturedAt).toLocaleString()}</p>
               )}
             </div>
           ) : null}
@@ -684,130 +643,69 @@ function ControlsTab({
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-sm text-gray-500">Control sessions and alarms for this pedestal.</p>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <p className="text-sm text-fg-muted">Sessions and alarms on this pedestal.</p>
         <button className="btn-secondary" onClick={onRefresh} disabled={loading}>
-          {loading ? 'Refreshing...' : 'Refresh'}
+          {loading ? 'Refreshing…' : 'Refresh'}
         </button>
       </div>
 
-      {error && (
-        <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-          {error}
-        </div>
-      )}
+      {error && <div className="notice-danger mb-4" role="alert">{error}</div>}
 
-      {/* Pending sessions — Allow / Deny */}
-      <div className="card mb-6">
-        <h2 className="text-lg font-semibold mb-4 text-yellow-700">
-          Pending Approvals
-          {pendingSessions.length > 0 && <span className="ml-2 badge-yellow">{pendingSessions.length}</span>}
-        </h2>
+      <Section title="Waiting for approval" count={pendingSessions.length}>
         {pendingSessions.length === 0 ? (
-          <p className="text-gray-400 text-sm">No pending sessions for this pedestal.</p>
+          <p className="text-fg-muted text-sm">No sessions are waiting on this pedestal.</p>
         ) : (
-          <div className="space-y-3">
+          <ul className="divide-y divide-line">
             {pendingSessions.map((s) => (
-              <div key={s.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-                <div>
-                  <p className="text-sm font-medium">
-                    Session #{s.id}{s.socket_id != null && ` (Socket ${s.socket_id})`}
-                  </p>
-                  {s.customer_name && <p className="text-xs text-gray-600">Customer: {s.customer_name}</p>}
-                  <p className="text-xs text-gray-500">Type: {s.type ?? 'unknown'}</p>
-                </div>
+              <SessionLine key={s.id} s={s} kind="pending">
                 <div className="flex gap-2 shrink-0">
-                  <button
-                    onClick={() => onAllow(s.id)}
-                    className="btn-primary py-1.5 text-xs"
-                    disabled={actionLoading === s.id}
-                  >
+                  <button onClick={() => onAllow(s.id)} className="btn-primary btn-sm" disabled={actionLoading === s.id}>
                     Allow
                   </button>
-                  <button
-                    onClick={() => onDenyOpen(s.id)}
-                    className="btn-danger py-1.5 text-xs"
-                    disabled={actionLoading === s.id}
-                  >
+                  <button onClick={() => onDenyOpen(s.id)} className="btn-danger btn-sm" disabled={actionLoading === s.id}>
                     Deny
                   </button>
                 </div>
-              </div>
+              </SessionLine>
             ))}
-          </div>
+          </ul>
         )}
-      </div>
+      </Section>
 
-      {/* Active sessions — Stop */}
-      <div className="card mb-6">
-        <h2 className="text-lg font-semibold mb-4">
-          Active Sessions
-          {activeSessions.length > 0 && <span className="ml-2 badge-green">{activeSessions.length}</span>}
-        </h2>
+      <Section title="Active sessions" count={activeSessions.length}>
         {activeSessions.length === 0 ? (
-          <p className="text-gray-400 text-sm">No active sessions for this pedestal.</p>
+          <p className="text-fg-muted text-sm">No active sessions on this pedestal.</p>
         ) : (
-          <div className="space-y-3">
+          <ul className="divide-y divide-line">
             {activeSessions.map((s) => (
-              <div key={s.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-green-50 rounded-lg border border-green-200">
-                <div>
-                  <p className="text-sm font-medium">
-                    Session #{s.id}{s.socket_id != null && ` (Socket ${s.socket_id})`}
-                  </p>
-                  {s.started_at && (
-                    <p className="text-xs text-gray-500">Started: {new Date(s.started_at).toLocaleString()}</p>
-                  )}
-                </div>
-                <button
-                  onClick={() => onStopOpen(s.id)}
-                  className="btn-danger py-1.5 text-xs shrink-0"
-                  disabled={actionLoading === s.id}
-                >
+              <SessionLine key={s.id} s={s} kind="active">
+                <button onClick={() => onStopOpen(s.id)} className="btn-danger btn-sm shrink-0 self-start sm:self-center"
+                  disabled={actionLoading === s.id}>
                   Stop
                 </button>
-              </div>
+              </SessionLine>
             ))}
-          </div>
+          </ul>
         )}
-      </div>
+      </Section>
 
-      {/* Active alarms — Acknowledge */}
-      <div className="card">
-        <h2 className="text-lg font-semibold mb-4">
-          Active Alarms
-          {unackedAlarms.length > 0 && <span className="ml-2 text-xs font-semibold bg-red-100 text-red-700 px-2 py-0.5 rounded-full">{unackedAlarms.length}</span>}
-        </h2>
+      <Section title="Open alarms" count={unackedAlarms.length}>
         {unackedAlarms.length === 0 ? (
-          <p className="text-gray-400 text-sm">No active alarms for this pedestal.</p>
+          <p className="text-fg-muted text-sm">No open alarms on this pedestal.</p>
         ) : (
-          <div className="space-y-3">
+          <ul className="divide-y divide-line">
             {unackedAlarms.map((a) => (
-              <div key={a.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-red-50 rounded-lg border border-red-200">
-                <div>
-                  <p className="text-sm font-medium">Alarm #{a.id}</p>
-                  <p className="text-xs text-gray-500">{new Date(a.received_at).toLocaleString()}</p>
-                  {a.alarm_data && typeof a.alarm_data === 'object' && (
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      {Object.entries(a.alarm_data)
-                        .filter(([k]) => k !== 'id')
-                        .slice(0, 3)
-                        .map(([k, v]) => `${k}: ${v}`)
-                        .join(' · ')}
-                    </p>
-                  )}
-                </div>
-                <button
-                  onClick={() => onAckOpen(a.id)}
-                  className="btn-secondary py-1.5 text-xs shrink-0"
-                  disabled={actionLoading === a.id}
-                >
+              <AlarmLine key={a.id} a={a}>
+                <button onClick={() => onAckOpen(a.id)} className="btn-primary btn-sm shrink-0 self-start sm:self-center"
+                  disabled={actionLoading === a.id}>
                   Acknowledge
                 </button>
-              </div>
+              </AlarmLine>
             ))}
-          </div>
+          </ul>
         )}
-      </div>
+      </Section>
     </div>
   )
 }
@@ -815,34 +713,17 @@ function ControlsTab({
 // ── Shared sub-components ─────────────────────────────────────────────────────
 
 function OccupancyBadge({ occupied }: { occupied: boolean | null }) {
-  if (occupied === null || occupied === undefined) {
-    return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
-        <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
-        No Analysis
-      </span>
-    )
-  }
-  return occupied ? (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
-      <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
-      Occupied
-    </span>
-  ) : (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
-      <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-      Available
-    </span>
-  )
+  const o = OCCUPANCY[occupied === null || occupied === undefined ? 'none' : occupied ? 'occupied' : 'vacant']
+  return <Status tone={o.tone} icon={o.icon} word={o.word} />
 }
 
 function HealthRow({ label, ok }: { label: string; ok: boolean }) {
+  const r = REACH[ok ? 'yes' : 'no']
   return (
-    <div className="flex items-center gap-2">
-      <span className={`w-2 h-2 rounded-full ${ok ? 'bg-green-500' : 'bg-red-400'}`} />
-      <span className="text-gray-700">{label}</span>
-      <span className={`text-xs ${ok ? 'text-green-600' : 'text-red-500'}`}>{ok ? 'OK' : 'Fault'}</span>
-    </div>
+    <span className="flex items-center gap-2">
+      {label}
+      <Status tone={r.tone} icon={r.icon} word={r.word} />
+    </span>
   )
 }
 
@@ -850,10 +731,10 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
   return (
     <button
       onClick={onClick}
-      className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+      className={`px-4 py-2 text-sm font-semibold border-b-[3px] -mb-px whitespace-nowrap transition-colors ${
         active
-          ? 'border-brand-600 text-brand-700'
-          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+          ? 'border-accent text-fg'
+          : 'border-transparent text-fg-muted hover:text-fg hover:border-line'
       }`}
     >
       {children}

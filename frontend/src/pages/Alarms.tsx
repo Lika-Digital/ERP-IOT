@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
 import { getAlarmLog, acknowledgeAlarm, type AlarmLogEntry } from '../api/alarms'
 import ConfirmDialog from '../components/ui/ConfirmDialog'
+import Status, { ALARM_STATE } from '../components/ui/Status'
 
 export default function Alarms() {
   const { marinaId } = useParams<{ marinaId: string }>()
@@ -21,7 +22,7 @@ export default function Alarms() {
       setAlarms(resp.alarms)
       setError(null)
     } catch {
-      setError('Failed to load alarm log.')
+      setError('Failed to load the alarm log.')
     } finally {
       setLoading(false)
     }
@@ -39,7 +40,7 @@ export default function Alarms() {
       setAckDialog(null)
       await fetchAlarms()
     } catch {
-      setError('Failed to acknowledge alarm.')
+      setError('Failed to acknowledge the alarm.')
     } finally {
       setActionLoading(null)
     }
@@ -51,20 +52,15 @@ export default function Alarms() {
   }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
+    <div className="page max-w-5xl" data-page="alarms">
+      <div className="flex flex-wrap items-end justify-between gap-3 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Alarm Log</h1>
-          <p className="text-sm text-gray-500 mt-1">Historical and active alarms</p>
+          <h1 className="page-title">Alarm log</h1>
+          <p className="page-lead">Alarms reported by the cabinets, newest first</p>
         </div>
-        <div className="flex items-center gap-3">
-          <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={unackOnly}
-              onChange={(e) => setUnackOnly(e.target.checked)}
-              className="rounded"
-            />
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2 text-sm text-fg-muted cursor-pointer">
+            <input type="checkbox" checked={unackOnly} onChange={(e) => setUnackOnly(e.target.checked)} />
             Unacknowledged only
           </label>
           <button onClick={fetchAlarms} className="btn-secondary" disabled={loading}>
@@ -73,73 +69,64 @@ export default function Alarms() {
         </div>
       </div>
 
-      {error && (
-        <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-          {error}
-        </div>
-      )}
+      {error && <div className="notice-danger mb-4" role="alert">{error}</div>}
 
       {loading ? (
         <div className="flex justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600" />
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-fg" />
         </div>
       ) : alarms.length === 0 ? (
         <div className="card text-center py-12">
-          <p className="text-gray-400">
-            {unackOnly ? 'No unacknowledged alarms.' : 'No alarms recorded.'}
-          </p>
+          <p className="text-fg-muted">{unackOnly ? 'No unacknowledged alarms.' : 'No alarms recorded.'}</p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {alarms.map((alarm) => (
-            <div
-              key={alarm.id}
-              className={`card flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 ${
-                alarm.acknowledged_at ? 'opacity-60' : 'border-red-200 bg-red-50'
-              }`}
-            >
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className={alarm.acknowledged_at ? 'badge-gray' : 'badge-red'}>
-                    {alarm.acknowledged_at ? 'acknowledged' : 'active'}
-                  </span>
-                  <span className="text-sm font-medium">{alarmType(alarm)}</span>
-                  <span className="text-xs text-gray-400">Pedestal {alarm.pedestal_id}</span>
+        <ul className="space-y-3">
+          {alarms.map((alarm) => {
+            const st = ALARM_STATE[alarm.acknowledged_at ? 'acknowledged' : 'open']
+            return (
+              <li
+                key={alarm.id}
+                className={`card !p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-l-4 ${
+                  alarm.acknowledged_at ? 'border-l-st-grey-line' : 'border-l-st-red-line'
+                }`}
+                data-alarm-log={alarm.id}
+              >
+                <div className="min-w-0 space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Status tone={st.tone} icon={st.icon} word={st.word} />
+                    <span className="font-semibold">{alarmType(alarm)}</span>
+                    <span className="text-xs text-fg-muted">Pedestal {alarm.pedestal_id}</span>
+                  </div>
+                  <p className="text-xs text-fg-muted">Received {new Date(alarm.received_at).toLocaleString()}</p>
+                  {alarm.acknowledged_at && (
+                    <p className="text-xs text-fg-muted">
+                      Acknowledged {new Date(alarm.acknowledged_at).toLocaleString()}
+                    </p>
+                  )}
+                  {alarm.alarm_data.value != null && (
+                    <p className="text-xs text-fg-muted">Value: {String(alarm.alarm_data.value)}</p>
+                  )}
                 </div>
-                <p className="text-xs text-gray-500">
-                  Received: {new Date(alarm.received_at).toLocaleString()}
-                </p>
-                {alarm.acknowledged_at && (
-                  <p className="text-xs text-gray-400">
-                    Acked: {new Date(alarm.acknowledged_at).toLocaleString()}
-                  </p>
-                )}
-                {/* Show key alarm data fields */}
-                {alarm.alarm_data.value != null && (
-                  <p className="text-xs text-gray-500 mt-1">
-                    Value: {String(alarm.alarm_data.value)}
-                  </p>
-                )}
-              </div>
 
-              {!alarm.acknowledged_at && (
-                <button
-                  onClick={() => setAckDialog({ alarmId: alarm.id, pedestalId: alarm.pedestal_id })}
-                  className="btn-secondary text-xs py-1.5 shrink-0"
-                  disabled={actionLoading === alarm.id}
-                >
-                  Acknowledge
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
+                {!alarm.acknowledged_at && (
+                  <button
+                    onClick={() => setAckDialog({ alarmId: alarm.id, pedestalId: alarm.pedestal_id })}
+                    className="btn-primary btn-sm shrink-0 self-start sm:self-center"
+                    disabled={actionLoading === alarm.id}
+                  >
+                    Acknowledge
+                  </button>
+                )}
+              </li>
+            )
+          })}
+        </ul>
       )}
 
       <ConfirmDialog
         isOpen={!!ackDialog}
-        title="Acknowledge Alarm"
-        message={`Are you sure you want to acknowledge alarm #${ackDialog?.alarmId}?`}
+        title="Acknowledge alarm"
+        message={`Acknowledge alarm #${ackDialog?.alarmId}?`}
         confirmLabel="Acknowledge"
         onConfirm={handleAcknowledge}
         onCancel={() => setAckDialog(null)}

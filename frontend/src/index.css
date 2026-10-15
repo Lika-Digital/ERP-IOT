@@ -64,18 +64,4 @@
   .notice-warn {
     @apply rounded-control border px-4 py-3 text-sm bg-st-yellow-bg text-st-yellow-fg border-st-yellow-line;
   }
-
-  /* Badges for screens not yet redesigned; a redesigned screen uses <Status>. */
-  .badge-green {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-st-green-bg text-st-green-fg;
-  }
-  .badge-yellow {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-st-yellow-bg text-st-yellow-fg;
-  }
-  .badge-red {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-st-red-bg text-st-red-fg;
-  }
-  .badge-gray {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-st-grey-bg text-st-grey-fg;
-  }
 }

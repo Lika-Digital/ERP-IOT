@@ -52,7 +52,7 @@ export default function Layout() {
     navigate('/login')
   }
 
-  const themeLabel = theme === 'dark' ? 'Svijetla tema' : 'Tamna tema'
+  const themeLabel = theme === 'dark' ? 'Light theme' : 'Dark theme'
   const who = fullName || email
 
   return (
@@ -67,21 +67,21 @@ export default function Layout() {
         data-sidebar
       >
         <div className="p-4 flex items-center justify-between gap-2">
-          <NavLink to="/marinas" className="block rounded-control overflow-hidden" aria-label="Lika — početna">
+          <NavLink to="/marinas" className="block rounded-control overflow-hidden" aria-label="Lika — home">
             <img src={logo} alt="Lika" className="h-9 w-auto" />
           </NavLink>
           <button className="md:hidden p-2 text-sidebar-muted hover:text-sidebar-fg" onClick={() => setOpen(false)}
-            aria-label="Zatvori izbornik">
+            aria-label="Close menu">
             <Icon d={ICONS.close} />
           </button>
         </div>
         <p className="px-5 -mt-1 mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-sidebar-muted">
-          ERP marine
+          Marina ERP
         </p>
 
         <nav className="flex-1 min-h-0 overflow-y-auto px-3 space-y-1">
           <NavLink to="/marinas" className={navLinkClass} end>
-            <Icon d={ICONS.marinas} /> All Marinas
+            <Icon d={ICONS.marinas} /> All marinas
           </NavLink>
           {role === 'admin' && (
             <NavLink to="/users" className={navLinkClass} data-nav="users">
@@ -103,7 +103,7 @@ export default function Layout() {
                 <Icon d={ICONS.dashboard} /> Dashboard
               </NavLink>
               <NavLink to={`/marinas/${marinaId}/control`} className={navLinkClass}>
-                <Icon d={ICONS.control} /> Pedestal Control
+                <Icon d={ICONS.control} /> Pedestal control
               </NavLink>
               <NavLink to={`/marinas/${marinaId}/energy`} className={navLinkClass}>
                 <Icon d={ICONS.energy} /> Energy
@@ -140,7 +140,7 @@ export default function Layout() {
 
       <main className="flex-1 overflow-auto flex flex-col min-w-0">
         <header className="md:hidden sticky top-0 z-20 flex items-center gap-3 px-4 h-14 bg-sidebar text-sidebar-fg">
-          <button onClick={() => setOpen(true)} className="p-2 -ml-2" aria-label="Otvori izbornik" data-menu>
+          <button onClick={() => setOpen(true)} className="p-2 -ml-2" aria-label="Open menu" data-menu>
             <Icon d={ICONS.menu} className="w-6 h-6" />
           </button>
           <img src={logo} alt="Lika" className="h-7 w-auto rounded" />

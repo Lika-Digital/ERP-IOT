@@ -15,6 +15,8 @@ export interface Outlet {
   current_amps?: (number | null)[]
   power_kw?: number | null
   state?: string
+  // on | off | unknown — decided by the server from the cabinet's state; controls follow it
+  switch: 'on' | 'off' | 'unknown'
   breaker_tripped?: boolean
   shared_with_berths?: number[]
   // Present ONLY when a control can actually work (D3). Absent = no control in the DOM.

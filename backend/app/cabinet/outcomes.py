@@ -12,20 +12,20 @@ from typing import Any, Optional
 
 SENTENCES = {
     "ok": "",
-    "cabinet_auth_failed": "Ormar ne prihvaća našu prijavu.",
-    "not_enabled": "Ova funkcija nije uključena na ormaru.",
-    "standalone": "Ormar radi samostalno. Osoblje marine može upravljati kad se ponovno poveže.",
-    "awaiting_plug": "Priklopite kabel za početak.",
-    "outlet_busy": "Ovaj priključak trenutno koristi netko drugi.",
-    "nfc_mapping_mismatch": "Naljepnica ne odgovara ovom priključku — uključivanje je odbijeno.",
+    "cabinet_auth_failed": "The cabinet does not accept our sign-in.",
+    "not_enabled": "This function is not enabled on the cabinet.",
+    "standalone": "The cabinet is running on its own. Marina staff can control it once it reconnects.",
+    "awaiting_plug": "Plug in the cable to start.",
+    "outlet_busy": "Someone else is using this outlet right now.",
+    "nfc_mapping_mismatch": "The tag does not belong to this outlet — switching on was refused.",
     "already_ended": "",                     # staff closed it first — not an error (D10)
-    "session_state_changed": "Sesija je u međuvremenu promijenila stanje. Osvježite prikaz.",
-    "not_found": "Ormar ne poznaje ovaj zapis.",
-    "conflict": "Ormar je odbio naredbu.",
-    "erp_bug": "Tehnička greška, prijavljena.",
-    "capability_unavailable": "Ova mogućnost trenutno nije dostupna na ormaru.",
-    "stale": "Ormar se ne javlja — prikazani su zadnji poznati podaci.",
-    "no_contact": "Nema veze s ovim ormarom.",
+    "session_state_changed": "The session changed in the meantime. Refresh the view.",
+    "not_found": "The cabinet does not know this record.",
+    "conflict": "The cabinet refused the command.",
+    "erp_bug": "Technical error, reported.",
+    "capability_unavailable": "This feature is not available on the cabinet right now.",
+    "stale": "The cabinet is not answering — showing the last known data.",
+    "no_contact": "No connection to this cabinet.",
 }
 
 # Outcomes that are not failures of the ERP or the cabinet; they are states.

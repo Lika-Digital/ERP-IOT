@@ -10,6 +10,7 @@ import {
   type MarinaUpdate,
 } from '../api/marinas'
 import { useAuthStore } from '../store/authStore'
+import Status, { MARINA, CONNECTION } from '../components/ui/Status'
 
 const EMPTY_CREATE: MarinaCreate = {
   name: '',
@@ -125,63 +126,51 @@ export default function MarinaSelect() {
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
-  const statusColor = (status: string) => {
-    if (status === 'active') return 'badge-green'
-    if (status === 'maintenance') return 'badge-yellow'
-    return 'badge-gray'
-  }
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-600" />
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-fg" />
       </div>
     )
   }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="page max-w-5xl" data-page="marinas">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-wrap items-end justify-between gap-3 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Marinas</h1>
-          <p className="text-gray-500 text-sm mt-1">Select a marina to manage</p>
+          <h1 className="page-title">Marinas</h1>
+          <p className="page-lead">Select a marina to manage</p>
         </div>
         {role === 'admin' && (
           <button className="btn-primary" onClick={() => setShowCreate(true)}>
-            + Add Marina
+            + Add marina
           </button>
         )}
       </div>
 
       {/* Error banner */}
       {error && (
-        <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-          {error}
-        </div>
+        <div className="notice-danger mb-4" role="alert">{error}</div>
       )}
 
       {/* Test connection result */}
       {testResult && (
-        <div className={`mb-4 px-4 py-3 rounded-lg text-sm border flex items-start justify-between gap-3 ${
-          testResult.success
-            ? 'bg-green-50 border-green-200 text-green-700'
-            : 'bg-red-50 border-red-200 text-red-700'
-        }`}>
-          <span>
-            <strong>{testResult.success ? '✓ Connection OK' : '✗ Connection failed'}:</strong>{' '}
-            {testResult.detail}
-          </span>
-          <button className="shrink-0 underline text-xs opacity-70" onClick={() => setTestResult(null)}>
-            dismiss
-          </button>
+        <div className="card !p-4 mb-4 flex flex-wrap items-start justify-between gap-3" role="status" data-connection-test>
+          <div className="space-y-1 min-w-0">
+            {(() => { const c = CONNECTION[testResult.success ? 'ok' : 'failed']
+              return <Status tone={c.tone} icon={c.icon} word={c.word} /> })()}
+            <p className="text-sm text-fg-muted break-words">{testResult.detail}</p>
+          </div>
+          <button className="btn-secondary btn-sm shrink-0" onClick={() => setTestResult(null)}>Dismiss</button>
         </div>
       )}
 
       {/* Marina grid */}
       {marinas.length === 0 ? (
         <div className="card text-center py-12">
-          <p className="text-gray-500">No marinas assigned to your account.</p>
+          <p className="text-fg-muted">No marinas assigned to your account.</p>
           {role === 'admin' && (
             <button className="btn-primary mt-4" onClick={() => setShowCreate(true)}>
               Add your first marina
@@ -191,7 +180,7 @@ export default function MarinaSelect() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {marinas.map((marina) => (
-            <div key={marina.id} className="card hover:border-brand-300 hover:shadow-md transition-all flex flex-col">
+            <div key={marina.id} className="card hover:border-accent transition-colors flex flex-col" data-marina={marina.id}>
               {/* Click to navigate */}
               <button
                 onClick={() => navigate(`/marinas/${marina.id}/dashboard`)}
@@ -202,17 +191,18 @@ export default function MarinaSelect() {
                 )}
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <h2 className="font-semibold text-gray-900 group-hover:text-brand-700 truncate">
+                    <h2 className="text-lg font-bold tracking-tight group-hover:text-link truncate">
                       {marina.name}
                     </h2>
                     {marina.location && (
-                      <p className="text-sm text-gray-500 truncate">{marina.location}</p>
+                      <p className="text-sm text-fg-muted truncate">{marina.location}</p>
                     )}
-                    <p className="text-xs text-gray-400 mt-1">{marina.timezone}</p>
+                    <p className="text-xs text-fg-muted mt-1">{marina.timezone}</p>
                   </div>
-                  <span className={statusColor(marina.status)}>{marina.status}</span>
+                  {(() => { const m = MARINA[marina.status] ?? MARINA.inactive
+                    return <Status tone={m.tone} icon={m.icon} word={m.word} /> })()}
                 </div>
-                <div className="mt-3 pt-3 border-t border-gray-100 flex items-center text-xs text-gray-400 gap-1">
+                <div className="mt-3 pt-3 border-t border-line flex items-center text-xs text-fg-muted gap-1">
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                   </svg>
@@ -222,7 +212,7 @@ export default function MarinaSelect() {
 
               {/* Admin actions */}
               {role === 'admin' && (
-                <div className="mt-3 pt-3 border-t border-gray-100 flex gap-2">
+                <div className="mt-3 pt-3 border-t border-line flex gap-2">
                   <button
                     className="btn-secondary text-xs flex-1"
                     onClick={() => openEdit(marina)}
@@ -234,7 +224,7 @@ export default function MarinaSelect() {
                     disabled={testingId === marina.id}
                     onClick={() => handleTestConnection(marina.id)}
                   >
-                    {testingId === marina.id ? 'Testing…' : 'Test Connection'}
+                    {testingId === marina.id ? 'Testing…' : 'Test connection'}
                   </button>
                 </div>
               )}
@@ -246,8 +236,8 @@ export default function MarinaSelect() {
       {/* ── Create marina modal ─────────────────────────────────────────────── */}
       {showCreate && (
         <MarinaModal
-          title="Add New Marina"
-          submitLabel={creating ? 'Creating…' : 'Create Marina'}
+          title="Add marina"
+          submitLabel={creating ? 'Creating…' : 'Create marina'}
           disabled={creating}
           onClose={() => setShowCreate(false)}
           onSubmit={handleCreate}
@@ -264,7 +254,7 @@ export default function MarinaSelect() {
       {editingMarina && (
         <MarinaModal
           title={`Edit — ${editingMarina.name}`}
-          submitLabel={saving ? 'Saving…' : 'Save Changes'}
+          submitLabel={saving ? 'Saving…' : 'Save changes'}
           disabled={saving}
           onClose={() => setEditingMarina(null)}
           onSubmit={handleEdit}
@@ -302,11 +292,11 @@ function MarinaModal({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative bg-white rounded-xl shadow-xl max-w-lg w-full p-6 z-10 max-h-[90vh] overflow-y-auto">
+      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+      <div className="relative bg-surface text-fg rounded-card shadow-card border border-line max-w-lg w-full p-6 z-10 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+          <h2 className="text-lg font-bold tracking-tight">{title}</h2>
+          <button onClick={onClose} className="text-fg-muted hover:text-fg text-2xl leading-none" aria-label="Close">&times;</button>
         </div>
         <form onSubmit={onSubmit} className="space-y-4">
           {children}
@@ -344,7 +334,7 @@ function MarinaFormFields({
   return (
     <>
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
+        <label className="label">Name *</label>
         <input
           className="input"
           required
@@ -355,7 +345,7 @@ function MarinaFormFields({
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+        <label className="label">Location</label>
         <input
           className="input"
           value={values.location ?? ''}
@@ -365,7 +355,7 @@ function MarinaFormFields({
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Timezone</label>
+        <label className="label">Timezone</label>
         <input
           className="input"
           value={values.timezone ?? 'UTC'}
@@ -375,13 +365,13 @@ function MarinaFormFields({
       </div>
 
       {/* Pedestal SW integration */}
-      <div className="rounded-lg border border-gray-200 p-4 space-y-4 bg-gray-50">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-          Pedestal SW Integration
+      <div className="rounded-control border border-line p-4 space-y-4 bg-surface-2">
+        <p className="text-xs font-semibold text-fg-muted uppercase tracking-wide">
+          Cabinet connection
         </p>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">API Base URL *</label>
+          <label className="label">API base URL *</label>
           <input
             className="input"
             required
@@ -393,8 +383,8 @@ function MarinaFormFields({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Service Account Email *
+          <label className="label">
+            Service account e-mail *
           </label>
           <input
             className="input"
@@ -408,8 +398,8 @@ function MarinaFormFields({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Service Account Password {isEdit ? '' : '*'}
+          <label className="label">
+            Service account password {isEdit ? '' : '*'}
           </label>
           <input
             className="input"
@@ -425,7 +415,7 @@ function MarinaFormFields({
             autoComplete="new-password"
           />
           {isEdit && (
-            <p className="text-xs text-gray-400 mt-1">
+            <p className="text-xs text-fg-muted mt-1">
               Leave blank to keep the existing password.
             </p>
           )}

@@ -4,7 +4,7 @@ import { getBerths, outletCommand, BerthView, BerthsResponse, Outlet, BerthColou
 import { askReason, NO_REASON } from '../api/controls'
 import { cabinetSentence } from '../api'
 import StaleDataBanner from '../components/ui/StaleDataBanner'
-import Status, { BERTH_STATUS } from '../components/ui/Status'
+import Status, { BERTH_COLOUR, SWITCH } from '../components/ui/Status'
 import { useWebSocket } from '../hooks/useWebSocket'
 
 // berth_colour from the server -> tone of the same name (a lookup, spec §3.2)
@@ -33,6 +33,7 @@ function OutletRow({
   busy: boolean
   onCommand: (outlet: Outlet, action: 'activate' | 'stop') => void
 }) {
+  const sw = SWITCH[outlet.switch] ?? SWITCH.unknown
   return (
     <li className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 py-2 text-sm border-t border-line first:border-t-0"
       data-outlet={outlet.name}>
@@ -46,29 +47,28 @@ function OutletRow({
             {(outlet.current_amps ?? []).map((a) => fmt(a)).join(' / ')} A
           </span>
         ) : (
-          <span className="ml-2 text-fg-muted">voda</span>
+          <span className="ml-2 text-fg-muted">Water</span>
         )}
         {outlet.shared_with_berths && outlet.shared_with_berths.length > 0 && (
           <span className="block mt-1 text-xs text-fg-muted">
-            dijeli {outlet.name} s vezom {outlet.shared_with_berths.map((b) => berths.get(b) ?? b).join(', ')}
+            {outlet.name} is shared with berth {outlet.shared_with_berths.map((b) => berths.get(b) ?? b).join(', ')}
           </span>
         )}
       </div>
-      {outlet.controls && (
-        <div className="flex gap-2">
-          {outlet.controls.map((action) => (
-            <button
-              key={action}
-              className={action === 'activate' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'}
-              disabled={busy}
-              onClick={() => onCommand(outlet, action)}
-              data-control={`${outlet.name}:${action}`}
-            >
-              {action === 'activate' ? 'Upali' : 'Ugasi'}
-            </button>
-          ))}
-        </div>
-      )}
+      <div className="flex items-center gap-2">
+        <Status tone={sw.tone} icon={sw.icon} word={sw.word} />
+        {outlet.controls?.map((action) => (
+          <button
+            key={action}
+            className={action === 'activate' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'}
+            disabled={busy}
+            onClick={() => onCommand(outlet, action)}
+            data-control={`${outlet.name}:${action}`}
+          >
+            {action === 'activate' ? 'Turn on' : 'Turn off'}
+          </button>
+        ))}
+      </div>
     </li>
   )
 }
@@ -89,7 +89,7 @@ export default function Berths() {
       setView(await getBerths(id))
       setError(null)
     } catch (err) {
-      setError(cabinetSentence(err, 'Podaci o vezovima nisu dostupni.'))
+      setError(cabinetSentence(err, 'Berth data is not available.'))
     } finally {
       setLoading(false)
     }
@@ -100,7 +100,7 @@ export default function Berths() {
 
   const onCommand = async (berth: BerthView, outlet: Outlet, action: 'activate' | 'stop') => {
     if (berth.pedestal.pk === null) return
-    const reason = await askReason(`${outlet.name} ${action === 'activate' ? 'uključi' : 'isključi'}`)
+    const reason = await askReason(`${outlet.name}: turn ${action === 'activate' ? 'on' : 'off'}`)
     if (!reason) { setMessage(NO_REASON); return }
     setBusy(true)
     setMessage(null)
@@ -108,7 +108,7 @@ export default function Berths() {
       await outletCommand(id, berth.pedestal.pk, outlet.name, action, reason)
       await fetchData()
     } catch (err) {
-      setMessage(cabinetSentence(err, 'Naredba nije izvršena.'))
+      setMessage(cabinetSentence(err, 'The command was not carried out.'))
     } finally {
       setBusy(false)
     }
@@ -129,11 +129,11 @@ export default function Berths() {
     <div className="page" data-page="berths">
       <div className="flex flex-wrap items-end justify-between gap-3 mb-6">
         <div>
-          <h1 className="page-title">Vezovi</h1>
-          <p className="page-lead">Stanje svakog veza, izračunato na poslužitelju</p>
+          <h1 className="page-title">Berths</h1>
+          <p className="page-lead">The state of every berth, as the server computes it</p>
         </div>
         <button onClick={fetchData} className="btn-secondary" disabled={loading}>
-          {loading ? 'Osvježavam…' : 'Osvježi'}
+          {loading ? 'Refreshing…' : 'Refresh'}
         </button>
       </div>
 
@@ -142,7 +142,7 @@ export default function Berths() {
       {error && (
         <div className="notice-danger mb-6" role="alert">
           <p>{error}</p>
-          <button className="btn-primary btn-sm mt-3" onClick={fetchData}>Pokušaj ponovno</button>
+          <button className="btn-primary btn-sm mt-3" onClick={fetchData}>Try again</button>
         </div>
       )}
 
@@ -152,18 +152,18 @@ export default function Berths() {
 
       {view && !view.cabinet.configured && (
         <p className="text-sm text-fg-muted mb-4">
-          Ormar ove marine nije opisan u ERP-u (tip uređaja, priključci po vezu) — priključci se ne prikazuju.
+          This marina's cabinet is not described in the ERP (device type, outlets per berth) — outlets are not shown.
         </p>
       )}
 
       {berths.length === 0 && !error ? (
         <div className="card text-center py-10">
-          <p className="text-fg-muted">{view?.cabinet.outcome.sentence || 'Nema podataka o vezovima.'}</p>
+          <p className="text-fg-muted">{view?.cabinet.outcome.sentence || 'No berth data.'}</p>
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {berths.map((berth) => {
-            const st = BERTH_STATUS[berth.status] ?? BERTH_STATUS.unknown
+            const st = BERTH_COLOUR[berth.berth_colour] ?? BERTH_COLOUR.grey
             return (
               <article
                 key={berth.berth_id}
@@ -171,14 +171,14 @@ export default function Berths() {
                 data-berth={berth.berth_id}
                 data-colour={berth.berth_colour}
               >
-                <header className="flex items-start justify-between gap-3 px-4 pt-4">
+                <header className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2 px-4 pt-4">
                   <div className="min-w-0">
-                    <h3 className="text-lg font-bold tracking-tight">{berth.name ?? `Vez ${berth.berth_id}`}</h3>
+                    <h3 className="text-lg font-bold tracking-tight">{berth.name ?? `Berth ${berth.berth_id}`}</h3>
                     {berth.pedestal.display_id && (
                       <p className="text-xs text-fg-muted font-mono truncate">{berth.pedestal.display_id}</p>
                     )}
                   </div>
-                  <Status tone={berth.berth_colour} icon={st.icon} word={st.word} />
+                  <Status tone={st.tone} icon={st.icon} word={st.word} />
                 </header>
                 {berth.status_sentence && (
                   <p className="px-4 pt-2 text-sm" data-sentence>{berth.status_sentence}</p>

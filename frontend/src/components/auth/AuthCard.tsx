@@ -14,7 +14,7 @@ export default function AuthCard({ title, children }: { title: string; children:
         <div className="flex flex-col items-center mb-8">
           <img src={logo} alt="Lika" className="h-14 w-auto rounded-card shadow-card" />
           <p className="mt-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-sidebar-muted">
-            ERP marine
+            Marina ERP
           </p>
         </div>
 

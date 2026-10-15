@@ -11,7 +11,7 @@ never derives a status; it renders `berth_colour` and `status_sentence`.
 Tests talk about `status_code`, never about the sentence.
 
 A state with no row in the table is not drawn as free: it becomes
-`unclassified` / unknown / grey, "Nešto treba provjeriti" (§3.2).
+`unclassified` / unknown / grey, "Something needs checking" (§3.2).
 """
 from __future__ import annotations
 
@@ -25,22 +25,22 @@ DEFAULT_HEARTBEAT_INTERVAL = timedelta(seconds=60)
 
 # rank, status_code, status, berth_colour, sentence
 _TABLE: list[tuple[float, str, str, str, str]] = [
-    (1,   "no_contact",           "unknown",   "grey",   "Nema veze s ovim ormarom"),
-    (2,   "standalone",           "unknown",   "grey",   "Ormar radi samostalno"),
-    (2.5, "outlet_silent",        "unknown",   "grey",   "Ovaj priključak se nije javio"),
-    (3,   "water_leak",           "attention", "red",    "Otkriveno curenje vode"),
-    (4,   "too_hot",              "attention", "red",    "Ormar je pregrijan"),
+    (1,   "no_contact",           "unknown",   "grey",   "No connection to this cabinet"),
+    (2,   "standalone",           "unknown",   "grey",   "The cabinet is running on its own"),
+    (2.5, "outlet_silent",        "unknown",   "grey",   "This outlet has not reported"),
+    (3,   "water_leak",           "attention", "red",    "Water leak detected"),
+    (4,   "too_hot",              "attention", "red",    "The cabinet is overheating"),
     (5,   "auto_off_overload",    "attention", "red",
-     "Struja se automatski isključila — preveliko trošenje"),
-    (6,   "breaker_tripped",      "attention", "red",    "Struja je iskočila — treba resetirati"),
-    (7,   "measurement_missing",  "attention", "red",    "Potrošnja nije izmjerena — treba pregled"),
-    (8,   "vessel_mismatch",      "attention", "red",    "Plovilo ne odgovara slici"),
-    (9,   "power_without_vessel", "attention", "orange", "Struja teče, a plovila nema"),
-    (10,  "reserved_empty",       "attention", "yellow", "Rezervirano, vez je prazan"),
+     "Power switched off automatically — overload"),
+    (6,   "breaker_tripped",      "attention", "red",    "Breaker tripped — needs a reset"),
+    (7,   "measurement_missing",  "attention", "red",    "Consumption not measured — needs a check"),
+    (8,   "vessel_mismatch",      "attention", "red",    "The vessel does not match the berth"),
+    (9,   "power_without_vessel", "attention", "orange", "Power is on, but there is no vessel"),
+    (10,  "reserved_empty",       "attention", "yellow", "Reserved, the berth is empty"),
     (11,  "vessel_present",       "ok",        "blue",   ""),
     (12,  "free",                 "ok",        "green",  ""),
 ]
-UNCLASSIFIED = ("unclassified", "unknown", "grey", "Nešto treba provjeriti")
+UNCLASSIFIED = ("unclassified", "unknown", "grey", "Something needs checking")
 
 STATUS_CODES = frozenset(r[1] for r in _TABLE) | {UNCLASSIFIED[0]}
 _BY_CODE = {r[1]: r for r in _TABLE}

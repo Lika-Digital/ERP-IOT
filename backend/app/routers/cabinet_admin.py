@@ -24,9 +24,9 @@ from .auth import require_admin
 router = APIRouter(prefix="/api/marinas", tags=["cabinet-admin"])
 
 COMPARISON_SENTENCE = {
-    "unverifiable": "Nije moguće provjeriti — ormar ne izlaže svoje mapiranje (R1).",
-    "in_sync": "Mapiranje ERP-a i ormara se slaže.",
-    "divergent": "Mapiranje ERP-a i ormara se NE slaže — treba riješiti.",
+    "unverifiable": "Cannot check — the cabinet does not expose its mapping (R1).",
+    "in_sync": "The ERP and cabinet mappings agree.",
+    "divergent": "The ERP and cabinet mappings do NOT agree — needs fixing.",
 }
 
 

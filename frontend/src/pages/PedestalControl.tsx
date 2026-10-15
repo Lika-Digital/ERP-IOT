@@ -5,6 +5,7 @@ import { getPendingSessions, getActiveSessions } from '../api/energy'
 import { allowSession, askReason, denySession, NO_REASON, stopSession } from '../api/controls'
 import StaleDataBanner from '../components/ui/StaleDataBanner'
 import ConfirmDialog from '../components/ui/ConfirmDialog'
+import Status, { SESSION } from '../components/ui/Status'
 
 interface Session {
   id: number
@@ -55,14 +56,14 @@ export default function PedestalControl() {
   }, [fetchData])
 
   const handleAllow = async (sessionId: number, pedestalId: number) => {
-    const reason = await askReason(`dopusti sesiju #${sessionId}`)
+    const reason = await askReason(`Allow session #${sessionId}`)
     if (!reason) { setError(NO_REASON); return }
     setActionLoading(sessionId)
     try {
       await allowSession(id, sessionId, reason, pedestalId)
       await fetchData()
     } catch (err) {
-      setError(cabinetSentence(err, 'Failed to allow session.'))
+      setError(cabinetSentence(err, 'Failed to allow the session.'))
     } finally {
       setActionLoading(null)
     }
@@ -78,7 +79,7 @@ export default function PedestalControl() {
       setDenyReason('')
       await fetchData()
     } catch (err) {
-      setError(cabinetSentence(err, 'Failed to deny session.'))
+      setError(cabinetSentence(err, 'Failed to deny the session.'))
     } finally {
       setActionLoading(null)
     }
@@ -86,7 +87,7 @@ export default function PedestalControl() {
 
   const handleStop = async () => {
     if (!stopDialog) return
-    const reason = await askReason(`zaustavi sesiju #${stopDialog.sessionId}`)
+    const reason = await askReason(`Stop session #${stopDialog.sessionId}`)
     if (!reason) { setError(NO_REASON); return }
     setActionLoading(stopDialog.sessionId)
     try {
@@ -94,148 +95,114 @@ export default function PedestalControl() {
       setStopDialog(null)
       await fetchData()
     } catch (err) {
-      setError(cabinetSentence(err, 'Failed to stop session.'))
+      setError(cabinetSentence(err, 'Failed to stop the session.'))
     } finally {
       setActionLoading(null)
     }
   }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
+    <div className="page max-w-5xl" data-page="control">
+      <div className="flex flex-wrap items-end justify-between gap-3 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Pedestal Control</h1>
-          <p className="text-sm text-gray-500 mt-1">Manage session approvals and active sessions</p>
+          <h1 className="page-title">Pedestal control</h1>
+          <p className="page-lead">Approve waiting sessions and stop running ones</p>
         </div>
         <button onClick={fetchData} className="btn-secondary" disabled={loading}>
-          {loading ? 'Refreshing...' : 'Refresh'}
+          {loading ? 'Refreshing…' : 'Refresh'}
         </button>
       </div>
 
       <StaleDataBanner isStale={isStale} onRefresh={fetchData} />
 
-      {error && (
-        <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-          {error}
-        </div>
-      )}
+      {error && <div className="notice-danger mb-4" role="alert">{error}</div>}
 
-      {/* Pending sessions */}
-      <div className="card mb-6">
-        <h2 className="text-lg font-semibold mb-4 text-yellow-700">
-          Pending Approvals
-          {pendingSessions.length > 0 && (
-            <span className="ml-2 badge-yellow">{pendingSessions.length}</span>
-          )}
+      <section className="card mb-6">
+        <h2 className="text-lg font-bold tracking-tight mb-4 flex items-center gap-2">
+          Waiting for approval
+          <span className="text-sm font-semibold text-fg-muted tabular-nums">{pendingSessions.length}</span>
         </h2>
-
         {pendingSessions.length === 0 ? (
-          <p className="text-gray-400 text-sm">No pending sessions.</p>
+          <p className="text-fg-muted text-sm">No sessions are waiting.</p>
         ) : (
-          <div className="space-y-3">
+          <ul className="divide-y divide-line">
             {pendingSessions.map((s) => (
-              <div
-                key={s.id}
-                className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-yellow-50 rounded-lg border border-yellow-200"
-              >
-                <div>
-                  <p className="text-sm font-medium">
-                    Session #{s.id} — Pedestal {s.pedestal_id}
-                    {s.socket_id != null && ` (Socket ${s.socket_id})`}
+              <li key={s.id} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="min-w-0 space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Status tone={SESSION.pending.tone} icon={SESSION.pending.icon} word={SESSION.pending.word} />
+                    <span className="font-semibold">Session #{s.id}</span>
+                  </div>
+                  <p className="text-xs text-fg-muted">
+                    Pedestal {s.pedestal_id}{s.socket_id != null && ` · socket ${s.socket_id}`} · {s.type ?? 'unknown type'}
+                    {s.customer_name && ` · ${s.customer_name}`}
                   </p>
-                  {s.customer_name && (
-                    <p className="text-xs text-gray-600">Customer: {s.customer_name}</p>
-                  )}
-                  <p className="text-xs text-gray-500">Type: {s.type ?? 'unknown'}</p>
                 </div>
                 <div className="flex gap-2 shrink-0">
-                  <button
-                    onClick={() => handleAllow(s.id, s.pedestal_id)}
-                    className="btn-primary py-1.5 text-xs"
-                    disabled={actionLoading === s.id}
-                  >
+                  <button onClick={() => handleAllow(s.id, s.pedestal_id)} className="btn-primary btn-sm"
+                    disabled={actionLoading === s.id}>
                     Allow
                   </button>
-                  <button
-                    onClick={() => setDenyDialog({ sessionId: s.id, pedestalId: s.pedestal_id })}
-                    className="btn-danger py-1.5 text-xs"
-                    disabled={actionLoading === s.id}
-                  >
+                  <button onClick={() => setDenyDialog({ sessionId: s.id, pedestalId: s.pedestal_id })}
+                    className="btn-danger btn-sm" disabled={actionLoading === s.id}>
                     Deny
                   </button>
                 </div>
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
-      </div>
+      </section>
 
-      {/* Active sessions */}
-      <div className="card">
-        <h2 className="text-lg font-semibold mb-4">
-          Active Sessions
-          {activeSessions.length > 0 && (
-            <span className="ml-2 badge-green">{activeSessions.length}</span>
-          )}
+      <section className="card">
+        <h2 className="text-lg font-bold tracking-tight mb-4 flex items-center gap-2">
+          Active sessions
+          <span className="text-sm font-semibold text-fg-muted tabular-nums">{activeSessions.length}</span>
         </h2>
-
         {activeSessions.length === 0 ? (
-          <p className="text-gray-400 text-sm">No active sessions.</p>
+          <p className="text-fg-muted text-sm">No active sessions.</p>
         ) : (
-          <div className="space-y-3">
+          <ul className="divide-y divide-line">
             {activeSessions.map((s) => (
-              <div
-                key={s.id}
-                className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-green-50 rounded-lg border border-green-200"
-              >
-                <div>
-                  <p className="text-sm font-medium">
-                    Session #{s.id} — Pedestal {s.pedestal_id}
-                    {s.socket_id != null && ` (Socket ${s.socket_id})`}
+              <li key={s.id} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="min-w-0 space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Status tone={SESSION.active.tone} icon={SESSION.active.icon} word={SESSION.active.word} />
+                    <span className="font-semibold">Session #{s.id}</span>
+                  </div>
+                  <p className="text-xs text-fg-muted">
+                    Pedestal {s.pedestal_id}{s.socket_id != null && ` · socket ${s.socket_id}`}
+                    {s.started_at && ` · started ${new Date(s.started_at).toLocaleString()}`}
                   </p>
-                  {s.started_at && (
-                    <p className="text-xs text-gray-500">
-                      Started: {new Date(s.started_at).toLocaleString()}
-                    </p>
-                  )}
                 </div>
-                <button
-                  onClick={() => setStopDialog({ sessionId: s.id, pedestalId: s.pedestal_id })}
-                  className="btn-danger py-1.5 text-xs shrink-0"
-                  disabled={actionLoading === s.id}
-                >
+                <button onClick={() => setStopDialog({ sessionId: s.id, pedestalId: s.pedestal_id })}
+                  className="btn-danger btn-sm shrink-0 self-start sm:self-center" disabled={actionLoading === s.id}>
                   Stop
                 </button>
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
-      </div>
+      </section>
 
-      {/* Deny dialog */}
       <ConfirmDialog
         isOpen={!!denyDialog}
-        title="Deny Session"
-        message="Optionally provide a reason for denial that will be sent to the customer."
-        confirmLabel="Deny Session"
+        title="Deny session"
+        message="A reason is required (at least 3 characters). It is written to the audit log and sent to the customer."
+        confirmLabel="Deny session"
         confirmVariant="danger"
         onConfirm={handleDeny}
         onCancel={() => { setDenyDialog(null); setDenyReason('') }}
       >
-        <input
-          className="input"
-          placeholder="Reason (optional)"
-          value={denyReason}
-          onChange={(e) => setDenyReason(e.target.value)}
-        />
+        <input className="input" placeholder="Reason" aria-label="reason" value={denyReason}
+          onChange={(e) => setDenyReason(e.target.value)} />
       </ConfirmDialog>
 
-      {/* Stop dialog */}
       <ConfirmDialog
         isOpen={!!stopDialog}
-        title="Stop Session"
-        message={`Are you sure you want to stop session #${stopDialog?.sessionId}? This will cut power immediately.`}
-        confirmLabel="Stop Session"
+        title="Stop session"
+        message={`Stop session #${stopDialog?.sessionId}? Power is cut immediately.`}
+        confirmLabel="Stop session"
         confirmVariant="danger"
         onConfirm={handleStop}
         onCancel={() => setStopDialog(null)}

@@ -118,7 +118,7 @@ def _local_hour(at_utc: datetime, tz_name: str | None) -> tuple[int, str]:
         try:
             tz, used = ZoneInfo(name), name
         except (ZoneInfoNotFoundError, ValueError):
-            tz, used = timezone.utc, f"UTC (zona {name!r} nepoznata ovom računalu)"
+            tz, used = timezone.utc, f"UTC (zone {name!r} unknown to this host)"
     return at_utc.replace(tzinfo=timezone.utc).astimezone(tz).hour, used
 
 
@@ -140,9 +140,9 @@ def decoy_touch(c: Connection, since: datetime, now: datetime) -> list:
         first = hits[0][0]
         out.append(Finding(
             "decoy_touch", f"{kind}|{decoy}|{ip}|{day}", "critical",
-            f"Mamac dotaknut: {quote(decoy)}",
-            f"{len(hits)} dodir(a) mamca vrste '{kind}' s adrese {quote(ip) or 'nepoznata'}; "
-            "nitko legitiman ne dira mamce (sloj 2).",
+            f"Decoy touched: {quote(decoy)}",
+            f"{len(hits)} touch(es) of a '{kind}' decoy from {quote(ip) or 'an unknown address'}; "
+            "nobody legitimate touches a decoy (layer 2).",
             [_ev("decoy_hits", [h["id"] for h, _ in hits],
                  {"kind": kind, "decoy": decoy, "method": first["method"], "path": first["path"],
                   "source_ip": ip, "user_agent": first["user_agent"]}, hits[0][1])],
@@ -173,9 +173,9 @@ def login_spray(c: Connection, since: datetime, now: datetime) -> list:
             continue
         out.append(Finding(
             "login_spray", f"{ip}|{start.isoformat()}", "warning",
-            f"Neuspjele prijave na {len(emails)} računa s iste adrese",
-            f"S adrese {quote(ip)} {len(rows)} neuspjelih prijava na {len(emails)} različitih "
-            f"e-mailova unutar {int(SPRAY_BUCKET.total_seconds() // 60)} min.",
+            f"Failed sign-ins on {len(emails)} accounts from one address",
+            f"{len(rows)} failed sign-ins from {quote(ip)} on {len(emails)} different "
+            f"e-mail addresses within {int(SPRAY_BUCKET.total_seconds() // 60)} min.",
             [_ev("auth_audit", [r["id"] for r, _ in rows],
                  {"source_ip": ip, "emails_tried": emails,
                   "details": sorted({r["detail"] or "" for r, _ in rows})}, rows[0][1])],
@@ -201,9 +201,9 @@ def socket_cmd_odd_hour(c: Connection, since: datetime, now: datetime) -> list:
             continue
         out.append(Finding(
             "socket_cmd_odd_hour", f"command_audit|{r['id']}", "warning",
-            f"{r['display_id']}: naredba priključku izvan radnog vremena",
-            f"{r['endpoint_key']} '{quote(r['action'])}' u {hour:02d} h po lokalnom vremenu "
-            f"({zone}); radno vrijeme je {WORK_FROM_HOUR:02d}–{WORK_TO_HOUR:02d} h.",
+            f"{r['display_id']}: outlet command outside working hours",
+            f"{r['endpoint_key']} '{quote(r['action'])}' at {hour:02d}:00 local time "
+            f"({zone}); working hours are {WORK_FROM_HOUR:02d}–{WORK_TO_HOUR:02d} h.",
             [_ev("command_audit", [r["id"]],
                  {"endpoint_key": r["endpoint_key"], "action": r["action"],
                   "actor_ref": r["actor_ref"], "reason": r["reason"], "source_ip": r["source_ip"],
@@ -234,9 +234,9 @@ def socket_cmd_new_ip(c: Connection, since: datetime, now: datetime) -> list:
         known = sorted({h["source_ip"] for h in hist if h["source_ip"]})
         out.append(Finding(
             "socket_cmd_new_ip", f"command_audit|{r['id']}", "warning",
-            f"{r['display_id']}: naredba priključku s nove adrese",
-            f"Račun je u zadnjih {BASELINE.days} dana slao naredbe s {len(known)} adresa; "
-            "ova nije među njima.",
+            f"{r['display_id']}: outlet command from a new address",
+            f"In the last {BASELINE.days} days the account sent commands from {len(known)} "
+            "addresses; this is not one of them.",
             [_ev("command_audit", [r["id"]],
                  {"endpoint_key": r["endpoint_key"], "action": r["action"],
                   "actor_ref": r["actor_ref"], "source_ip": r["source_ip"],
@@ -266,9 +266,9 @@ def account_new_endpoint(c: Connection, since: datetime, now: datetime) -> list:
         seen.add(key)
         out.append(Finding(
             "account_new_endpoint", f"{r['actor_ref']}|{r['endpoint_key']}|{at.date()}", "info",
-            f"Račun prvi put zove {r['endpoint_key']}",
-            f"U zadnjih {BASELINE.days} dana račun je zvao {len({h['endpoint_key'] for h in hist})}"
-            " drugih vrsta naredbi, ovu nijednom.",
+            f"Account calls {r['endpoint_key']} for the first time",
+            f"In the last {BASELINE.days} days the account called {len({h['endpoint_key'] for h in hist})}"
+            " other kinds of command, never this one.",
             [_ev("command_audit", [r["id"]],
                  {"endpoint_key": r["endpoint_key"], "actor_ref": r["actor_ref"],
                   "source_ip": r["source_ip"],
@@ -316,9 +316,9 @@ def door_no_window(c: Connection, since: datetime, now: datetime) -> list:
             continue
         out.append(Finding(
             "door_no_window", f"alarm_log|{r['id']}", "warning",
-            f"{r['display_id']}: vrata otvorena izvan servisnog prozora",
-            "Ormar je javio vrata (marina_door), a za to vrijeme nema najavljenog servisnog "
-            "prozora.",
+            f"{r['display_id']}: door open outside a service window",
+            "The cabinet reported its door (marina_door) and no service window was "
+            "announced for that time.",
             [_ev("alarm_log", [r["id"]], {"event": "marina_door", "data": data}, at)], at, at))
     for r in c.execute(_STATUS_SNAPSHOTS, _p(c, since=since, now=now)).mappings():
         data = _as_dict(r["last_seen_data"])
@@ -333,9 +333,9 @@ def door_no_window(c: Connection, since: datetime, now: datetime) -> list:
         hour = at.replace(minute=0, second=0, microsecond=0)
         out.append(Finding(
             "door_no_window", f"status_ext|{cab['id']}|{hour.isoformat()}", "warning",
-            f"{cab['display_id']}: vrata otvorena izvan servisnog prozora",
-            "Zadnje stanje ormara (status_ext) kaže door_state = open, a za to vrijeme nema "
-            "najavljenog servisnog prozora.",
+            f"{cab['display_id']}: door open outside a service window",
+            "The cabinet's last state (status_ext) says door_state = open and no service "
+            "window was announced for that time.",
             [_ev("pedestal_cache", [r["id"]], {"cache_key": r["cache_key"],
                                                "door_state": data.get("door_state")}, at)],
             at, at))
@@ -343,19 +343,19 @@ def door_no_window(c: Connection, since: datetime, now: datetime) -> list:
 
 
 RULES = (
-    Rule("decoy_touch", "critical", "dodir mamca (sloj 2)", decoy_touch),
+    Rule("decoy_touch", "critical", "a decoy is touched (layer 2)", decoy_touch),
     Rule("login_spray", "warning",
-         f"neuspjele prijave na ≥{SPRAY_ACCOUNTS} računa s iste adrese u "
+         f"failed sign-ins on ≥{SPRAY_ACCOUNTS} accounts from one address within "
          f"{int(SPRAY_BUCKET.total_seconds() // 60)} min", login_spray),
     Rule("socket_cmd_odd_hour", "warning",
-         f"naredba priključku izvan {WORK_FROM_HOUR:02d}–{WORK_TO_HOUR:02d} h po lokalnom vremenu",
+         f"outlet command outside {WORK_FROM_HOUR:02d}–{WORK_TO_HOUR:02d} h local time",
          socket_cmd_odd_hour),
     Rule("socket_cmd_new_ip", "warning",
-         f"naredba priključku s adrese koju račun nije koristio {BASELINE.days} dana",
+         f"outlet command from an address the account has not used in {BASELINE.days} days",
          socket_cmd_new_ip),
     Rule("account_new_endpoint", "info",
-         f"račun zove endpoint koji nije zvao {BASELINE.days} dana", account_new_endpoint),
-    Rule("door_no_window", "warning", "vrata ormara izvan najavljenog servisnog prozora",
+         f"account calls an endpoint it has not called in {BASELINE.days} days", account_new_endpoint),
+    Rule("door_no_window", "warning", "cabinet door outside an announced service window",
          door_no_window),
 )
 RULE_IDS = tuple(r.rule_id for r in RULES)

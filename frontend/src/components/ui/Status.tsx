@@ -45,7 +45,7 @@ export function StatusGlyph({ icon, className = 'w-4 h-4' }: { icon: StatusIcon;
 export default function Status({ tone, icon, word, size = 'sm' }: StatusProps) {
   const pad = size === 'md' ? 'px-3 py-1 text-sm' : 'px-2.5 py-0.5 text-xs'
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full border font-semibold ${pad} ${TONE[tone]}`}
+    <span className={`inline-flex items-center gap-1.5 rounded-full border font-semibold whitespace-nowrap ${pad} ${TONE[tone]}`}
       data-status={tone}>
       <StatusGlyph icon={icon} className={size === 'md' ? 'w-4 h-4' : 'w-3.5 h-3.5'} />
       {word}
@@ -55,27 +55,86 @@ export default function Status({ tone, icon, word, size = 'sm' }: StatusProps) {
 
 /* ── Lookup tables: server key -> how it is shown. Never a decision. ───────── */
 
-/** Berth: the server's `status` category (ok | attention | unknown), §3. */
-export const BERTH_STATUS: Record<string, { icon: StatusIcon; word: string }> = {
-  ok: { icon: 'ok', word: 'U redu' },
-  attention: { icon: 'attention', word: 'Pažnja' },
-  unknown: { icon: 'unknown', word: 'Nepoznato' },
+type Look = { tone: Tone; icon: StatusIcon; word: string }
+
+/**
+ * Berth: keyed by the server's `berth_colour` (D2, spec §3.2). One colour, one
+ * word — the same word never appears in two colours.
+ */
+export const BERTH_COLOUR: Record<Tone, Look> = {
+  green: { tone: 'green', icon: 'ok', word: 'Free' },
+  blue: { tone: 'blue', icon: 'ok', word: 'Occupied — correct vessel' },
+  yellow: { tone: 'yellow', icon: 'info', word: 'Reserved' },
+  orange: { tone: 'orange', icon: 'attention', word: 'Power without vessel' },
+  red: { tone: 'red', icon: 'alert', word: 'Alarm' },
+  grey: { tone: 'grey', icon: 'unknown', word: 'Unknown' },
+}
+
+/** Outlet / valve: the server's `switch` (on | off | unknown). */
+export const SWITCH: Record<string, Look> = {
+  on: { tone: 'green', icon: 'ok', word: 'On' },
+  off: { tone: 'grey', icon: 'paused', word: 'Off' },
+  unknown: { tone: 'grey', icon: 'unknown', word: 'Unknown' },
 }
 
 /** Security alarm severity (D21). */
-export const SEVERITY: Record<string, { tone: Tone; icon: StatusIcon; word: string }> = {
-  critical: { tone: 'red', icon: 'alert', word: 'critical' },
-  warning: { tone: 'orange', icon: 'attention', word: 'warning' },
-  info: { tone: 'blue', icon: 'info', word: 'info' },
+export const SEVERITY: Record<string, Look> = {
+  critical: { tone: 'red', icon: 'alert', word: 'Critical' },
+  warning: { tone: 'orange', icon: 'attention', word: 'Warning' },
+  info: { tone: 'blue', icon: 'info', word: 'Info' },
 }
 
 /** Security alarm state and rule mode (D21). */
-export const ALARM_STATE: Record<string, { tone: Tone; icon: StatusIcon; word: string }> = {
-  open: { tone: 'red', icon: 'attention', word: 'open' },
-  acknowledged: { tone: 'yellow', icon: 'ok', word: 'acknowledged' },
-  closed: { tone: 'grey', icon: 'ok', word: 'closed' },
+export const ALARM_STATE: Record<string, Look> = {
+  open: { tone: 'red', icon: 'attention', word: 'Open' },
+  acknowledged: { tone: 'yellow', icon: 'ok', word: 'Acknowledged' },
+  closed: { tone: 'grey', icon: 'ok', word: 'Closed' },
 }
-export const RULE_MODE: Record<string, { tone: Tone; icon: StatusIcon; word: string }> = {
-  active: { tone: 'green', icon: 'ok', word: 'active' },
-  shadow: { tone: 'grey', icon: 'paused', word: 'shadow' },
+export const RULE_MODE: Record<string, Look> = {
+  active: { tone: 'green', icon: 'ok', word: 'Active' },
+  shadow: { tone: 'grey', icon: 'paused', word: 'Shadow' },
 }
+
+/** Users (D20): what the server reports about an account, one look per fact. */
+export const ACCOUNT: Record<string, Look> = {
+  password_set: { tone: 'green', icon: 'ok', word: 'Password set' },
+  link_pending: { tone: 'yellow', icon: 'info', word: 'Link pending' },
+  mfa_linked: { tone: 'green', icon: 'ok', word: '2FA linked' },
+  mfa_missing: { tone: 'yellow', icon: 'attention', word: '2FA not linked' },
+  active: { tone: 'green', icon: 'ok', word: 'Active' },
+  locked: { tone: 'red', icon: 'alert', word: 'Locked' },
+  disabled: { tone: 'grey', icon: 'paused', word: 'Disabled' },
+}
+
+/** Cabinet sessions as the server lists them: waiting for approval, or running. */
+export const SESSION: Record<'pending' | 'active', Look> = {
+  pending: { tone: 'yellow', icon: 'info', word: 'Waiting for approval' },
+  active: { tone: 'green', icon: 'ok', word: 'Active' },
+}
+
+/** Marina record status, as stored on the server. */
+export const MARINA: Record<string, Look> = {
+  active: { tone: 'green', icon: 'ok', word: 'Active' },
+  maintenance: { tone: 'yellow', icon: 'attention', word: 'Maintenance' },
+  inactive: { tone: 'grey', icon: 'paused', word: 'Inactive' },
+}
+
+/** A connection test the operator just ran. */
+export const CONNECTION: Record<'ok' | 'failed', Look> = {
+  ok: { tone: 'green', icon: 'ok', word: 'Connection OK' },
+  failed: { tone: 'red', icon: 'alert', word: 'Connection failed' },
+}
+
+/** Camera occupancy as the cabinet reports it (true / false / not analysed). */
+export const OCCUPANCY: Record<'occupied' | 'vacant' | 'none', Look> = {
+  occupied: { tone: 'blue', icon: 'ok', word: 'Occupied' },
+  vacant: { tone: 'green', icon: 'ok', word: 'Free' },
+  none: { tone: 'grey', icon: 'unknown', word: 'Not analysed' },
+}
+
+/** A sensor or device the cabinet reports as reachable or not; a reading in alarm. */
+export const REACH: Record<'yes' | 'no', Look> = {
+  yes: { tone: 'green', icon: 'ok', word: 'Reachable' },
+  no: { tone: 'red', icon: 'alert', word: 'Unreachable' },
+}
+export const READING_ALARM: Look = { tone: 'red', icon: 'alert', word: 'Alarm' }

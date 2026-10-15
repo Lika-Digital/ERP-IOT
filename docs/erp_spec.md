@@ -3,11 +3,11 @@
 Što se gradi, u kojem redoslijedu, i svaka odluka izrečena tako da ispravak
 košta jedan redak, a ne razgovor.
 
-    Verzija 13 — zamjenjuje v12 od 2026-10-14
+    Verzija 14 — zamjenjuje v13 od 2026-10-15
     Datum 2026-10-15
-    Status faze 1–4 ZAVRŠENE i PRIHVAĆENE (§10.1–§10.4); korak 5a (D20) PRIHVAĆEN
-           2026-10-14, na `main` (§10.7); faza 8 (D21) ZAVRŠENA na grani `faza/8-d21`,
-           čeka prihvaćanje (§10.8); 5b čeka tvoju listu (§10.7); agenti D21/D22 dizajnirani (§13);
+    Status faze 1–4 ZAVRŠENE i PRIHVAĆENE (§10.1–§10.4); korak 5a (D20) i faza 8 (D21)
+           PRIHVAĆENI, na `main` (§10.7, §10.8); UI · Lika brand ZAVRŠEN na grani
+           `faza/ui-brand`, čeka prihvaćanje (§10.9); 5b sljedeći, korak po korak (§10.7);
            §1 je prazan
 
 Čita se uz `docs/inputs/odluke.md` **v2.5** (odluke, obvezujuće — v2.1 dodaje **D18**, v2.2 **D19**,
@@ -17,6 +17,16 @@ v2.3 ispravak mreže u **D13**, v2.4 **D20**, v2.5 **D21**, **D22** i redoslijed
 `docs/inputs/ormar_ui_v2_spec.txt` (specifikacija ormara — uzor forme i izvor rječnika stanja).
 
 **Sve u ovom dokumentu je ODLUČENO. §1 je prazan — nema otvorenih blokatora.**
+
+### Što se promijenilo u verziji 14
+
+| | |
+|---|---|
+| **Faza 8 (D21) prihvaćena** | 2026-10-15, na `main` (`07a400a`) |
+| **UI · Lika brand** (§6.0, §10.9) | svi zasloni na design tokenima izvedenim iz UI-ja ormara; svijetla i tamna tema; **cijelo sučelje na engleskom**, uključujući rečenice stanja i poruke ormara koje šalje server |
+| **§3.2 · jedna boja, jedna riječ** | svaka boja iz D2 ima svoju riječ (Free, Occupied — correct vessel, Reserved, Power without vessel, Alarm, Unknown); ista riječ nikad u dvije boje (TC-UIR-02) |
+| **§4.1 · priključak: `switch` + samo smislen gumb** | server iz stanja ormara računa `switch` = on / off / unknown i šalje samo naredbu koja tom stanju odgovara (on → stop, off → activate, unknown → obje); SIM-01b |
+| **§11** | O47 → u 5b; O48 06–22 h potvrđeno; O49 → 5b; O46 kasnije; O51 novi |
 
 ### Što se promijenilo u verziji 13
 
@@ -1688,6 +1698,35 @@ Isti slijed pri **svakom** skeniranju; razlikuje se samo treći odgovor:
 
 ## §6 Stranice
 
+### §6.0 · Izgled i jezik (v14)
+
+> **Odlučeno** · ERP izgleda kao **Lika proizvod**, po uzoru na UI ormara
+> (`Lika-Digital/Cloud_IOT@e80a4c1`, `frontend/`): logo i boje iz loga (lime `#C4FF61`, tinta
+> `#2B2A29`), tamna bočna traka, kartice `rounded-xl` s tankim obrubom, svijetla i tamna tema.
+> Sve vrijednosti su u **jednoj datoteci**, `frontend/src/theme/tokens.css`; zaslon kaže čemu boja
+> služi (`bg-surface`, `text-fg-muted`, `<Status tone=…>`), nikad koja je nijansa.
+> **Jezik sučelja je engleski** — izbornik, prijava, 2FA, zasloni, statusi i rečenice koje šalje
+> server (rečenice stanja §3.2, poruke ormara §2.5, alarmi agenta D21).
+>
+> **Pravila koja redizajn ne smije izgubiti, i test koji ih drži:**
+>
+> | Pravilo | Test |
+> |---|---|
+> | status = ikona + riječ + boja, sva tri obavezna | TC-UIR-01 (izvor: `<Status>` traži sva tri; nijedan zaslon nema sirovu Tailwind boju ni obojeni „badge") |
+> | jedna riječ, jedna boja; svaka boja D2 ima svoju riječ | TC-UIR-02 |
+> | status računa server | SIM-15; riječ i ikona su tablica po ključu sa servera (`berth_colour`, `switch`, …) |
+> | odsutna mogućnost se ne iscrtava | SIM-06, SIM-02, SIM-01b (u pregledniku) |
+> | 360 px bez vodoravnog pomicanja, obje teme, svaki zaslon | provjera u pregledniku, korak UI |
+> | WCAG AA za svaki par tekst/pozadina, obje teme; grafikoni 3:1 | TC-UIB-01 |
+>
+> **Zašto** · Tvoja odluka (2026-10-15): ERP je izgledao staromodno, a treba se vidjeti da je
+> Lika proizvod. Jezik: jedan jezik u cijelom sučelju; engleski jer ga koriste i osoblje i
+> gosti iz više zemalja.
+>
+> **Ako griješim** · Boje su jedna datoteka; tekstovi su u zaslonima i u tri modula na serveru
+> (`berth_status.py`, `outcomes.py`, `agent/rules.py`) — prijevod je zamjena nizova, testovi
+> provjeravaju ključeve, ne tekst.
+
 Tri razine. Natrag je uvijek vidljiv. Nijedan overlay ne otvara drugi overlay.
 **Odsutna mogućnost se ne iscrtava** — ni onemogućena kontrola — umjesto nje jedna rečenica (D3).
 **Imena kupaca ne idu na zaslone marine** (D15).
@@ -2502,6 +2541,45 @@ VPS-a se preklapaju); 5c odmah nakon 5b ako je domena spremna; 5d 2–3 dana; 5e
 faza 6 lokalno protiv simulatora za vrijeme tog tjedna; faza 7 poslije njega. Prijedlog v9
 „faza 5 se piše dok teče 4.5 c" je bespredmetan — 4.5 je obrisana, a 5a kreće odmah.
 
+### §10.9 · UI · Lika brand — izvještaj (2026-10-15)
+
+**Grana `faza/ui-brand`**, od `07a400a` (faza 8). Prijedlog 1 (prijava s 2FA, Vezovi, Sigurnost)
+odobren 2026-10-15; korak 3 prenio je izgled na sve zaslone. Snimke: `docs/ui/korak-3/`
+(11 zaslona × svijetla/tamna × desktop/mobitel = 44), prijedlog 1 ostaje u `docs/ui/prijedlog-1/`.
+
+| Mjera | Kraj faze 8 | Kraj UI faze | Kako izmjereno |
+|---|---|---|---|
+| Backend testova | 442 | **496**, 0 preskočenih | `scripts/pytest_counts.py` |
+| UI testovi (`test_ui_brand.py`) | — | **53**: AA za 21 par u obje teme, grafikoni 3:1, ista imena tokena u obje teme, `<Status>` s tri obavezna svojstva, sirove boje i „badge" u 19 datoteka zaslona i komponenti, jedna riječ = jedna boja, svaka boja D2 ima svoju riječ | pytest |
+| Provjera u pregledniku | 15 | **16** — novo: svaki zaslon na 360 px u obje teme bez vodoravnog pomicanja, prekidač teme; SIM-01 sada tvrdi i da mirna utičnica kaže „Off" i nudi samo „Turn on" | `scripts/browser_check.py` |
+| Najslabiji kontrast teksta | — | **6,36 : 1** svijetla, **5,45 : 1** tamna (granica 4,5) | TC-UIB-01 |
+| Grafikoni prema kartici | — | najmanje **7,03 : 1** (granica 3) | TC-UIB-01 |
+| Vanjski zahtjevi pri prijavi | 1 (Google Fonts) | **0** — sustavski font | TC-UIB-02 |
+| Bundle | 669,76 kB | **669,53 kB** | `vite build` |
+
+**Što je novo na serveru:**
+- `switch` po priključku (on / off / unknown) i `controls` samo za smislenu naredbu
+  (`berth_view.py`, SIM-01b). Ventil: ERP ne čita stanje ventila, pa je `unknown` i nudi obje
+  naredbe — namjerno, jer nitko ne može reći koja je prava.
+- Rečenice stanja (§3.2), poruke ormara (§2.5), alarmi i pravila agenta (D21), poruke routera,
+  `setup_admin` i greške pri podizanju — na engleskom. Ključevi nepromijenjeni; nijedan test
+  nije provjeravao tekst osim provjere u pregledniku („kabel" → „cable").
+
+**Nađeno usput, ispravljeno:**
+- **Energy se rušio** kad ormar vrati nepotpun sažetak (`total_energy_kwh` nedostaje →
+  `undefined.toFixed`, prazan zaslon). Nova `utils/format.num()` prikazuje „—", nikad 0. Provjera
+  u pregledniku sada prije provjere čeka da podaci stignu, pa bi ovakav pad uhvatila — prije nije
+  ni otvarala Energy s podacima.
+- **Dashboard i zaslon ormara pokazivali su „Online / Offline" iz `opta_connected`**, izračunato u
+  pregledniku — D2 to zabranjuje kao dokaz da je uređaj živ, a pravilo „status računa server"
+  isto. Uklonjeno; kartica pokazuje vrijeme zadnjeg javljanja (podatak, ne status). Pravi status
+  veze po ormaru je O51.
+- Dva teksta tražila su „razlog (neobavezno)" za odbijanje sesije, a server razlog traži — tekst
+  sada kaže da je obvezan.
+
+**Što UI faza nije mogla:** stvarne podatke s Krka (Energy i Dashboard na simulatoru su prazni);
+status veze ormara na Dashboardu (O51).
+
 ### §10.8 · Faza 8 (D21) — izvještaj (2026-10-15)
 
 **Grana `faza/8-d21`**, od `3736f89`. Samo interni podaci ERP-a; ništa od 5b (VPS, nginx,
@@ -2770,11 +2848,12 @@ Nađeno usput. Nije u izvedbi gore; tvoje je da odlučiš prioritet.
 | O38 | ~~uloge `admin`/`operator` iz §5.3 ne postoje~~ — **zatvoreno odlukom D20** (§5.3: Admin i Marina Manager); ~~razlog naredbe u `window.prompt`~~ — **5a: pravi dijalog** (`ReasonDialog`), i za reset 2FA | zatvoreno |
 | O43 | Ograničenje pokušaja prijave **po IP-u** — u 5a je samo po računu (5 → 15 min) | nginx `limit_req` + CrowdSec, 5b |
 | O45 | ~~Pokretanje backenda na PostgreSQL bazi **prije** `alembic upgrade head` rušilo se: `create_all` je okidač knjige kredita slao kroz `DDL()`, koji tekst formatira s `%`, pa je plpgsql-ov `% refused` postao rječnik i SQL je pukao~~ — **nađeno pri lokalnom testu 5a, ispravljeno 2026-10-14:** `%` se u `DDL()` escapea (`backend/app/models/billing.py`); migracija `007` je bila ispravna jer `op.execute` ne formatira. Test: `create_all` šalje bazi isti tekst kao migracija; provjereno i na pravom PostgreSQL-u (prazna shema, transakcija vraćena). CI ga nije vidio jer uvijek migrira prije pokretanja | zatvoreno |
-| O46 | Pravila D21 **bez izvora u ERP-u**: serija nepoznatih NFC tagova (ERP ne prima neuspjela očitanja), Smart Mode izvan radnog vremena (ERP ne bilježi promjenu, samo stanje), vrata + novi uređaj u LAN-u (ormar ne šalje DHCP zakupe, D16) | zahtjev ormaru kad se odluči; do tada se pravila **ne pišu** |
-| O47 | Uloga `erp_agent` može stvoriti **privremenu** tablicu (PostgreSQL daje `TEMPORARY` PUBLIC-u na bazi). Nestaje sa sesijom i nije upis u podatke ERP-a | ako želiš i to: `REVOKE TEMPORARY ON DATABASE erp_iot FROM PUBLIC` u runbooku 5b, uz `GRANT` vlasniku aplikacije |
-| O48 | Radno vrijeme za `socket_cmd_odd_hour` je **06–22 h, isto za sve marine**, po `marinas.timezone`. Windows bez paketa `tzdata` ne zna zone, pa računa u UTC-u i to piše u dokaz. Linux (VPS, CI) ih zna | po marini kad zatreba; `tzdata` nije dodan kao ovisnost |
-| O49 | Mamci: `DECOY_ACCOUNT_EMAILS` i `DECOY_API_KEYS` **prazni su po defaultu**, vrijednosti se upisuju na VPS-u. Lažni ormar u Tailscale mreži je infrastruktura, ne kod | 5b |
+| O46 | **Kasnije** (v14, tvoja odluka 2026-10-15). Pravila D21 **bez izvora u ERP-u**: serija nepoznatih NFC tagova (ERP ne prima neuspjela očitanja), Smart Mode izvan radnog vremena (ERP ne bilježi promjenu, samo stanje), vrata + novi uređaj u LAN-u (ormar ne šalje DHCP zakupe, D16) | zahtjev ormaru kad se odluči; do tada se pravila **ne pišu** |
+| O47 | Uloga `erp_agent` može stvoriti **privremenu** tablicu (PostgreSQL daje `TEMPORARY` PUBLIC-u na bazi). Nestaje sa sesijom i nije upis u podatke ERP-a | **odlučeno (v14): da, u 5b** — `REVOKE TEMPORARY ON DATABASE erp_iot FROM PUBLIC` u runbooku, uz `GRANT` vlasniku aplikacije |
+| O48 | Radno vrijeme za `socket_cmd_odd_hour` je **06–22 h, isto za sve marine**, po `marinas.timezone`. Windows bez paketa `tzdata` ne zna zone, pa računa u UTC-u i to piše u dokaz. Linux (VPS, CI) ih zna **potvrđeno (v14): 06–22 h je u redu**; po marini kad zatreba; `tzdata` nije dodan kao ovisnost |
+| O49 | Mamci: `DECOY_ACCOUNT_EMAILS` i `DECOY_API_KEYS` **prazni su po defaultu**, vrijednosti se upisuju na VPS-u. Lažni ormar u Tailscale mreži je infrastruktura, ne kod | **potvrđeno (v14): 5b** |
 | O50 | Pragovi pravila su u kodu (`rules.py`), isti za sve marine; novo pravilo je kod s testom, kako D13 traži | namjerno |
+| O51 | Dashboard nema **status veze po ormaru**: „Online / Offline" je uklonjen jer se računao u pregledniku iz `opta_connected` (D2). Server ga već računa po vezu (`connection` u §3.1) | dodati `connection` po ormaru u `/dashboard` i prikazati ga kroz `<Status>`; do tada kartica pokazuje vrijeme zadnjeg javljanja |
 | O44 | `SecurityMiddleware` bilježi 403 kao „Unauthorised access" — s D20 je 403 i običan Manager na Admin ruti | šum u logu; rješava se s O2 (CrowdSec) |
 | O39 | Koja verzija ormara vrti na Krku — R14 b/c i loopback backend objavljeni su na `main` `eac7aa2`, Krk nepoznat | LIVE-01 (§10.5 b1, b7) |
 | O40 | Faza 4 tjedan stvarnog rada ne mjeri naplatu (ERP-ove sesije nastaju tek u fazi 7) | §10.6, prijedlog 2 |

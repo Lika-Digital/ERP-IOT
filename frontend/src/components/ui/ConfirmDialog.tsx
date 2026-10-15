@@ -27,14 +27,14 @@ export default function ConfirmDialog({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/50"
+        className="absolute inset-0 bg-black/60"
         onClick={onCancel}
       />
 
       {/* Dialog */}
-      <div className="relative bg-white rounded-xl shadow-xl max-w-md w-full p-6 z-10">
-        <h2 className="text-lg font-semibold text-gray-900 mb-2">{title}</h2>
-        <p className="text-sm text-gray-600 mb-4">{message}</p>
+      <div className="relative bg-surface text-fg border border-line rounded-card shadow-card max-w-md w-full p-6 z-10">
+        <h2 className="text-lg font-bold tracking-tight mb-2">{title}</h2>
+        <p className="text-sm text-fg-muted mb-4">{message}</p>
 
         {children && <div className="mb-4">{children}</div>}
 

@@ -166,6 +166,24 @@ def test_sim_01_full_cabinet(client, admin_headers, marina_id, sim, cabinet_conf
     assert b1["pedestal"] == {"pk": 1, "display_id": "MAR_KRK_ORM_01"}
 
 
+# ─── SIM-01b  the outlet state is a word, and only the fitting command ───────
+
+def test_sim_01b_outlet_state_is_a_word_and_only_the_fitting_command(
+        client, admin_headers, marina_id, sim, cabinet_config):
+    cabinet_config(marina_id, "full", FULL_MAP)
+    socks = {s.socket_id: s for s in _state(sim).sockets}
+    socks[1].display_state = "active"
+    socks[2].display_state = "idle"
+    socks[3].display_state = "fault"
+    v = _berths(client, admin_headers, marina_id)
+    outlets = {o["name"]: o for b in v["berths"] for o in b["outlets"]}
+    seen = {n: (o["switch"], o.get("controls")) for n, o in outlets.items()}
+    assert seen["Q1"] == ("on", ["stop"])
+    assert seen["Q2"] == ("off", ["activate"])
+    assert seen["Q3"] == ("unknown", ["activate", "stop"])     # nobody can say which is right
+    assert seen["V1"] == ("unknown", ["activate", "stop"])     # the ERP does not read valves
+
+
 # ─── SIM-02  retrofit: water is drawn nowhere ────────────────────────────────
 
 def test_sim_02_retrofit_has_no_water_anywhere(client, admin_headers, marina_id, sim,

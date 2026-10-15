@@ -5,7 +5,7 @@ import api from './index'
 // Asked in a real dialog since D20 (O38), not window.prompt.
 export { askReason } from '../components/ui/ReasonDialog'
 
-export const NO_REASON = 'Naredba nije poslana — razlog je obvezan (najmanje 3 znaka).'
+export const NO_REASON = 'Command not sent — a reason is required (at least 3 characters).'
 
 const withPedestal = (pedestalId?: number) =>
   pedestalId ? { params: { pedestal_id: pedestalId } } : undefined

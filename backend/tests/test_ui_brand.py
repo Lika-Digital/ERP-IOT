@@ -2,7 +2,9 @@
 
 TC-UIB-01  every text/background pair in the tokens meets WCAG AA (4.5:1), both themes
 TC-UIR-01  status is icon + word + colour: one <Status> component, all three props
-           required, and no raw palette colour class in a redesigned screen
+           required, and no raw palette colour class anywhere in the app
+TC-UIR-02  one word, one colour: the same status word never appears in two colours,
+           and every berth colour of D2 has its own word
 TC-UIR-04  the 360 px rule is checked in the browser (scripts/browser_check.py)
 
 Source scans, like SIM-15: the mechanism is asserted, not a screenshot.
@@ -18,17 +20,9 @@ _REPO = Path(__file__).resolve().parents[2]
 _SRC = _REPO / "frontend" / "src"
 _TOKENS = _SRC / "theme" / "tokens.css"
 
-# Screens moved onto the tokens. A screen joins this list in the commit that
-# redesigns it; at the end of the redesign it is every file under pages/.
-REDESIGNED = [
-    "components/layout/Layout.tsx",
-    "components/auth/AuthCard.tsx",
-    "components/auth/MfaSteps.tsx",
-    "components/ui/Status.tsx",
-    "pages/Login.tsx",
-    "pages/Berths.tsx",
-    "pages/Security.tsx",
-]
+# Every screen and component is on the tokens (UI step 3): the scan covers all of them.
+REDESIGNED = sorted(str(f.relative_to(_SRC)).replace("\\", "/")
+                    for f in _SRC.rglob("*.tsx"))
 
 # (text, background) pairs that appear on screen
 PAIRS = [
@@ -74,6 +68,15 @@ def test_uib_01_every_token_pair_meets_wcag_aa(theme):
     assert low == []
 
 
+@pytest.mark.parametrize("theme", ["light", "dark"])
+def test_uib_01_chart_series_stand_out_from_the_card(theme):
+    # non-text graphics: WCAG 1.4.11 asks 3:1 against what is next to them
+    t = _themes()[theme]
+    low = [f"{c}: {contrast(t[c], t['surface']):.2f}" for c in ("chart-1", "chart-2", "chart-3")
+           if contrast(t[c], t["surface"]) < 3.0]
+    assert low == []
+
+
 def test_uib_01_both_themes_define_the_same_tokens():
     t = _themes()
     assert set(t["light"]) == set(t["dark"])
@@ -108,10 +111,39 @@ def test_uir_01_no_raw_palette_colour_in_a_redesigned_screen(rel):
     assert _RAW.findall(text) == []
 
 
-@pytest.mark.parametrize("rel", [r for r in REDESIGNED if r.startswith("pages/")])
+@pytest.mark.parametrize("rel", REDESIGNED)
 def test_uir_01_status_in_a_redesigned_screen_goes_through_status(rel):
     text = (_SRC / rel).read_text(encoding="utf-8")
     assert "badge-" not in text, "a coloured badge is status without icon and word"
+
+
+def test_uir_01_the_scan_covers_every_screen():
+    pages = {f.name for f in (_SRC / "pages").glob("*.tsx")}
+    assert pages and {r.split("/")[-1] for r in REDESIGNED} >= pages
+
+
+_LOOK = re.compile(r"\{\s*tone:\s*'(\w+)',\s*icon:\s*'\w+',\s*word:\s*'([^']+)'\s*\}")
+
+
+def _looks() -> list[tuple[str, str]]:
+    return _LOOK.findall((_SRC / "components" / "ui" / "Status.tsx").read_text(encoding="utf-8"))
+
+
+def test_uir_02_one_word_one_colour():
+    tones: dict[str, set[str]] = {}
+    for tone, word in _looks():
+        tones.setdefault(word, set()).add(tone)
+    assert {w: t for w, t in tones.items() if len(t) > 1} == {}
+
+
+def test_uir_02_every_berth_colour_has_its_own_word():
+    from app.cabinet.berth_status import _TABLE, UNCLASSIFIED
+    src = (_SRC / "components" / "ui" / "Status.tsx").read_text(encoding="utf-8")
+    block = re.search(r"BERTH_COLOUR: Record<Tone, Look> = \{(.*?)\n\}", src, re.S).group(1)
+    table = dict((t, w) for t, w in _LOOK.findall(block))
+    server_colours = {r[3] for r in _TABLE} | {UNCLASSIFIED[2]}
+    assert set(table) == server_colours
+    assert len(set(table.values())) == len(table)
 
 
 def test_uib_02_no_external_font_or_asset_request():

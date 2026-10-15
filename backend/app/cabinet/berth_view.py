@@ -53,6 +53,18 @@ def _outlet_name(socket_id: int) -> str:
     return f"Q{int(socket_id)}"
 
 
+# The outlet's state as one word for staff, and only the command that fits it.
+# Decided here, never in the browser (§3): the frontend renders `switch` and
+# draws exactly the buttons in `controls`. An unknown state offers both, since
+# nobody can say which one is right.
+SWITCH = {"active": "on", "idle": "off", "pending": "off"}
+CONTROLS_FOR = {"on": ["stop"], "off": ["activate"], "unknown": ["activate", "stop"]}
+
+
+def switch_of(state: Optional[str]) -> str:
+    return SWITCH.get(state or "", "unknown")
+
+
 def electricity_reading(load: dict) -> dict:
     """One shape for one-phase and three-phase sockets (spec §4.1, TC-ERP-SIM-03).
 
@@ -174,8 +186,9 @@ def build(
             if shared:
                 # supervision clarification only, never a billing note (§9.1 SIM-04)
                 o["shared_with_berths"] = shared
+            o["switch"] = switch_of(o.get("state"))
             if can_control:
-                o["controls"] = ["activate", "stop"]
+                o["controls"] = list(CONTROLS_FOR[o["switch"]])
             outlets.append(o)
 
         out.append({

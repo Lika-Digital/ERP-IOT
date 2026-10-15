@@ -19,9 +19,10 @@ Then the DOM checks the spec asks to be made in the DOM, not in JSON:
   SIM-07 no plug: the cabinet's sentence is shown, no error page
   D21    a decoy touch -> one agent pass -> the alarm on the Security screen, its
          evidence (markup in a User-Agent) shown as text; the Admin acknowledges
-  UI     at 360 px wide, in the light and the dark theme, sign-in, the 2FA step,
-         berths and Security have no page-level horizontal scroll (TC-UIR-04); the
-         theme switch flips the theme and remembers it.
+  UI     at 360 px wide, in the light and the dark theme, every screen (sign-in,
+         2FA, marinas, dashboard, pedestal, control, energy, alarms, berths, users,
+         Security) has no page-level horizontal scroll (TC-UIR-04); the theme switch
+         flips the theme and remembers it.
          With SCREENSHOT_DIR set, the same screens are saved as PNGs (desktop and
          360 px, both themes) for a design review.
 
@@ -62,13 +63,13 @@ EXPECTED = [
     "D20: Users screen - the admin is listed with 2FA linked",
     "erp: marina pointed at the simulator",
     "BOOT-01b: /marinas/:id/berths renders berth rows from the simulator",
-    "SIM-01: full cabinet - outlets and controls in the DOM",
+    "SIM-01: full cabinet - outlets and controls in the DOM; an idle outlet says Off and offers only Turn on",
     "SIM-06: Smart Mode OFF - readings shown, zero controls in the DOM",
     "SIM-02: retrofit - no water element anywhere",
     "SIM-05: silent cabinet - every berth grey",
     "SIM-07: no plug - the cabinet's sentence is shown",
     "D21: Security screen - decoy touch -> agent -> alarm, evidence shown as text, Admin decides",
-    "UI: sign-in, 2FA, berths, Security fit 360 px without horizontal scroll, light and dark; theme switch",
+    "UI: every screen fits 360 px without horizontal scroll, light and dark; theme switch",
     "BOOT-01b: no page errors and no console errors in any scenario",
 ]
 _passed: list[str] = []
@@ -303,7 +304,7 @@ def main() -> int:
                 page.wait_for_selector(f"[data-user='{ADMIN_EMAIL}']", timeout=15000)
             except Exception as exc:  # noqa: BLE001
                 fail(5, f"Users screen: {exc}")
-            if "linked" not in page.inner_text(f"[data-user='{ADMIN_EMAIL}']"):
+            if page.locator(f"[data-user='{ADMIN_EMAIL}'] [data-mfa='linked']").count() != 1:
                 fail(5, "the admin's 2FA is not shown as linked")
             ok(5)
 
@@ -359,6 +360,12 @@ def main() -> int:
 
             if page.locator("[data-outlet]").count() < 5 or page.locator("[data-control]").count() == 0:
                 fail(8, "full cabinet: outlets or controls missing")
+            # the simulator's sockets are idle: the server says "off" and sends only activate
+            # (a valve's state is not read by the ERP: unknown, so it keeps both)
+            if page.locator("[data-control^='Q'][data-control$=':stop']").count() != 0:
+                fail(8, "an idle socket offers Turn off")
+            if page.locator("[data-outlet='Q1'] [data-status]:has-text('Off')").count() != 1:
+                fail(8, "an idle outlet does not say Off")
             ok(8)
 
             profile("smart_off")
@@ -366,14 +373,14 @@ def main() -> int:
             load()
             if page.locator("[data-outlet]").count() == 0:
                 fail(9, "Smart Mode OFF: readings must still render")
-            if page.locator("[data-control]").count() != 0 or page.locator("button:has-text('Upali')").count():
+            if page.locator("[data-control]").count() != 0 or page.locator("button:has-text('Turn on')").count():
                 fail(9, "Smart Mode OFF: a control element exists in the DOM")
             ok(9)
 
             profile("retrofit")
             http("PATCH", f"{sim_url}/__sim/credentials", {"email": SIM_EMAIL, "password": SIM_PASSWORD})
             load(retrofit_id)
-            if page.locator("[data-outlet^='V']").count() or "voda" in page.inner_text("[data-page]"):
+            if page.locator("[data-outlet^='V']").count() or "Water" in page.inner_text("[data-page]"):
                 fail(10, "retrofit: a water element is in the DOM")
             ok(10)
 
@@ -401,14 +408,14 @@ def main() -> int:
                 fail(12, f"the command was not preceded by the reason dialog: {exc}")
             if page.is_enabled("[data-reason-ok]"):
                 fail(12, "the dialog accepts an empty reason")
-            page.fill("[data-reason-input]", "provjera iz preglednika")
+            page.fill("[data-reason-input]", "browser check")
             page.click("[data-reason-ok]")
             try:
                 page.wait_for_selector("[data-message]", timeout=10000)
             except Exception as exc:  # noqa: BLE001
                 fail(12, f"no sentence shown: {exc}")
             text = page.inner_text("[data-message]")
-            if "kabel" not in text.lower():
+            if "cable" not in text.lower():
                 fail(12, f"expected the no-plug sentence, got {text!r}")
             if native:
                 fail(12, f"a native browser dialog appeared: {native}")
@@ -449,7 +456,7 @@ def main() -> int:
                 fail(13, "the User-Agent is not shown, as text, in the evidence")
             alarm.locator("button:has-text('Acknowledge')").click()
             page.wait_for_selector("[data-reason-dialog]", timeout=10000)
-            page.fill("[data-reason-input]", "provjera iz preglednika")
+            page.fill("[data-reason-input]", "browser check")
             page.click("[data-reason-ok]")
             try:
                 page.wait_for_selector("[data-alarm='decoy_touch'] >> text=acknowledged",
@@ -482,6 +489,10 @@ def main() -> int:
 
             def visit(scheme, size, name, pg, ready):
                 pg.wait_for_selector(ready, timeout=15000)
+                try:
+                    pg.wait_for_load_state("networkidle", timeout=10000)   # data loaded, not a spinner
+                except Exception:  # noqa: BLE001 — a screen that keeps polling is still checked
+                    pass
                 pg.wait_for_timeout(150)
                 if size == "mobile":
                     w = pg.evaluate("() => [document.documentElement.scrollWidth, window.innerWidth]")
@@ -505,20 +516,30 @@ def main() -> int:
                     pg = anon.new_page()
                     watch(pg)
                     pg.goto(f"{spa_url}/login")
-                    visit(scheme, size, "1-login", pg, "input[type=email]")
+                    visit(scheme, size, "01-login", pg, "input[type=email]")
                     pg.fill("input[type=email]", ADMIN_EMAIL)
                     pg.fill("input[type=password]", ADMIN_PASSWORD)
                     pg.click("button[type=submit]")
-                    visit(scheme, size, "2-login-2fa", pg, "[data-step='mfa-code']")
+                    visit(scheme, size, "02-login-2fa", pg, "[data-step='mfa-code']")
                     anon.close()
 
                     ctx = browser.new_context(color_scheme=scheme, viewport=vp, storage_state=signed_in)
                     pg = ctx.new_page()
                     watch(pg)
-                    pg.goto(f"{spa_url}/marinas/{marina_id}/berths")
-                    visit(scheme, size, "3-berths", pg, "[data-berth]")
-                    pg.goto(f"{spa_url}/security")
-                    visit(scheme, size, "4-security", pg, "[data-alarm]")
+                    m = f"{spa_url}/marinas/{marina_id}"
+                    for name, url, ready in (
+                        ("03-marinas", f"{spa_url}/marinas", "[data-marina]"),
+                        ("04-dashboard", f"{m}/dashboard", "[data-page='dashboard']"),
+                        ("05-pedestal", f"{m}/pedestals/1", "[data-page='pedestal']"),
+                        ("06-control", f"{m}/control", "[data-page='control']"),
+                        ("07-energy", f"{m}/energy", "[data-page='energy']"),
+                        ("08-alarms", f"{m}/alarms", "[data-page='alarms']"),
+                        ("09-berths", f"{m}/berths", "[data-berth]"),
+                        ("10-users", f"{spa_url}/users", "[data-user]"),
+                        ("11-security", f"{spa_url}/security", "[data-alarm]"),
+                    ):
+                        pg.goto(url)
+                        visit(scheme, size, name, pg, ready)
                     theme = pg.evaluate("() => document.documentElement.className")
                     if scheme not in theme:
                         wide.append(f"system {scheme} preference not applied: <html class={theme!r}>")

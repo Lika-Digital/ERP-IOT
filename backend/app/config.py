@@ -100,10 +100,10 @@ def _is_blank(value: str | None) -> bool:
 # tiha degradacija sigurnosti. Spec §7.1: podizanje se odbija.
 if _is_blank(settings.jwt_secret):
     raise MissingSecretError(
-        "JWT_SECRET nije postavljen. Aplikacija se nece dici.\n"
-        "  Razvoj:     dodaj JWT_SECRET u backend/.env\n"
-        "  Produkcija: systemd LoadCredential (spec 8.3), nikad u datoteku uz aplikaciju\n"
-        "  Generiraj:  python -c \"import secrets; print(secrets.token_hex(32))\""
+        "JWT_SECRET is not set. The application will not start.\n"
+        "  Development: add JWT_SECRET to backend/.env\n"
+        "  Production:  systemd LoadCredential (spec 8.3), never a file next to the app\n"
+        "  Generate:    python -c \"import secrets; print(secrets.token_hex(32))\""
     )
 
 # ── Database URL: FAIL-FAST ───────────────────────────────────────────────────
@@ -112,9 +112,9 @@ if _is_blank(settings.jwt_secret):
 # bez njega se nista ne dize, ni aplikacija ni migracija.
 if _is_blank(settings.database_url):
     raise MissingSecretError(
-        "DATABASE_URL nije postavljen. Aplikacija se nece dici.\n"
-        "  Razvoj:     dodaj DATABASE_URL u backend/.env\n"
-        "  Produkcija: systemd LoadCredential (spec 8.3), nikad u datoteku uz aplikaciju"
+        "DATABASE_URL is not set. The application will not start.\n"
+        "  Development: add DATABASE_URL to backend/.env\n"
+        "  Production:  systemd LoadCredential (spec 8.3), never a file next to the app"
     )
 
 # ── DEFAULT_ADMIN_PASSWORD is gone (D20.3) ────────────────────────────────────
