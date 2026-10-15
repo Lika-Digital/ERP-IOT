@@ -21,8 +21,9 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..models.berth import BerthReservation
+from ..models.cabinet import Cabinet, Outlet
 from ..models.cache import AlarmLog, AuditLog, PedestalCache, SessionLog, SyncLog
-from ..models.metering import (CommandAudit, ConsumptionInterval, ConsumptionMonthly,
+from ..models.metering import (CommandAudit, ConsumptionInterval, ConsumptionMonthly, OutletMeterState,
                                ReconciliationRun)
 from ..models.security import DecoyHit, SecurityAlarm, ServiceWindow
 from ..models.user import AuthAudit, SetupToken
@@ -73,6 +74,25 @@ def _delete_older(db: Session, model, col, cutoff: datetime) -> int:
         total += len(ids)
 
 
+def _delete_simulated_intervals(db: Session, cutoff: datetime) -> int:
+    sim_outlets = (select(Outlet.id).join(Cabinet, Cabinet.id == Outlet.cabinet_id)
+                   .where(Cabinet.is_simulated.is_(True)))
+    total = 0
+    while True:
+        ids = db.execute(select(ConsumptionInterval.id)
+                         .where(ConsumptionInterval.to_at < cutoff,
+                                ConsumptionInterval.outlet_id.in_(sim_outlets))
+                         .limit(CHUNK)).scalars().all()
+        if not ids:
+            return total
+        # the meter state may point at a row about to go
+        db.query(OutletMeterState).filter(OutletMeterState.last_interval_id.in_(ids)).update(
+            {OutletMeterState.last_interval_id: None}, synchronize_session=False)
+        db.execute(delete(ConsumptionInterval).where(ConsumptionInterval.id.in_(ids)))
+        db.commit()
+        total += len(ids)
+
+
 def _month(dt: datetime) -> date:
     return date(dt.year, dt.month, 1)
 
@@ -118,6 +138,10 @@ def run(db: Session, now: datetime | None = None) -> dict:
     out = {}
     for name, (model, col, days) in windows().items():
         out[name] = _delete_older(db, model, col, now - timedelta(days=days))
+    # D28: simulated history is a demo, not a record — kept 30 days and deleted, never
+    # rolled into the monthly figures (which reports and billing read)
+    out["simulated_intervals"] = _delete_simulated_intervals(
+        db, now - timedelta(days=settings.retention_simulated_intervals_days))
     out["consumption_intervals"] = _roll_up_intervals(
         db, now - timedelta(days=settings.retention_intervals_days))
     if any(out.values()):
