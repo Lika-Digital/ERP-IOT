@@ -1,7 +1,7 @@
 # ERP-IOT — dnevnik odluka
 
 **Verzija 2.6 · 2026-10-15** — zamjenjuje v2.5.
-v2.6 dodaje **D23–D27** (glavni dashboard; moduli Electricity & Water, Safety & Security i Occupancy; konfiguracija veza i usporedba plovila) i proširuje fazu 6; **D24 vraća energetskog agenta** (ispravak D22). v2.5 dodaje **D21** (sigurnosni agent samo čita; mijenja slojeve 3 i 4 u D13 i D14) i **D22** (provjera slike s ormara; zamjenjuje energetskog agenta, koji se briše iz plana), i novi redoslijed faze 5 (5a–5e; faza 4.5 se briše, prvo spajanje na Krk je s VPS-a). v2.4 dodaje **D20** (korisnici, prijava i tajne). v2.3 ispravlja mrežna pravila u **D13** (ormar → ERP samo webhook; bez statične IP). v2.2 dodaje **D19** (ventili i utičnice prema Smart Modeu). v2.1 je dodao **D18** (mapiranje na obje strane); prvi isporučeni zip sadržavao je stariju v2 bez njega.
+v2.6 dodaje **D23–D27** (glavni dashboard; moduli Electricity & Water, Safety & Security i Occupancy; konfiguracija veza i usporedba plovila) i **D28** (demo marina: 2 prava ormara, ostalo simulirano) i proširuje fazu 6; **D24 vraća energetskog agenta** (ispravak D22). v2.5 dodaje **D21** (sigurnosni agent samo čita; mijenja slojeve 3 i 4 u D13 i D14) i **D22** (provjera slike s ormara; zamjenjuje energetskog agenta, koji se briše iz plana), i novi redoslijed faze 5 (5a–5e; faza 4.5 se briše, prvo spajanje na Krk je s VPS-a). v2.4 dodaje **D20** (korisnici, prijava i tajne). v2.3 ispravlja mrežna pravila u **D13** (ormar → ERP samo webhook; bez statične IP). v2.2 dodaje **D19** (ventili i utičnice prema Smart Modeu). v2.1 je dodao **D18** (mapiranje na obje strane); prvi isporučeni zip sadržavao je stariju v2 bez njega.
 Ormar (Cloud_IOT) je druga strana ugovora; ovdje se bilježe odluke koje se tiču ERP-a i ono što ERP traži od ormara.
 
 Izvori, redom po težini:
@@ -418,7 +418,27 @@ Pravila:
 - **Odnos prema D22:** u načinu ERP rutinska usporedba (kad se zauzeće promijeni) radi se automatski sa zamagljenom slikom; D22-ovo odobrenje Admina vrijedi za eskalacije „nesigurna ocjena". *(Prijedlog s uvjetima: specifikacija §1.4.)*
 - Zahtjevi prema ormaru (specifikacija §7.2): dohvat trenutne slike veza za usporedbu (`camera.frame_ext`, uz zamagljivanje — R8), potvrda da `push_image_ext` radi s fotografijom plovila (R19), i da ormar javlja match rezultat po vezu (R20); guard preko ext API-ja (R21, D25).
 
-**Redoslijed (2026-10-15):** implementacija D23–D27 ide u **fazu 6 (proširenu)**. Smije se raditi lokalno protiv simulatora u vremenu čekanja dok traje 5b — **jedna stvar u isto vrijeme**: D23 dashboard + 2D karta, pa D27 konfiguracija veza, zatim detalji D24–D26. Energetski agent (D24) tek kad postoji povijest s Krka.
+## D28 · Demo marina
+Odluka 2026-10-15 (konačno).
+- Slika `docs/ui/marina-demo.png` je predložak 2D karte: **150 vezova**. Pontoni A–E po 20 vezova (A 20 m, B i C 15 m, D i E 10 m), obala: sjeverna 25, južna 10, istočna 15. SVG sa stabilnim id-em svakog veza (shema bez sudara pontona E i istočne obale — specifikacija §6.11); slika smije biti pozadina.
+
+**Pravi ormari (bez simulacije)** — rade preko pravog ext API-ja, kao i do sada:
+- `MAR_KRK_ORM_01` (Krk) → početak pontona A (A-01, A-02);
+- drugi ormar (marina-iot) → početak pontona B (B-01, B-02).
+
+**Simulirano u ERP-u (sve što nemamo):**
+- ostali vezovi i ormari demo marine — postojeći simulator ormara iz faze 2 proširen na isti ext API, ~74 virtualna ormara;
+- jedna nadzorna kamera i jedna IR (požarna) kamera;
+- Safety & Security: par vrata s NFC pristupom, senzor otvaranja, brojač ljudi.
+
+Realni i ponovljivi podaci (seed): dnevni profil struje i vode, brojila koja samo rastu, zauzeće ~70–85 %, rezervacije, povremeno wrong vessel / power without vessel, alarmi. Scenariji na naredbu za demo: ormar offline, IR alarm, neovlašteni pristup, prepaid na nuli, krivi brod.
+
+Pravila:
+- Svaki uređaj / ormar ima oznaku real / simulated; Admin na karti vidi znak „SIM".
+- Simulirano **nikad** ne ide u naplatu, izvještaje za upravu ni u sigurnosnog agenta kao stvarno.
+- Simulator radi lokalno i na VPS-u (zaseban systemd servis), može se ugasiti jednom naredbom i ne dira prave ormare.
+
+**Redoslijed (2026-10-15):** implementacija D23–D28 ide u **fazu 6 (proširenu)**. Smije se raditi lokalno protiv simulatora u vremenu čekanja dok traje 5b — **jedna stvar u isto vrijeme**: D28 demo marina, D23 dashboard + 2D karta, pa D27 konfiguracija veza, zatim detalji D24–D26. Energetski agent (D24) tek kad postoji povijest s Krka.
 
 ---
 

@@ -3,20 +3,29 @@
 Što se gradi, u kojem redoslijedu, i svaka odluka izrečena tako da ispravak
 košta jedan redak, a ne razgovor.
 
-    Verzija 15 — zamjenjuje v14 od 2026-10-15
+    Verzija 16 — zamjenjuje v15 od 2026-10-15
     Datum 2026-10-15
     Status faze 1–4 ZAVRŠENE i PRIHVAĆENE (§10.1–§10.4); korak 5a (D20), faza 8 (D21) i
            UI · Lika brand PRIHVAĆENI, na `main` (§10.7–§10.9); 5b u tijeku, korak po korak;
-           D23–D27 upisani, izvode se kao proširena faza 6 (§6.6–§6.10, §10);
+           D23–D28 upisani, izvode se kao proširena faza 6 (§6.6–§6.11, §10);
            §1 ima tri pitanja, nijedno ne blokira
 
 Čita se uz `docs/inputs/odluke.md` **v2.6** (odluke, obvezujuće — v2.1 dodaje **D18**, v2.2 **D19**,
-v2.3 ispravak mreže u **D13**, v2.4 **D20**, v2.5 **D21**, **D22** i redoslijed 5a–5e, v2.6 **D23–D27**),
+v2.3 ispravak mreže u **D13**, v2.4 **D20**, v2.5 **D21**, **D22** i redoslijed 5a–5e, v2.6 **D23–D28**),
 `docs/inputs/ormar_gateway_izvjestaj.md` (ugovor s ormarom, file:line),
 `docs/inputs/erp_inventar.md` (stanje repoa 2026-10-10) i
 `docs/inputs/ormar_ui_v2_spec.txt` (specifikacija ormara — uzor forme i izvor rječnika stanja).
 
 **Sve u ovom dokumentu je ODLUČENO osim tri pitanja u §1 (v15) — nijedno ne blokira.**
+
+### Što se promijenilo u verziji 16
+
+| | |
+|---|---|
+| **D28 · Demo marina** (§6.11) | 150 vezova (pontoni A–E po 20, obala sjever 25, jug 10, istok 15); shema id-eva bez sudara pontona E i istočne obale; **dva prava ormara** (Krk → A-01/A-02, marina-iot → B-01/B-02) preko pravog ext API-ja; **74 simulirana ormara** na istom ext API-ju, kamere i Safety & Security uređaji simulirani; ponovljivi podaci i scenariji na naredbu |
+| **Pravila za simulirano** | oznaka real/simulated na svakom ormaru i uređaju; **simulirano nikad u naplatu, izvještaje za upravu ni sigurnosnom agentu kao stvarno** — provodi baza i kod, ne dogovor; simulator je zaseban servis, gasi se jednom naredbom i ne zna za prave ormare |
+| **Faza 6** | novi korak **6.0** — demo marina, prije 6a |
+| **§11** | O59 (slika `marina-demo.png` nije u repou), O60 (podaci drugog ormara), O61 (povremeni pad provjere u pregledniku) |
 
 ### Što se promijenilo u verziji 15
 
@@ -2154,6 +2163,136 @@ vessel_match_results berth_id, source (cabinet | erp), verdict (match | mismatch
 
 Zahtjevi prema ormaru: R8, R19, R20 (§7.2).
 
+### §6.11 · Demo marina — D28 (v16)
+
+Jedna marina na kojoj se vidi sve iz D23–D27: **2 prava ormara**, ostalo simulirano. Predložak 2D
+karte je `docs/ui/marina-demo.png` — **u repou ga još nema (O59)**; topologija ispod je iz tvog
+opisa, a crtež ide po slici, koja smije biti pozadina SVG-a.
+
+**Raspored — 150 vezova:**
+
+| Zona | Vezova | Duljina | Id veza | Ormari |
+|---|---|---|---|---|
+| Ponton A | 20 | 20 m | `A-01` … `A-20` | **`MAR_KRK_ORM_01` (pravi) → A-01, A-02**; `SIM_A_02` … `SIM_A_10` |
+| Ponton B | 20 | 15 m | `B-01` … `B-20` | **marina-iot (pravi) → B-01, B-02**; `SIM_B_02` … `SIM_B_10` |
+| Ponton C | 20 | 15 m | `C-01` … `C-20` | `SIM_C_01` … `SIM_C_10` |
+| Ponton D | 20 | 10 m | `D-01` … `D-20` | `SIM_D_01` … `SIM_D_10` |
+| Ponton E | 20 | 10 m | `E-01` … `E-20` | `SIM_E_01` … `SIM_E_10` |
+| Obala sjever | 25 | — | `QN-01` … `QN-25` | `SIM_QN_01` … `SIM_QN_13` (zadnji pokriva jedan vez) |
+| Obala jug | 10 | — | `QS-01` … `QS-10` | `SIM_QS_01` … `SIM_QS_05` |
+| Obala istok | 15 | — | `QE-01` … `QE-15` | `SIM_QE_01` … `SIM_QE_08` (zadnji pokriva jedan vez) |
+| **Ukupno** | **150** | | | **2 prava + 74 simulirana** (jedan ormar = dva susjedna veza) |
+
+> **Odlučeno** · **Shema id-eva:** ponton = **jedno slovo** (`A`–`E`), obala = **`Q` + strana**
+> (`QN`, `QS`, `QE` — *quay*, jer je sučelje na engleskom), pa crtica i dvoznamenkasti broj od
+> mora prema kopnu, odnosno od zapada prema istoku. `berth_number` = `E-07`, a `svg_id` =
+> `berth-E-07` (HTML id počinje slovom). Ponton E i istočna obala ne mogu se sudariti: `E-07` i
+> `QE-07` se razlikuju već prvim znakom, a pravilo je provjerljivo jednim izrazom
+> `^([A-E]|Q[NSE])-\d{2}$`. Duljina veza ide u novi stupac `berths.length_m`.
+>
+> **Zašto** · Id je stabilan dok god vez fizički postoji. Ne ovisi o redoslijedu crtanja ni o
+> ormaru, pa novi crtež ili zamjena ormara ne mijenja ni jedan id. „Q" umjesto „O" (obala) jer
+> se O lako zamijeni s nulom.
+>
+> **Ako griješim** · Id je podatak u `berths`. Preimenovanje je migracija s tablicom
+> staro → novo.
+
+**Pravi ormari** rade preko pravog ext API-ja, kao i do sada: Krk po §10.5, a drugi ormar
+(marina-iot) na isti način. Treba njegov `display_id`, Tailscale adresu i `api_client` račun
+(O60). Dok ERP nije spojen na njih (5d), A-01, A-02, B-01 i B-02 su **sivi, „no contact"**, a ne
+simulirani.
+
+**Simulirano u ERP-u (sve što nemamo):**
+- **74 ormara** — postojeći simulator iz faze 2 (`backend/simulator/cabinet_sim.py`, jedan ormar
+  po aplikaciji) proširuje se na **više ormara iza jednog porta**: svaki pod svojim prefiksom
+  (`http://127.0.0.1:<port>/c/SIM_C_04/api/ext/...`). Ugovor je isti ext API, odgovori ostaju
+  ugrađeni iz koda ormara. Vrste: pontoni i sjeverna/istočna obala = puni ormar (4 utičnice +
+  2 ventila, Q1 trofazna), **južna obala = retrofit** (samo utičnice), da se na demo karti vidi
+  i D3.
+- **Kamere:** jedna nadzorna i jedna IR (požarna). Nadzorna daje statičnu generiranu sliku bez
+  ljudi, IR daje temperaturu i događaje.
+- **Safety & Security (§6.8):** dvoja vrata s NFC čitačem, senzor otvaranja i brojač ljudi, kao
+  `iot_devices` sa `source = simulator`.
+
+**Podaci — realni i ponovljivi:**
+
+> **Odlučeno** · Svaka simulirana vrijednost je **funkcija (seed, uređaj, vrijeme)**, a ne stanje
+> koje se pamti. Dnevni profil struje i vode po tipu veza i dobu dana, sezona i vikend.
+> **Brojilo je integral profila** pa samo raste, i to i nakon restarta. Zauzeće je ~70–85 %,
+> uz rezervacije te povremeno Wrong vessel, Power without vessel i alarme, koji se izvlače iz
+> istog seeda. Isti seed i isto vrijeme daju isti odgovor.
+>
+> **Zašto** · Ponovljivo znači da se demo i test mogu ponoviti, a bez pamćenja stanja restart
+> nikad ne vrati brojilo unatrag. Povijest za grafikone postoji odmah: ERP pri prvom spajanju
+> povuče **30 dana** kroz iste rute za usklađivanje kao kod pravog ormara.
+>
+> **Ako griješim** · Seed je jedan parametar; drugi seed daje drugu, jednako ponovljivu marinu.
+
+**Scenariji na naredbu** (za demo; svaki se i poništava):
+
+| Naredba | Što se dogodi |
+|---|---|
+| `erp-sim scenario offline SIM_C_04` | ormar prestane odgovarati → njegovi vezovi sivi, „no contact" |
+| `erp-sim scenario ir-alarm` | IR kamera javi temperaturni prag → upozorenje u Safety & Security, uz napomenu da ERP nije vatrodojava |
+| `erp-sim scenario unauthorised-access` | vrata otvorena bez valjanog skeniranja → upozorenje pristupa |
+| `erp-sim scenario prepaid-zero` | demo korisnik s kreditom 0 skenira priključak → odbijeno, kao u §5.4 |
+| `erp-sim scenario wrong-vessel C-11` | ormar javi `state_code = 2` za vez → Wrong vessel |
+| `erp-sim scenario reset` | sve natrag na seed |
+
+**Pravila (obvezujuća):**
+
+> **Odlučeno** · **Oznaka real / simulated** je na svakom ormaru (`cabinets.is_simulated`) i uređaju
+> (`iot_devices.source = 'simulator'`), a s ormara se prenosi na sve što od njega nastane
+> (sesije, intervali, alarmi). **Admin na karti vidi znak „SIM"** na simuliranom vezu i
+> uređaju. Marina Manager ga na karti ne vidi (po D28 znak je za Admina), ali svaki izvoz i
+> izvještaj ga nosi.
+>
+> **Odlučeno** · **Simulirano nikad ne ide u naplatu, u izvještaje za upravu ni sigurnosnom
+> agentu kao stvarno.** To provodi **baza i kod, ne dogovor**:
+> - **naplata:** okidač u bazi odbija `billing_records` i redak `credit_ledger` za sesiju sa
+>   simuliranog ormara, isti uzorak kao okidač knjige kredita (§4.5). Scenarij `prepaid-zero`
+>   koristi demo korisnika (`customers.is_demo`) i ne stvara ni jedan obračunski redak;
+> - **izvještaji za upravu** (D26 CSV, D24 analitika): zadano **samo stvarno**. Simulirano se
+>   uključuje samo izričito, uz stupac `simulated` u svakom retku i `-SIMULATED` u imenu
+>   datoteke;
+> - **sigurnosni agent:** smije čitati simulirane izvore (scenariji trebaju alarm), ali svaki
+>   takav alarm nosi `simulated = true` i znak „SIM", **nikad se ne povezuje sa stvarnim
+>   događajem u jedan slučaj** (§13.4) i ne broji se u stvarna otvorena upozorenja na kartici
+>   (§6.6) nego zasebno („+1 SIM").
+>
+> **Odlučeno** · **Simulator ne dira prave ormare:**
+> - simulator nema klijentski kod, samo odgovara na pozive i ne zna za prave ormare;
+> - u bazi CHECK: `is_simulated = true` ⇔ `base_url` pokazuje na adresu simulatora na loopbacku.
+>   Pravi ormar zato ne može imati adresu simulatora, a simulirani ne može imati Tailscale
+>   adresu;
+> - scenarij prima samo id simuliranog ormara ili veza. Za pravi id odgovor je greška, ništa
+>   drugo.
+>
+> **Odlučeno** · **Simulator je zaseban servis** i lokalno i na VPS-u:
+> - lokalno: `scripts/demo` (start / stop);
+> - na VPS-u: systemd `erp-sim.service`, vlastiti sistemski korisnik `erp-sim`, sluša samo
+>   `127.0.0.1`, bez izlaznog prometa (`IPAddressDeny=any`, osim loopbacka);
+> - gasi se **jednom naredbom**: `sudo systemctl disable --now erp-sim`. Tada su simulirani vezovi
+>   sivi, „no contact", što je istinito;
+> - na VPS dolazi s fazom 6, **ne u 5b**.
+>
+> **Zašto** · Demo s pravim i simuliranim ormarima na istoj karti koristan je samo ako se
+> stvarno i simulirano ne mogu pomiješati tamo gdje to košta: u novcu, u izvještaju upravi i u
+> sigurnosnom slučaju. Zato zabranu provode okidač, CHECK i test, ne pažnja.
+>
+> **Ako griješim** · Svako pravilo je jedan okidač ili jedan filter s testom. Uklanjanje demo
+> marine je brisanje jedne marine, a simulator se gasi jednom naredbom.
+
+**Rast baze:** 74 simulirana ormara puno su više od Krka. Simulirani intervali imaju zasebnu
+retenciju od **30 dana** (ne 400), a `growth_check` dobiva demo profil i mora ostati u budžetu
+od 1 GB (§8.2).
+
+**Testovi (6.0):** id-evi zadovoljavaju shemu i ima ih 150 jedinstvenih; svaki `svg_id` postoji u
+SVG-u i obrnuto; brojilo simuliranog priključka nikad ne pada (i preko restarta); isti seed daje
+isti odgovor; okidač odbija obračun simulirane sesije; CSV za upravu bez simuliranog po
+zadanom; alarm sa simuliranog izvora se ne spaja sa stvarnim; CHECK odbija pravi ormar na
+adresi simulatora; scenarij s pravim id-em ne radi ništa; simulator ne otvara izlaznu vezu.
+
 ---
 
 ## §7 Sigurnost
@@ -2648,7 +2787,7 @@ završava zelenim gateom i ažuriranom ovom specifikacijom (verzija +1, što se 
 | **5c** | **Cloudflare tunel (javni UI)** — tek kad je 5a zelen **i na VPS-u** | ERP javno dostupan iza Cloudflare Accessa (§8.4 koraci 8, 13) |
 | **5d** | **Priprema Krka + spajanje VPS → Krk** — `api_client` račun, 17 endpointova kao monitor, `krk_probe` (i mjerenje D17); LIVE-01 samo čitanje, poller preko noći, kontrolni testovi **samo na tvoj OK** (§10.5) | simulator se slaže sa živim ormarom ili je svaka razlika zapisana i ispravljena (§0.8); stvarni rast izmjeren |
 | **5e** | **Tjedan stvarnog rada**, uz fazu 6 lokalno protiv simulatora | izvještaj: stvarni rast prije/poslije 7 dana (O35), greške u `sync_log`, usporedba sa simulacijom |
-| **6** | **Zauzeće vezova + 2D SVG** — četiri signala iz §3.1, tablica stanja §3.2, statični SVG s `svg_id` po vezu. **Proširena u v15 (D23–D27)**, redom: **6a** glavni dashboard, 2D karta i tri kartice (§6.6, O51) · **6b** konfiguracija veza i usporedba plovila (§6.10) · **6c** Electricity & Water, bez agenta (§6.7) · **6d** Safety & Security: registar uređaja, prazna stanja, simulator 1 vrata + 1 senzor (§6.8) · **6e** Occupancy s poviješću i CSV-om (§6.9). Lokalno protiv simulatora smije dok traje 5b — **jedna stvar u isto vrijeme** | **Krk na karti, četiri signala, sivo za tiho**; tri kartice s pravilom svježine; način PEDESTAL na simulatoru od fotografije do „Wrong vessel" |
+| **6** | **Zauzeće vezova + 2D SVG** — četiri signala iz §3.1, tablica stanja §3.2, statični SVG s `svg_id` po vezu. **Proširena u v15 (D23–D27) i v16 (D28)**, redom: **6.0** demo marina — SVG 150 vezova, simulator 74 ormara, kamere i Safety uređaji, seed i scenariji, oznaka real/simulated (§6.11) · **6a** glavni dashboard, 2D karta i tri kartice (§6.6, O51) · **6b** konfiguracija veza i usporedba plovila (§6.10) · **6c** Electricity & Water, bez agenta (§6.7) · **6d** Safety & Security: registar uređaja, prazna stanja, simulator 1 vrata + 1 senzor (§6.8) · **6e** Occupancy s poviješću i CSV-om (§6.9). Lokalno protiv simulatora smije dok traje 5b — **jedna stvar u isto vrijeme** | **Krk na karti, četiri signala, sivo za tiho**; tri kartice s pravilom svježine; način PEDESTAL na simulatoru od fotografije do „Wrong vessel" |
 | **7** | **Poslovna logika i NFC tok** — §5.1, §5.4, tarifa (§4.5), `billing_records`, izvoz za blagajnu, knjiga kredita u iznosima | **TC-ERP-ACC-01..06 prolaze na pravom ormaru**; potrošnja se slaže na obje strane |
 | **8** | **Sigurnosni agent (D21)** — mamci, domenske detekcije, signali vrata i novog uređaja, servisni prozori, zaslon §6.5; **samo čita, jedini upis je alarm** (§13.1). ~~CVE/KEV s weba~~ otpada (D21) | prvi stvarni nalazi na VPS-u i Krku; testovi ograničenja AGT-01..05 zeleni — **izvedeno v13 (§10.8): AGT-01..06 zeleni; „prvi stvarni nalazi" čekaju VPS** |
 | **9** | ~~Energetski agent~~ → **Provjera slike s ormara (D22)** — §13.2; traži R17, R18 i veći VPS | zahtjev za pregled od događaja ormara do rezultata u 2D, uz Adminovo odobrenje |
@@ -3137,6 +3276,9 @@ Nađeno usput. Nije u izvedbi gore; tvoje je da odlučiš prioritet.
 | O56 | Integracija s certificiranim vatrodojavnim sustavom (D25) | samo ako marina ima sustav s izlazom; ERP prima signal, nikad ga ne zamjenjuje |
 | O57 | Retencija slika D27 i kamera D25 na ERP-u | prijedlog kao O42: **30 dana** za spremljene; rutinski kadar se ne sprema (§1.4) |
 | O58 | Koliko povijesti s Krka treba energetskom agentu (D24) | prijedlog **30 dana**; odlučuje se kad dođe faza 10 |
+| O59 | **`docs/ui/marina-demo.png` nije u repou** (ni u jednoj radnoj kopiji, 2026-10-15) — predložak karte D28 | shema id-eva i topologija su iz opisa (§6.11); crtež SVG-a čeka sliku |
+| O60 | Drugi pravi ormar (marina-iot): `display_id`, Tailscale adresa, `api_client` račun | potrebno za 5d; do tada B-01 i B-02 sivi, „no contact" |
+| O61 | **Provjera u pregledniku pala je najmanje 6 puta zaredom**, pa prošla 4 puta (2026-10-15, grana `faza/6-d23-d27`, promjena samo u dokumentaciji): `GET /api/marinas/{id}/berths` nije odgovorio u 10 s, simulator je odgovarao odmah. Uzrok nije uhvaćen | istražiti prije 6.0, koja opterećuje upravo taj put; ne zaobilaziti povećanjem timeouta |
 | O44 | `SecurityMiddleware` bilježi 403 kao „Unauthorised access" — s D20 je 403 i običan Manager na Admin ruti | šum u logu; rješava se s O2 (CrowdSec) |
 | O39 | Koja verzija ormara vrti na Krku — R14 b/c i loopback backend objavljeni su na `main` `eac7aa2`, Krk nepoznat | LIVE-01 (§10.5 b1, b7) |
 | O40 | Faza 4 tjedan stvarnog rada ne mjeri naplatu (ERP-ove sesije nastaju tek u fazi 7) | §10.6, prijedlog 2 |
@@ -3192,6 +3334,8 @@ Nađeno usput. Nije u izvedbi gore; tvoje je da odlučiš prioritet.
 - **ERP nije sustav za dojavu požara** (D25) i nikad nije jedini put alarma.
 - **Ne prepoznajem lica.** Brojanje ljudi je anonimni broj (D25).
 - **Nijedan agent ne otvara ni ne zaključava vrata** (D25, D21).
+- **Simulirano nikad ne naplaćujem, ne stavljam u izvještaj upravi i ne predajem agentu kao
+  stvarno** (D28). Provodi to baza (okidač, CHECK), ne pažnja.
 
 ---
 
@@ -3430,8 +3574,8 @@ i čeka čovjeka; nikad ne otvara ni ne zaključava vrata.
 
 ---
 
-`docs/erp_spec.md` · verzija 15 · 2026-10-15 · zamjenjuje v14 od 2026-10-15
+`docs/erp_spec.md` · verzija 16 · 2026-10-15 · zamjenjuje v15 od 2026-10-15
 
 Faze 1–4, korak 5a, faza 8 (D21) i UI · Lika brand su završeni i prihvaćeni; 5b ide korak po korak
-(§10.6). D23–D27 su upisani (§6.6–§6.10) i izvode se kao proširena faza 6 (6a–6e); energetski
-agent (D24) je faza 10. **§1 ima tri pitanja** (§1.2–§1.4), nijedno ne blokira.
+(§10.6). D23–D28 su upisani (§6.6–§6.11) i izvode se kao proširena faza 6 (6a–6e); energetski
+agent (D24) je faza 10. Demo marina (D28, §6.11) je korak 6.0. **§1 ima tri pitanja** (§1.2–§1.4), nijedno ne blokira.
