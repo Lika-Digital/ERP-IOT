@@ -412,6 +412,8 @@ Gdje se sprema referentna fotografija — **konfigurabilno po marini** (i po pot
 
 Razlog: konačno rješenje još nije odlučeno, a ormar mora raditi i bez našeg ERP-a.
 
+*(2026-10-15, odgovori na specifikaciju §1)* Boja veza = samo zauzeće (crvena = Wrong vessel); alarm ormara je zasebna oznaka na vezu. Slanje fotografije ormaru uključuje se po ormaru, tek kad živa provjera potvrdi popravak 2.3. Način ERP: da, uz tri uvjeta iz §1.4 (R8 potvrđen na ormaru; rutinski kadar se ne sprema; čeka model i veći VPS).
+
 Pravila:
 - **GDPR (D15):** na svakoj slici s ormara ljudi su zamagljeni NA ORMARU prije slanja. Retencija slika na ERP-u ograničena i zapisana. Pristup slikama ide u audit.
 - Podaci o vlasniku su osobni podaci: vidljivi u detalju veza ulogama Admin i Marina Manager; NE prikazuju se na karti, na dashboardu ni na javnim / zidnim zaslonima.
@@ -434,7 +436,7 @@ Odluka 2026-10-15 (konačno).
 Realni i ponovljivi podaci (seed): dnevni profil struje i vode, brojila koja samo rastu, zauzeće ~70–85 %, rezervacije, povremeno wrong vessel / power without vessel, alarmi. Scenariji na naredbu za demo: ormar offline, IR alarm, neovlašteni pristup, prepaid na nuli, krivi brod.
 
 Pravila:
-- Svaki uređaj / ormar ima oznaku real / simulated; Admin na karti vidi znak „SIM".
+- Svaki uređaj / ormar ima oznaku real / simulated; Admin na karti vidi znak „SIM". *(2026-10-15: vide ga i Admin i Marina Manager.)*
 - Simulirano **nikad** ne ide u naplatu, izvještaje za upravu ni u sigurnosnog agenta kao stvarno.
 - Simulator radi lokalno i na VPS-u (zaseban systemd servis), može se ugasiti jednom naredbom i ne dira prave ormare.
 

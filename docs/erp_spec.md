@@ -3,12 +3,12 @@
 Što se gradi, u kojem redoslijedu, i svaka odluka izrečena tako da ispravak
 košta jedan redak, a ne razgovor.
 
-    Verzija 16 — zamjenjuje v15 od 2026-10-15
+    Verzija 17 — zamjenjuje v16 od 2026-10-15
     Datum 2026-10-15
     Status faze 1–4 ZAVRŠENE i PRIHVAĆENE (§10.1–§10.4); korak 5a (D20), faza 8 (D21) i
            UI · Lika brand PRIHVAĆENI, na `main` (§10.7–§10.9); 5b u tijeku, korak po korak;
            D23–D28 upisani, izvode se kao proširena faza 6 (§6.6–§6.11, §10);
-           §1 ima tri pitanja, nijedno ne blokira
+           §1 je prazan (tri pitanja iz v15 odlučena 2026-10-15)
 
 Čita se uz `docs/inputs/odluke.md` **v2.6** (odluke, obvezujuće — v2.1 dodaje **D18**, v2.2 **D19**,
 v2.3 ispravak mreže u **D13**, v2.4 **D20**, v2.5 **D21**, **D22** i redoslijed 5a–5e, v2.6 **D23–D28**),
@@ -16,7 +16,16 @@ v2.3 ispravak mreže u **D13**, v2.4 **D20**, v2.5 **D21**, **D22** i redoslijed
 `docs/inputs/erp_inventar.md` (stanje repoa 2026-10-10) i
 `docs/inputs/ormar_ui_v2_spec.txt` (specifikacija ormara — uzor forme i izvor rječnika stanja).
 
-**Sve u ovom dokumentu je ODLUČENO osim tri pitanja u §1 (v15) — nijedno ne blokira.**
+**Sve u ovom dokumentu je ODLUČENO. §1 je prazan — tri pitanja iz v15 odlučena su 2026-10-15.**
+
+### Što se promijenilo u verziji 17
+
+| | |
+|---|---|
+| **§1 odlučen** (2026-10-15) | sve tri preporuke prihvaćene: boja veza = samo zauzeće, alarm ormara je zasebna oznaka (§1.2 → §3.2); slanje fotografije ormaru po ormaru, tek kad živa provjera potvrdi popravak 2.3 (§1.3); D27 način ERP s tri uvjeta (§1.4) |
+| **„SIM" vide Admin i Marina Manager** | §6.11 |
+| **O59 zatvoren** | `docs/ui/marina-demo.png` u repou; numeracija vezova prema slici: pontoni od korijena uz sjevernu šetnicu prema jugu, neparni zapadno, parni istočno (§6.11) |
+| **§3.2** | crvena boja veza = samo `vessel_mismatch`; rangovi 3–7 prelaze u zasebnu oznaku `alarm` |
 
 ### Što se promijenilo u verziji 16
 
@@ -413,8 +422,8 @@ sesije, a `session_l` je uvijek `null` (`ext_pedestal_endpoints.py:363`); alarm 
 
 ## §1 Blokirajuće
 
-**Tri pitanja iz D23–D27 (v15), §1.2–§1.4.** Nijedno ne blokira 5b ni lokalni rad na fazi 6 —
-svako ima preporuku, radim po njoj dok ne kažeš drugačije, i promjena je u svakom slučaju malena.
+**Prazno.** Tri pitanja iz v15 (§1.2–§1.4) odlučena su 2026-10-15 — u svakom je prihvaćena
+preporuka; tekst ostaje radi razloga.
 
 Sekcija ostaje jer je mjesto kamo ide prva odluka koja mi zatreba. Pravilo iz prompta vrijedi
 i dalje: odluku koja nedostaje ne izmišljam — dodajem je ovdje i nastavljam s onim što ne
@@ -441,7 +450,7 @@ ERP usklađuje **iterirajući korisnike**, ne pitajući za prozor.
 `last_reconciled_at` i commita. Zahtjev je §7.2 R2; dok ne prođe, ERP je ne koristi za prikaz
 (§7.2).
 
-### §1.2 · Crvena na karti — „Wrong vessel" ili „Alarm"? *(v15, otvoreno)*
+### §1.2 · Crvena na karti — „Wrong vessel" ili „Alarm"? *(v15 → **odlučeno 2026-10-15: (a)**)*
 
 D23 daje karti šest boja i crvenoj riječ **Wrong vessel**. U §3.2 crvena danas pokriva **šest
 stanja** — curenje vode, pregrijavanje, automatsko isključenje, iskočio osigurač, neizmjerena
@@ -460,7 +469,7 @@ različite radnje. Pod (b) karta ne kaže **zašto** je vez crven, a postotak za
 točno onda kad nešto ne štima.
 **Ako griješim** · Jedna tablica u `berth_status.py` i jedno polje; testovi provjeravaju ključeve.
 
-### §1.3 · `berths.push_image_ext` prije popravka 2.3 (R4) *(v15, otvoreno)*
+### §1.3 · `berths.push_image_ext` prije popravka 2.3 (R4) *(v15 → **odlučeno 2026-10-15: preporuka**)*
 
 Načini **PEDESTAL** i **BOTH** iz D27 šalju referentnu fotografiju ormaru kroz
 `berths.push_image_ext`. §12 to zabranjuje dok ormar ne popravi 2.3 (R4): ext write rute danas
@@ -471,7 +480,7 @@ kad živa provjera (§9.1b) potvrdi R4 na tom ormaru. Do tada se fotografija spr
 „Not sent to pedestal — waiting for pedestal fix 2.3", a ormar uspoređuje s onim što već ima.
 **Druga mogućnost** · uključiti odmah i prihvatiti rizik iz §12 — tvoja odluka, jedan redak.
 
-### §1.4 · D27 način ERP i odobrenje iz D22 *(v15, prijedlog — vrijedi ako ne kažeš drugačije)*
+### §1.4 · D27 način ERP i odobrenje iz D22 *(v15 → **odlučeno 2026-10-15: da, s tri uvjeta**)*
 
 Slažem se s D27: u načinu ERP rutinska usporedba ide automatski kad se zauzeće promijeni, a
 Adminovo odobrenje iz D22 vrijedi za eskalaciju „nesigurna ocjena". Dodajem tri uvjeta:
@@ -844,6 +853,12 @@ vlagu i temperaturu.
 
 Boje se prenose kao **ključevi** `grey | red | orange | yellow | blue | green` (`berth_colour`);
 frontend ih samo pretvara u klasu.
+
+> **Odlučeno (v17, §1.2 (a))** · **Boja veza = samo zauzeće.** Rangovi 3–7 (`water_leak`,
+> `too_hot`, `auto_off_overload`, `breaker_tripped`, `measurement_missing`) više ne boje vez:
+> server ih šalje u zasebnom polju `alarm` (popis ključeva, najteži prvi), a vez ih nosi kao
+> oznaku. Crvena boja veza = samo `vessel_mismatch`, riječ „Wrong vessel". Rangovi 1, 2 i 2.5
+> (sivo) i dalje pobjeđuju sve, jer se tada ne zna ni zauzeće. Izvodi se u 6a.
 
 `outlet_silent` (rang 2.5) **nema izvor na ext API-ju** — „stanje priključka starije od 60 s" zna
 samo CORE ormara. U fazi 2 je uvijek neistinit (O24).
@@ -2007,7 +2022,8 @@ Definicije brojeva (računa server):
 **Boje vezova na karti** (rječnik §3.2 i §6.0, jedna riječ = jedna boja): Free (zelena),
 Occupied — correct vessel (plava), Reserved (žuta), **Wrong vessel** (crvena — plovilo nije ono
 koje treba biti; izvor je usporedba s ormara ili D27), Power without vessel (narančasta), Unknown
-(siva — nema svježih podataka). Odnos prema „Alarm": §1.2.
+(siva — nema svježih podataka). **Alarm ormara nije boja veza** nego zasebna oznaka na vezu
+(ikona + „Alarm" + broj), i broji se u kartici Safety & Security (§1.2 (a), odlučeno).
 
 Ime plovila i vlasnik **ne** prikazuju se na karti ni na dashboardu (D27, D15); karta pokazuje
 broj veza. Status veze po ormaru (O51) dolazi na ovaj zaslon u 6a.
@@ -2166,8 +2182,10 @@ Zahtjevi prema ormaru: R8, R19, R20 (§7.2).
 ### §6.11 · Demo marina — D28 (v16)
 
 Jedna marina na kojoj se vidi sve iz D23–D27: **2 prava ormara**, ostalo simulirano. Predložak 2D
-karte je `docs/ui/marina-demo.png` — **u repou ga još nema (O59)**; topologija ispod je iz tvog
-opisa, a crtež ide po slici, koja smije biti pozadina SVG-a.
+karte je `docs/ui/marina-demo.png` (u repou od v17); smije biti pozadina SVG-a. Na slici pontoni
+A–E idu od zajedničke šetnice uz sjevernu obalu prema jugu, s vezovima s obje strane; istočna
+obala je zaseban gat uz lukobran, južna obala je uz ulaz. Zapadna obala ima plovila na slici, ali
+**nije među 150 vezova** i ne crta se kao vez.
 
 **Raspored — 150 vezova:**
 
@@ -2184,8 +2202,10 @@ opisa, a crtež ide po slici, koja smije biti pozadina SVG-a.
 | **Ukupno** | **150** | | | **2 prava + 74 simulirana** (jedan ormar = dva susjedna veza) |
 
 > **Odlučeno** · **Shema id-eva:** ponton = **jedno slovo** (`A`–`E`), obala = **`Q` + strana**
-> (`QN`, `QS`, `QE` — *quay*, jer je sučelje na engleskom), pa crtica i dvoznamenkasti broj od
-> mora prema kopnu, odnosno od zapada prema istoku. `berth_number` = `E-07`, a `svg_id` =
+> (`QN`, `QS`, `QE` — *quay*, jer je sučelje na engleskom), pa crtica i dvoznamenkasti broj.
+> **Ponton:** od korijena uz sjevernu šetnicu prema jugu, **neparni zapadno, parni istočno** —
+> `A-01`/`A-02` su prvi par uz korijen, gdje je i prvi ormar („početak pontona"). **Sjeverna i
+> južna obala:** od zapada prema istoku. **Istočna obala:** od sjevera prema jugu. `berth_number` = `E-07`, a `svg_id` =
 > `berth-E-07` (HTML id počinje slovom). Ponton E i istočna obala ne mogu se sudariti: `E-07` i
 > `QE-07` se razlikuju već prvim znakom, a pravilo je provjerljivo jednim izrazom
 > `^([A-E]|Q[NSE])-\d{2}$`. Duljina veza ide u novi stupac `berths.length_m`.
@@ -2244,8 +2264,8 @@ simulirani.
 > **Odlučeno** · **Oznaka real / simulated** je na svakom ormaru (`cabinets.is_simulated`) i uređaju
 > (`iot_devices.source = 'simulator'`), a s ormara se prenosi na sve što od njega nastane
 > (sesije, intervali, alarmi). **Admin na karti vidi znak „SIM"** na simuliranom vezu i
-> uređaju. Marina Manager ga na karti ne vidi (po D28 znak je za Admina), ali svaki izvoz i
-> izvještaj ga nosi.
+> uređaju — **i Admin i Marina Manager** (odluka 2026-10-15) — a nosi ga i svaki izvoz i
+> izvještaj.
 >
 > **Odlučeno** · **Simulirano nikad ne ide u naplatu, u izvještaje za upravu ni sigurnosnom
 > agentu kao stvarno.** To provodi **baza i kod, ne dogovor**:
@@ -3276,7 +3296,7 @@ Nađeno usput. Nije u izvedbi gore; tvoje je da odlučiš prioritet.
 | O56 | Integracija s certificiranim vatrodojavnim sustavom (D25) | samo ako marina ima sustav s izlazom; ERP prima signal, nikad ga ne zamjenjuje |
 | O57 | Retencija slika D27 i kamera D25 na ERP-u | prijedlog kao O42: **30 dana** za spremljene; rutinski kadar se ne sprema (§1.4) |
 | O58 | Koliko povijesti s Krka treba energetskom agentu (D24) | prijedlog **30 dana**; odlučuje se kad dođe faza 10 |
-| O59 | **`docs/ui/marina-demo.png` nije u repou** (ni u jednoj radnoj kopiji, 2026-10-15) — predložak karte D28 | shema id-eva i topologija su iz opisa (§6.11); crtež SVG-a čeka sliku |
+| O59 | ~~`docs/ui/marina-demo.png` nije u repou~~ | **zatvoreno v17** — slika u repou; numeracija prema slici (§6.11) |
 | O60 | Drugi pravi ormar (marina-iot): `display_id`, Tailscale adresa, `api_client` račun | potrebno za 5d; do tada B-01 i B-02 sivi, „no contact" |
 | O61 | **Provjera u pregledniku pala je najmanje 6 puta zaredom**, pa prošla 4 puta (2026-10-15, grana `faza/6-d23-d27`, promjena samo u dokumentaciji): `GET /api/marinas/{id}/berths` nije odgovorio u 10 s, simulator je odgovarao odmah. Uzrok nije uhvaćen | istražiti prije 6.0, koja opterećuje upravo taj put; ne zaobilaziti povećanjem timeouta |
 | O44 | `SecurityMiddleware` bilježi 403 kao „Unauthorised access" — s D20 je 403 i običan Manager na Admin ruti | šum u logu; rješava se s O2 (CrowdSec) |
@@ -3574,8 +3594,9 @@ i čeka čovjeka; nikad ne otvara ni ne zaključava vrata.
 
 ---
 
-`docs/erp_spec.md` · verzija 16 · 2026-10-15 · zamjenjuje v15 od 2026-10-15
+`docs/erp_spec.md` · verzija 17 · 2026-10-15 · zamjenjuje v16 od 2026-10-15
 
 Faze 1–4, korak 5a, faza 8 (D21) i UI · Lika brand su završeni i prihvaćeni; 5b ide korak po korak
 (§10.6). D23–D28 su upisani (§6.6–§6.11) i izvode se kao proširena faza 6 (6a–6e); energetski
-agent (D24) je faza 10. Demo marina (D28, §6.11) je korak 6.0. **§1 ima tri pitanja** (§1.2–§1.4), nijedno ne blokira.
+agent (D24) je faza 10. Demo marina (D28, §6.11) je korak 6.0. **§1 je prazan** — tri pitanja iz v15
+odlučena su 2026-10-15.
