@@ -223,6 +223,7 @@ async def test_connection(
     if not marina.pedestal_service_email or not marina.pedestal_service_password_encrypted:
         return {"success": False, "detail": "Service account credentials not configured"}
 
+    from ..cabinet.client import TLS
     from ..utils.encryption import decrypt_password
     import httpx
 
@@ -233,7 +234,7 @@ async def test_connection(
 
     login_url = f"{marina.pedestal_api_base_url.rstrip('/')}/api/auth/service-token"
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=10.0, verify=TLS) as client:
             resp = await client.post(
                 login_url,
                 json={"email": marina.pedestal_service_email, "password": plain_password},

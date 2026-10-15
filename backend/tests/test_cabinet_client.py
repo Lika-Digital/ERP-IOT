@@ -232,3 +232,35 @@ def test_reconciliation_reads_mark_the_cabinet_and_say_so_in_their_names():
 @pytest.mark.parametrize("name", ["nfc_session", "nfc_sessions_by_user"])
 def test_no_display_friendly_alias_exists(name):
     assert not hasattr(CabinetClient, name)
+
+
+# ── O61: a client per call must not rebuild TLS on the event loop ─────────────
+
+def test_o61_every_cabinet_call_shares_one_tls_context(monkeypatch):
+    # httpx re-reads the CA bundle for each new client (~0.24 s of CPU on the
+    # event loop); a berths request makes ~10 calls, so that alone took it past
+    # the browser's 10 s on a busy machine (spec §11 O61)
+    seen = []
+    real = httpx.AsyncClient
+
+    def spy(*a, **kw):
+        seen.append(kw.get("verify"))
+        return real(*a, **kw)
+
+    monkeypatch.setattr(cc.httpx, "AsyncClient", spy)
+    c, _ = _client()
+    run(c.health())
+    run(c.list_berths())
+    assert len(seen) >= 3                      # token + two calls
+    assert all(v is cc.TLS for v in seen)
+
+
+def test_o61_no_http_client_in_the_app_builds_its_own_tls():
+    import re
+    from pathlib import Path
+    app = Path(cc.__file__).resolve().parents[1]
+    bad = [f"{f.relative_to(app)}:{n}"
+           for f in app.rglob("*.py")
+           for n, line in enumerate(f.read_text(encoding="utf-8").splitlines(), 1)
+           if re.search(r"httpx\.(Async)?Client\(", line) and "verify=TLS" not in line]
+    assert bad == []

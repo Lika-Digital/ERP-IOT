@@ -23,9 +23,11 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import ssl
 from datetime import datetime, timedelta, timezone
 from typing import Any, Awaitable, Callable, Optional
 
+import certifi
 import httpx
 from jose import jwt
 from sqlalchemy.orm import Session
@@ -33,6 +35,12 @@ from sqlalchemy.orm import Session
 from ..utils.time import utcnow
 from . import contract
 from .outcomes import Outcome, classify_400, classify_409
+
+# ONE TLS context for the process. httpx builds a fresh one for every client it
+# creates, re-reading the CA bundle: ~0.24 s of CPU, on the event loop, per call.
+# With a client per call that was 2-3 s of a berths request and, on a busy
+# machine, more than 10 (spec §11 O61). Verification is unchanged: certifi's CAs.
+TLS = ssl.create_default_context(cafile=certifi.where())
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +89,7 @@ class CabinetClient:
     # ── plumbing ─────────────────────────────────────────────────────────────
 
     def _http(self) -> httpx.AsyncClient:
-        return httpx.AsyncClient(timeout=self.timeout, transport=self._transport)
+        return httpx.AsyncClient(timeout=self.timeout, transport=self._transport, verify=TLS)
 
     def _drop_token(self) -> None:
         self._token = None
