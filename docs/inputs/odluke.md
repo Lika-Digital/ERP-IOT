@@ -1,7 +1,7 @@
 # ERP-IOT — dnevnik odluka
 
-**Verzija 2.5 · 2026-10-13** — zamjenjuje v2.4.
-v2.5 dodaje **D21** (sigurnosni agent samo čita; mijenja slojeve 3 i 4 u D13 i D14) i **D22** (provjera slike s ormara; zamjenjuje energetskog agenta, koji se briše iz plana), i novi redoslijed faze 5 (5a–5e; faza 4.5 se briše, prvo spajanje na Krk je s VPS-a). v2.4 dodaje **D20** (korisnici, prijava i tajne). v2.3 ispravlja mrežna pravila u **D13** (ormar → ERP samo webhook; bez statične IP). v2.2 dodaje **D19** (ventili i utičnice prema Smart Modeu). v2.1 je dodao **D18** (mapiranje na obje strane); prvi isporučeni zip sadržavao je stariju v2 bez njega.
+**Verzija 2.6 · 2026-10-15** — zamjenjuje v2.5.
+v2.6 dodaje **D23–D27** (glavni dashboard; moduli Electricity & Water, Safety & Security i Occupancy; konfiguracija veza i usporedba plovila) i proširuje fazu 6; **D24 vraća energetskog agenta** (ispravak D22). v2.5 dodaje **D21** (sigurnosni agent samo čita; mijenja slojeve 3 i 4 u D13 i D14) i **D22** (provjera slike s ormara; zamjenjuje energetskog agenta, koji se briše iz plana), i novi redoslijed faze 5 (5a–5e; faza 4.5 se briše, prvo spajanje na Krk je s VPS-a). v2.4 dodaje **D20** (korisnici, prijava i tajne). v2.3 ispravlja mrežna pravila u **D13** (ormar → ERP samo webhook; bez statične IP). v2.2 dodaje **D19** (ventili i utičnice prema Smart Modeu). v2.1 je dodao **D18** (mapiranje na obje strane); prvi isporučeni zip sadržavao je stariju v2 bez njega.
 Ormar (Cloud_IOT) je druga strana ugovora; ovdje se bilježe odluke koje se tiču ERP-a i ono što ERP traži od ormara.
 
 Izvori, redom po težini:
@@ -198,6 +198,7 @@ Sigurnosni agent (D21) i agent za provjeru slike (D22) dijele: registar izvora, 
 Brojke računa kod, ne LLM; LLM povezuje, prioritizira i objašnjava.
 
 ### ~~Energetski agent (drugi po redu)~~ — briše se iz plana (D22, 2026-10-13)
+*(2026-10-15)* **Vraća se — D24.** Energetski agent je ponovno u planu, kad postoji povijest s Krka; pravila kao D21 (samo čita, predlaže s dokazom i procjenom, ništa ne izvršava; brojke računa kod, LLM objašnjava).
 Drugi agent je provjera slike s ormara (D22). Što ostaje od podataka koje je energetski agent tražio, s novim razlogom:
 - retencija `consumption_intervals` 400 dana — **ostaje**: naplata i sporovi s gostima;
 - polling `load.*` svakih 300 s — **ostaje**: stanje struje uživo za 2D prikaz i signal „struja bez plovila" (D2);
@@ -261,10 +262,11 @@ Redoslijed je obvezujući. Svaka faza završava nečim što se može provjeriti,
 | 3 | **Model podataka**: vezovi, priključci, mapiranje (prema rješenju BLOK-1), NFC tagovi s dva zapisa + CSV uvoz, tip uređaja i mogućnosti, korisnici, ugovori, način naplate (default prepaid), knjiga kredita, `consumption_source` | migracije; uvoz Krk CSV-a pogađa točan priključak |
 | 4 | **Prikupljanje + retencija** u istom commitu: poller (health, sesije, berths.list, potrošnja), pull-usklađivanje sesija, prijemnik webhooka (danas X-API-Key, pripremljen za HMAC), audit log naredbi | podaci teku; rast baze izmjeren i ograničen |
 | 5 | **VPS**: način isporuke odlučen u specifikaciji (Docker s ispravnim Dockerfileovima ili systemd — jedan, ne oba), 2 GB / 20 GB, Postgres, nginx, cloudflared samo za UI, Tailscale prema ormarima, **slojevi 0 i 1 iz D13 prije javnog izlaganja**, backup, runbook. *Od 2026-10-13 u pet koraka:* **5a** D20 lokalno (prvo, prije svega) → **5b** VPS onboarding, samo Tailscale → **5c** Cloudflare tunel, tek kad je 5a zelen i na VPS-u → **5d** priprema Krka + spajanje VPS → Krk (LIVE-01 samo čitanje, poller preko noći, kontrolni testovi samo na OK) → **5e** tjedan stvarnog rada, uz fazu 6 lokalno. **Faza 4.5 (LIVE s PC-a) se briše**; njezina priprema prelazi u 5d | ERP javno dostupan iza Cloudflare Accessa; runbook proveden na čistom VPS-u |
-| 6 | **Zauzeće vezova** (D2) + **2D SVG prikaz** marine (plan nacrtan jednom, svaki vez ima id, aplikacija mijenja klasu) | Krk na karti, četiri signala, sivo za tiho |
+| 6 | **Zauzeće vezova** (D2) + **2D SVG prikaz** marine (plan nacrtan jednom, svaki vez ima id, aplikacija mijenja klasu). *(2026-10-15)* **Proširena D23–D27:** 6a glavni dashboard + karta, 6b konfiguracija veza (D27), 6c–6e moduli D24–D26 | Krk na karti, četiri signala, sivo za tiho |
 | 7 | **Poslovna logika i NFC tok** (D6, D9, D10), prihvatni testovi D11 | D11 1–6 prolaze na pravom ormaru |
 | 8 | **Sigurnosni agent (D21)**: mamci, domenske detekcije, signali vrata i novog uređaja (kad ih ormar šalje), prikaz "sigurnost"; samo čita interne podatke, jedini upis je alarm. ~~CVE/KEV prema pinanim verzijama~~ (otpada s weba; ručni uvoz datoteke ako zatreba). Implementacija smije krenuti nakon 5a, na vlastitoj grani, samo na internim podacima | prvi stvarni nalazi na VPS-u i Krku |
 | 9 | ~~**Energetski agent**~~ → **Provjera slike s ormara (D22)** — nakon 5e | — |
+| 10 | **Energetski agent (D24)** — kad postoji povijest s Krka *(2026-10-15)* | prvi prijedlozi na stvarnim podacima |
 
 Agenti (faze 8 i 9) dolaze nakon 5e, kad ERP stabilno radi s pravim ormarom.
 
@@ -315,7 +317,7 @@ Odluka 2026-10-13. Mijenja D13 (slojevi 3 i 4) i D14.
 - Prodaje se kao značajka platforme, ne samostalni IDS (D15/CRA).
 
 ## D22 · Drugi agent — provjera slike s ormara
-Odluka 2026-10-13. **Zamjenjuje energetskog agenta; energetski agent se briše iz plana.**
+Odluka 2026-10-13. **Zamjenjuje energetskog agenta; energetski agent se briše iz plana.** *(Ispravljeno D24, 2026-10-15: energetski agent se vraća.)*
 
 Proširenje agenta na ormaru (detekcija plovila, guard, zauzeće veza). Kad je agent na ormaru nesiguran u ocjenu:
 1. Ormar javi ERP-u događaj **„nesigurna ocjena"** (vez, vrijeme, razlog, ocjena) — mali podatak, bez slike, bez streama.
@@ -333,6 +335,91 @@ Proširenje agenta na ormaru (detekcija plovila, guard, zauzeće veza). Kad je a
 
 **Raspored agenata:** dolaze nakon 5e (ERP stabilno radi s pravim ormarom). Implementacija D21 smije krenuti nakon 5a, na vlastitoj grani, u vremenu čekanja na VPS — samo dijelovi na internim podacima, bez utjecaja na 5b.
 
+## D23 · Glavni dashboard
+Odluka 2026-10-15. Početni zaslon nakon prijave (Admin i Marina Manager): **2D karta marine** (SVG, vezovi) gore, ispod **tri velike kartice**. Svaka kartica je grupa; klik vodi u modul s detaljima (D24, D25, D26).
+
+```
+┌──────────────────────────────────────────────┐
+│           2D KARTA MARINE (SVG, vezovi)      │
+├──────────────┬────────────────┬──────────────┤
+│ Electricity  │ Safety &       │ Occupancy    │
+│ & Water      │ Security       │              │
+│ [broj]       │ [broj]         │ [ % ]        │
+└──────────────┴────────────────┴──────────────┘
+```
+
+Svaka kartica ima jasnu definiciju broja, vrijeme zadnjeg osvježenja i **sivo stanje kad su podaci stari** (isto pravilo kao tihi ormar — stari broj se ne prikazuje kao svjež):
+- **Electricity & Water:** današnja potrošnja cijele marine (kWh i m³ ili L), uz usporedbu s jučer / istim danom prošli tjedan.
+- **Safety & Security:** broj **otvorenih** upozorenja (ne svih događaja), s bojom najtežeg (critical / warning / info).
+- **Occupancy:** % zauzetih vezova = zauzeti / (svi vezovi s poznatim stanjem). Vezovi u stanju Unknown se ne računaju u nazivnik i broje se zasebno („2 unknown"). Rezervirani se prikazuju zasebno.
+
+Status i brojeve računa server; frontend ih samo prikazuje.
+
+2D karta — boje vezova (postojeći rječnik, jedna riječ = jedna boja):
+- Free (zelena)
+- Occupied — correct vessel (plava)
+- Reserved (žuta)
+- Wrong vessel (crvena) — plovilo na vezu nije ono koje treba biti; izvor je značajka zauzeća s ormara (match), odnosno D27
+- Power without vessel (narančasta)
+- Unknown (siva) — nema svježih podataka
+
+Klik na vez otvara detalj veza i konfiguraciju veza (D27).
+
+## D24 · Modul Electricity & Water
+Odluka 2026-10-15.
+- Klik na karticu vodi izravno na **sve mjerne točke** s ormara (utičnice i ventili), s detaljima.
+- Pregledi: po vezu, po doku, po ormaru, cijela marina.
+- Povijest i analitika: dnevno / tjedno / mjesečno, vršna snaga, VT/NT, „struja bez plovila", nenaplaćeno (osoblje, `origin = staff`), null nije 0 (D10).
+- **„Improvements": ovdje živi energetski agent** — vraća se u plan (**ispravak D22**, koji ga je uklonio). Agent je kao D21: samo čita interne podatke, predlaže uštede s dokazom i procjenom, ništa ne izvršava sam; brojke računa kod, LLM objašnjava (D14). Agent dolazi **nakon** što postoji povijest podataka s pravog ormara.
+
+## D25 · Modul Safety & Security
+Odluka 2026-10-15. Modul za fizičku sigurnost marine. Danas ima malo izvora; dizajnira se tako da se budući IoT uređaji dodaju bez prepravljanja.
+
+Sadržaj:
+- **Pametni pristup (smart access):** vrata / rampe s NFC čitačima.
+  - Mapiranje NFC skeniranja na lokaciju vrata (isti princip kao NFC na priključcima, D6.1).
+  - Grupe korisnika i prava pristupa po vratima i vremenu.
+  - Izvještaj i upozorenje kod neovlaštenog pristupa (vrata otvorena bez valjanog skeniranja, skeniranje bez prava, izvan vremena).
+- **Senzori:** otvaranje vrata, brojanje ljudi (koliko osoba prolazi) — statistika i upozorenja.
+- **Kamere:** IR / termalne kamere za ranu detekciju požara.
+- **Guard na ormarima:** konfiguracija postojeće guard značajke ormara (ERP prikazuje i konfigurira ono što ormar već ima).
+- **Veza s D21:** sigurnosni agent prima i ovaj modul kao izvor i javlja anomalije. Posebna vrijednost je **povezivanje fizičkog i digitalnog**: npr. vrata ormara otvorena + novi uređaj u mreži + naredba utičnici izvan radnog vremena = jedan slučaj, ne tri alarma. Pravila D21 ostaju: samo čita, otvara alarm, čeka čovjeka.
+
+Arhitektura (obavezno):
+- **Generički registar uređaja:** uređaj, tip, lokacija (vez / dok / vrata / zona), mogućnosti (čitanje / upravljanje), izvor podataka, adapter. Novi tip IoT uređaja = novi adapter, bez promjene modela (D14).
+- Za sada: model, zasloni s praznim stanjem („No devices connected yet") i simulator za 1 vrata + 1 senzor; pravi uređaji kasnije.
+
+Sigurnosne napomene:
+- **Požar:** ERP **nije** sustav za dojavu požara i ne smije biti jedini put alarma. IR kamere u ERP-u služe za prikaz i obavijest; zakonski i životno kritična dojava ide kroz certificirani vatrodojavni sustav. ERP ga samo prikazuje / prima signal ako postoji integracija.
+- **Brojanje ljudi:** samo anonimni brojevi, bez prepoznavanja lica.
+- **Kontrola pristupa:** otvaranje vrata iz ERP-a je upravljačka radnja — ista pravila kao kod utičnica (uloga, razlog, audit); sigurnosni agent nikad ne otvara / zaključava vrata.
+
+## D26 · Modul Occupancy
+Odluka 2026-10-15.
+- Izvještaj o zauzeću u stvarnom vremenu iz zauzeća s ormara (D2).
+- Povijest: zauzeće po danu / doku, prosjek, vršni dani, koliko dugo je vez bio „Wrong vessel" ili „Power without vessel".
+- Izvoz (CSV) za upravu marine.
+
+## D27 · Konfiguracija veza i usporedba plovila (match)
+Odluka 2026-10-15. Klik na vez → konfiguracija (Admin; Marina Manager čita):
+- Glavno plovilo veza: ime, registracija, vlasnik, fotografija.
+- Fotografija služi za usporedbu: odgovara li plovilo koje je sada na vezu spremljenom plovilu (match / mismatch → „Wrong vessel").
+
+Gdje se sprema referentna fotografija — **konfigurabilno po marini** (i po potrebi po vezu):
+- **PEDESTAL** — fotografija se šalje na ormar (postojeći `berths.push_image_ext`); ormar sam radi usporedbu i ERP-u javlja rezultat (`match_ok_bit` / `state_code` / `match_score`). Ovo je i način rada kad marina NEMA naš ERP.
+- **ERP** — fotografija je samo u ERP-u; ERP traži od ormara trenutnu sliku veza i usporedbu radi svojim modelom (D22).
+- **BOTH** — fotografija je na oba mjesta; **ocjena ERP-a ima prednost**, ocjena ormara se prikazuje uz nju; razlika između njih je signal za pregled.
+
+Razlog: konačno rješenje još nije odlučeno, a ormar mora raditi i bez našeg ERP-a.
+
+Pravila:
+- **GDPR (D15):** na svakoj slici s ormara ljudi su zamagljeni NA ORMARU prije slanja. Retencija slika na ERP-u ograničena i zapisana. Pristup slikama ide u audit.
+- Podaci o vlasniku su osobni podaci: vidljivi u detalju veza ulogama Admin i Marina Manager; NE prikazuju se na karti, na dashboardu ni na javnim / zidnim zaslonima.
+- **Odnos prema D22:** u načinu ERP rutinska usporedba (kad se zauzeće promijeni) radi se automatski sa zamagljenom slikom; D22-ovo odobrenje Admina vrijedi za eskalacije „nesigurna ocjena". *(Prijedlog s uvjetima: specifikacija §1.4.)*
+- Zahtjevi prema ormaru (specifikacija §7.2): dohvat trenutne slike veza za usporedbu (`camera.frame_ext`, uz zamagljivanje — R8), potvrda da `push_image_ext` radi s fotografijom plovila (R19), i da ormar javlja match rezultat po vezu (R20); guard preko ext API-ja (R21, D25).
+
+**Redoslijed (2026-10-15):** implementacija D23–D27 ide u **fazu 6 (proširenu)**. Smije se raditi lokalno protiv simulatora u vremenu čekanja dok traje 5b — **jedna stvar u isto vrijeme**: D23 dashboard + 2D karta, pa D27 konfiguracija veza, zatim detalji D24–D26. Energetski agent (D24) tek kad postoji povijest s Krka.
+
 ---
 
 ## Blokirajuće (moja odluka, ne blokira specifikaciju)
@@ -343,7 +430,9 @@ Proširenje agenta na ormaru (detekcija plovila, guard, zauzeće veza). Kad je a
 - Dokument MarinaMaster kaže da ERP potrošnju za vrijeme prekida "dobije naknadno"; webhook nema retry. Koji pull endpoint vraća sesije i potrošnju za vremenski raspon?
 - Koji EVENT_CATALOG id-evi odgovaraju početku sesije, potrošnji ~60 s i kraju sesije? `meter_telemetry_received` se emitira, ali nije u katalogu.
 - Kojom ulogom i ključem ERP zove `/api/nfc/*` (izravni kanal s `X-API-Key`) i kad se taj ključ rotira (ugrađen je u mobilnu aplikaciju)?
-- ~~Postoji li brojilo na glavnom priključku marine ili podaci s računa (za vršnu snagu)?~~ — **odgođeno** (energetski agent obrisan, D22).
+- ~~Postoji li brojilo na glavnom priključku marine ili podaci s računa (za vršnu snagu)?~~ — **odgođeno** (energetski agent obrisan, D22). *(2026-10-15: ponovno otvoreno — D24 traži vršnu snagu.)*
 - Model za provjeru slike (D22) — otvoreno, odlučuje se pri implementaciji.
+- Status veze po ormaru na dashboardu (spec O51) — rješava se u fazi 6 (D23).
+- Ventili su uvijek „Unknown" (ERP ne čita stanje ventila) — otvoreno; zatvara se kad ERP čita stanje ventila (R15/R16 s ormara).
 - Ormar: popravci 2.3, 1.3, 3.1, 2.1. `breakers.socket_reset_ext` i `load.auto_stop_ack_ext` ne uključivati prije 2.3.
 - Činjenice iz D16 "Najprije provjeriti".
