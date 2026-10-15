@@ -14,8 +14,8 @@ The database role `erp_agent` (migration 011) holds SELECT on the sources and
 INSERT on security_alarms — nothing else. app/agent/sources.py is the list.
 """
 from sqlalchemy import (
-    JSON, BigInteger, CheckConstraint, Column, DateTime, ForeignKey, Index, Integer, String,
-    Text, UniqueConstraint,
+    JSON, BigInteger, Boolean, CheckConstraint, Column, DateTime, ForeignKey, Index, Integer,
+    String, Text, UniqueConstraint, false,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 
@@ -58,6 +58,8 @@ class SecurityAlarm(Base):
     decided_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     decided_at = Column(DateTime, nullable=True)
     decision_note = Column(Text, nullable=True)
+    # D28: raised from simulated sources only — shown with "SIM", never counted as real
+    simulated = Column(Boolean, nullable=False, default=False, server_default=false())
 
 
 class ServiceWindow(Base):

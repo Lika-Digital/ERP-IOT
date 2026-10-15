@@ -27,13 +27,15 @@ DEFAULT_WINDOW = timedelta(hours=24)
 _MODES = text("SELECT rule_id, mode FROM security_rule_settings")
 _INSERT_PG = text(
     "INSERT INTO security_alarms (rule_id, fingerprint, severity, title, why, evidence, "
-    "window_from, window_to, created_at, state) VALUES (:rule_id, :fingerprint, :severity, "
-    ":title, :why, CAST(:evidence AS JSONB), :window_from, :window_to, :created_at, 'open') "
+    "window_from, window_to, created_at, state, simulated) VALUES (:rule_id, :fingerprint, "
+    ":severity, :title, :why, CAST(:evidence AS JSONB), :window_from, :window_to, :created_at, "
+    "'open', :simulated) "
     "ON CONFLICT (fingerprint) DO NOTHING")
 _INSERT_SQLITE = text(
     "INSERT INTO security_alarms (rule_id, fingerprint, severity, title, why, evidence, "
-    "window_from, window_to, created_at, state) VALUES (:rule_id, :fingerprint, :severity, "
-    ":title, :why, :evidence, :window_from, :window_to, :created_at, 'open') "
+    "window_from, window_to, created_at, state, simulated) VALUES (:rule_id, :fingerprint, "
+    ":severity, :title, :why, :evidence, :window_from, :window_to, :created_at, 'open', "
+    ":simulated) "
     "ON CONFLICT (fingerprint) DO NOTHING")
 
 
@@ -48,7 +50,8 @@ def _insert(c: Connection, f: Finding, now: datetime) -> bool:
         c, rule_id=f.rule_id, fingerprint=f.fingerprint, severity=f.severity,
         title=f.title, why=f.why,
         evidence=json.dumps(f.evidence, default=str, ensure_ascii=False),
-        window_from=f.window_from, window_to=f.window_to, created_at=now))
+        window_from=f.window_from, window_to=f.window_to, created_at=now,
+        simulated=bool(f.simulated)))
     return r.rowcount == 1
 
 

@@ -12,6 +12,10 @@ from ..database import Base
 from ..utils.time import utcnow
 
 OUTLET_NAMES = ("Q1", "Q2", "Q3", "Q4", "V1", "V2")
+SIMULATOR_URL_LIKE = "http://127.0.0.1:%/c/%"
+SIMULATED_MATCHES_URL = (
+    f"(is_simulated AND base_url LIKE '{SIMULATOR_URL_LIKE}') OR "
+    f"(NOT is_simulated AND base_url NOT LIKE '{SIMULATOR_URL_LIKE}')")
 CAPABILITIES = ("power", "water", "vessel_detect", "camera", "door", "breaker", "load_meter")
 
 
@@ -19,7 +23,13 @@ class Cabinet(Base):
     __tablename__ = "cabinets"
     __table_args__ = (
         UniqueConstraint("marina_id", "display_id", name="uq_cabinets_marina_display"),
-        UniqueConstraint("marina_id", "pedestal_pk", name="uq_cabinets_marina_pk"),
+        # a PK is unique per cabinet SERVER: two real cabinets in one marina (D28,
+        # Krk and marina-iot) are each pedestal 1 on their own server
+        UniqueConstraint("marina_id", "base_url", "pedestal_pk",
+                         name="uq_cabinets_marina_server_pk"),
+        # D28: simulated <=> the simulator's loopback address. A real cabinet can never
+        # point at the simulator, and a simulated one never at a real address.
+        CheckConstraint(SIMULATED_MATCHES_URL, name="ck_cabinets_simulated_url"),
         CheckConstraint("device_type IN ('full', 'retrofit')", name="ck_cabinets_device_type"),
         # HMAC on: there must be a secret to check against (§5.2)
         CheckConstraint("NOT webhook_hmac OR webhook_secret_enc IS NOT NULL",
@@ -47,6 +57,8 @@ class Cabinet(Base):
     smart_mode = Column(Boolean, nullable=True)        # NULL = never read
     last_heartbeat_at = Column(DateTime, nullable=True)
     last_polled_at = Column(DateTime, nullable=True)
+    # D28: real or simulated, carried to everything that comes from it
+    is_simulated = Column(Boolean, nullable=False, default=False, server_default=false())
 
 
 class CabinetCapability(Base):

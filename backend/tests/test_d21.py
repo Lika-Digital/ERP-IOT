@@ -142,13 +142,20 @@ def test_agt01_migration_grants_exactly_what_sources_py_lists():
     """agent_db_check.py compares the LIVE grants with sources.py; the migration is
     history and keeps its own literal copy. Both must say the same."""
     from app.agent import sources
-    spec = importlib.util.spec_from_file_location(
-        "m011", BACKEND / "alembic" / "versions" / "011_d21_security_agent.py")
-    m = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(m)
-    assert m.ROLE == sources.ROLE == "erp_agent"
+
+    def load(name, file):
+        spec = importlib.util.spec_from_file_location(name, BACKEND / "alembic" / "versions" / file)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    m = load("m011", "011_d21_security_agent.py")
+    m12 = load("m012", "012_d28_demo_marina.py")     # D28: is_simulated, base_url
+    assert m.ROLE == m12.ROLE == sources.ROLE == "erp_agent"
     assert set(m.SELECT_TABLES) == set(sources.SELECT_TABLES)
-    assert m.SELECT_COLUMNS == sources.SELECT_COLUMNS
+    granted = {t: tuple(cols) + tuple(m12.ADDED_SELECT_COLUMNS.get(t, ()))
+               for t, cols in m.SELECT_COLUMNS.items()}
+    assert granted == sources.SELECT_COLUMNS
     assert m.INSERT_TABLES == sources.INSERT_TABLES == ("security_alarms",)
     assert m.SEQUENCES == sources.SEQUENCES
 

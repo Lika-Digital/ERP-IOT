@@ -1,7 +1,7 @@
 """Berths and the berth -> outlet mapping, on both sides (spec §4.2, §4.3, D1, D18)."""
 from sqlalchemy import (
     JSON, Boolean, CheckConstraint, Column, DateTime, ForeignKey, ForeignKeyConstraint, Index, Integer,
-    String, Text, UniqueConstraint, text, true,
+    Numeric, String, Text, UniqueConstraint, text, true,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 
@@ -25,6 +25,25 @@ class Berth(Base):
     # berths.list) is per cabinet berth. Not in spec v5 §4.2; added in phase 3.
     cabinet_id = Column(Integer, ForeignKey("cabinets.id", ondelete="SET NULL"), nullable=True)
     cabinet_berth_id = Column(Integer, nullable=True)
+    length_m = Column(Numeric(5, 1), nullable=True)      # D28: 20 / 15 / 10 m pontoons
+    created_at = Column(DateTime, nullable=False, default=utcnow)
+
+
+class BerthReservation(Base):
+    """The reservation signal of D2 (§3.1): the ERP's own, never the cabinet's."""
+    __tablename__ = "berth_reservations"
+    __table_args__ = (
+        CheckConstraint("ends_at > starts_at", name="ck_berth_reservations_order"),
+        CheckConstraint("length(trim(created_by)) > 0", name="ck_berth_reservations_author"),
+        Index("ix_berth_reservations_berth_time", "berth_id", "starts_at", "ends_at"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    berth_id = Column(Integer, ForeignKey("berths.id", ondelete="CASCADE"), nullable=False)
+    starts_at = Column(DateTime, nullable=False)        # naive UTC (§4.0)
+    ends_at = Column(DateTime, nullable=False)
+    note = Column(Text, nullable=True)                  # no customer name here (D15)
+    created_by = Column(String(320), nullable=False)
     created_at = Column(DateTime, nullable=False, default=utcnow)
 
 

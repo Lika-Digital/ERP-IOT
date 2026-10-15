@@ -50,6 +50,9 @@ class Finding:
     evidence: list = field(default_factory=list)
     window_from: datetime | None = None
     window_to: datetime | None = None
+    # D28: true when every source is a simulated cabinet — shown with "SIM", never
+    # counted as real. A rule never mixes simulated and real sources into one case.
+    simulated: bool = False
 
     @property
     def fingerprint(self) -> str:
@@ -185,7 +188,7 @@ def login_spray(c: Connection, since: datetime, now: datetime) -> list:
 
 _OUTLET_CMDS_IN_WINDOW = text(
     "SELECT a.id, a.cabinet_id, a.endpoint_key, a.action, a.actor_ref, a.reason, a.source_ip, "
-    "a.created_at, c.display_id, m.timezone FROM command_audit a "
+    "a.created_at, c.display_id, c.is_simulated, m.timezone FROM command_audit a "
     "JOIN cabinets c ON c.id = a.cabinet_id JOIN marinas m ON m.id = c.marina_id "
     "WHERE a.actor_type = 'operator' AND a.endpoint_key IN ('controls.socket_cmd', "
     "'controls.water_cmd') AND a.created_at >= :since AND a.created_at <= :now ORDER BY a.id")
@@ -208,17 +211,22 @@ def socket_cmd_odd_hour(c: Connection, since: datetime, now: datetime) -> list:
                  {"endpoint_key": r["endpoint_key"], "action": r["action"],
                   "actor_ref": r["actor_ref"], "reason": r["reason"], "source_ip": r["source_ip"],
                   "local_hour": hour, "zone": zone}, at)],
-            at, at))
+            at, at, simulated=bool(r["is_simulated"])))
     return out
 
 
 _ACTOR_HISTORY = text(
-    "SELECT id, endpoint_key, source_ip FROM command_audit "
-    "WHERE actor_ref = :actor AND created_at >= :from_at AND created_at < :before")
+    "SELECT a.id, a.endpoint_key, a.source_ip FROM command_audit a "
+    "LEFT JOIN cabinets c ON c.id = a.cabinet_id "
+    "WHERE a.actor_ref = :actor AND a.created_at >= :from_at AND a.created_at < :before "
+    "AND COALESCE(c.is_simulated, :no) = :sim")
 
 
-def _history(c: Connection, actor: str, before: datetime) -> list:
-    return list(c.execute(_ACTOR_HISTORY, _p(c, actor=actor, from_at=before - BASELINE, before=before)).mappings())
+def _history(c: Connection, actor: str, before: datetime, simulated: bool = False) -> list:
+    # D28: a demo click is never the baseline of a real command, nor the other way round
+    return list(c.execute(_ACTOR_HISTORY, _p(c, actor=actor, from_at=before - BASELINE,
+                                             before=before, no=False,
+                                             sim=bool(simulated))).mappings())
 
 
 def socket_cmd_new_ip(c: Connection, since: datetime, now: datetime) -> list:
@@ -228,7 +236,7 @@ def socket_cmd_new_ip(c: Connection, since: datetime, now: datetime) -> list:
         if not r["actor_ref"] or not r["source_ip"]:
             continue
         at = _dt(r["created_at"])
-        hist = _history(c, r["actor_ref"], at)
+        hist = _history(c, r["actor_ref"], at, r["is_simulated"])
         if not hist or any(h["source_ip"] == r["source_ip"] for h in hist):
             continue      # no baseline yet, or a known address
         known = sorted({h["source_ip"] for h in hist if h["source_ip"]})
@@ -242,12 +250,14 @@ def socket_cmd_new_ip(c: Connection, since: datetime, now: datetime) -> list:
                   "actor_ref": r["actor_ref"], "source_ip": r["source_ip"],
                   "known_ips": known}, at),
              _ev("command_audit", [h["id"] for h in hist], {"baseline_days": BASELINE.days}, None)],
-            at, at))
+            at, at, simulated=bool(r["is_simulated"])))
     return out
 
 
 _ALL_CMDS_IN_WINDOW = text(
-    "SELECT a.id, a.endpoint_key, a.actor_ref, a.source_ip, a.created_at FROM command_audit a "
+    "SELECT a.id, a.endpoint_key, a.actor_ref, a.source_ip, a.created_at, "
+    "COALESCE(c.is_simulated, :no) AS is_simulated FROM command_audit a "
+    "LEFT JOIN cabinets c ON c.id = a.cabinet_id "
     "WHERE a.actor_ref IS NOT NULL AND a.created_at >= :since AND a.created_at <= :now "
     "ORDER BY a.id")
 
@@ -255,17 +265,19 @@ _ALL_CMDS_IN_WINDOW = text(
 def account_new_endpoint(c: Connection, since: datetime, now: datetime) -> list:
     """An account calls an endpoint it never called before (30 days), while it has history."""
     out, seen = [], set()
-    for r in c.execute(_ALL_CMDS_IN_WINDOW, _p(c, since=since, now=now)).mappings():
+    for r in c.execute(_ALL_CMDS_IN_WINDOW, _p(c, since=since, now=now, no=False)).mappings():
         at = _dt(r["created_at"])
-        key = (r["actor_ref"], r["endpoint_key"], at.date())
+        sim = bool(r["is_simulated"])
+        key = (r["actor_ref"], r["endpoint_key"], at.date(), sim)
         if key in seen:
             continue
-        hist = _history(c, r["actor_ref"], at)
+        hist = _history(c, r["actor_ref"], at, sim)
         if not hist or any(h["endpoint_key"] == r["endpoint_key"] for h in hist):
             continue
         seen.add(key)
         out.append(Finding(
-            "account_new_endpoint", f"{r['actor_ref']}|{r['endpoint_key']}|{at.date()}", "info",
+            "account_new_endpoint",
+            f"{r['actor_ref']}|{r['endpoint_key']}|{at.date()}" + ("|sim" if sim else ""), "info",
             f"Account calls {r['endpoint_key']} for the first time",
             f"In the last {BASELINE.days} days the account called {len({h['endpoint_key'] for h in hist})}"
             " other kinds of command, never this one.",
@@ -273,12 +285,13 @@ def account_new_endpoint(c: Connection, since: datetime, now: datetime) -> list:
                  {"endpoint_key": r["endpoint_key"], "actor_ref": r["actor_ref"],
                   "source_ip": r["source_ip"],
                   "known_endpoints": sorted({h["endpoint_key"] for h in hist})}, at)],
-            at, at))
+            at, at, simulated=sim))
     return out
 
 
 _DOOR_ALARMS = text(
-    "SELECT a.id, a.cabinet_id, a.alarm_data, a.received_at, c.display_id FROM alarm_log a "
+    "SELECT a.id, a.cabinet_id, a.alarm_data, a.received_at, c.display_id, c.is_simulated "
+    "FROM alarm_log a "
     "JOIN cabinets c ON c.id = a.cabinet_id "
     "WHERE a.received_at >= :since AND a.received_at <= :now ORDER BY a.id")
 _STATUS_SNAPSHOTS = text(
@@ -286,19 +299,24 @@ _STATUS_SNAPSHOTS = text(
     "FROM pedestal_cache p WHERE p.cache_key LIKE 'pedestals.status_ext:%' "
     "AND p.last_synced_at >= :since AND p.last_synced_at <= :now ORDER BY p.id")
 _CABINETS_OF_MARINA = text(
-    "SELECT id, pedestal_pk, display_id FROM cabinets WHERE marina_id = :m")
+    "SELECT id, pedestal_pk, display_id, base_url, is_simulated FROM cabinets "
+    "WHERE marina_id = :m")
 _WINDOW_COVERS = text(
     "SELECT id FROM service_windows WHERE cabinet_id = :cab AND from_at <= :at AND to_at >= :at")
 
 
 def _snapshot_cabinet(c: Connection, marina_id: int, cache_key: str):
-    # 'pedestals.status_ext:/api/ext/pedestals/<ref>/status' — <ref> is the PK or display_id
-    parts = cache_key.split("/")
+    # 'pedestals.status_ext:/api/ext/pedestals/<ref>/status@<base_url>' — <ref> is the
+    # PK or display_id, and a PK is unique only on its own cabinet SERVER (D28: two real
+    # cabinets in one marina are each pedestal 1), so the server must match too.
+    # A key without '@' predates 6.0: matched by the ref alone, as before.
+    key, _, server = cache_key.partition("@")
+    parts = key.split("/")
     ref = parts[-2] if len(parts) >= 2 else ""
-    for cab in c.execute(_CABINETS_OF_MARINA, {"m": marina_id}).mappings():
-        if ref in (str(cab["pedestal_pk"]), cab["display_id"]):
-            return cab
-    return None
+    hits = [cab for cab in c.execute(_CABINETS_OF_MARINA, {"m": marina_id}).mappings()
+            if ref in (str(cab["pedestal_pk"]), cab["display_id"])
+            and (not server or cab["base_url"].rstrip("/") == server.rstrip("/"))]
+    return hits[0] if len(hits) == 1 else None      # ambiguous is not a finding
 
 
 def door_no_window(c: Connection, since: datetime, now: datetime) -> list:
@@ -319,7 +337,8 @@ def door_no_window(c: Connection, since: datetime, now: datetime) -> list:
             f"{r['display_id']}: door open outside a service window",
             "The cabinet reported its door (marina_door) and no service window was "
             "announced for that time.",
-            [_ev("alarm_log", [r["id"]], {"event": "marina_door", "data": data}, at)], at, at))
+            [_ev("alarm_log", [r["id"]], {"event": "marina_door", "data": data}, at)], at, at,
+            simulated=bool(r["is_simulated"])))
     for r in c.execute(_STATUS_SNAPSHOTS, _p(c, since=since, now=now)).mappings():
         data = _as_dict(r["last_seen_data"])
         if str(data.get("door_state") or "").lower() != "open":
@@ -338,7 +357,7 @@ def door_no_window(c: Connection, since: datetime, now: datetime) -> list:
             "window was announced for that time.",
             [_ev("pedestal_cache", [r["id"]], {"cache_key": r["cache_key"],
                                                "door_state": data.get("door_state")}, at)],
-            at, at))
+            at, at, simulated=bool(cab["is_simulated"])))
     return out
 
 

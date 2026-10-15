@@ -287,8 +287,8 @@ def sim(setup_test_database):
 
 def _clear_cabinets(marina_id):
     """Explicit order: the app's SQLite engine has no FK cascades (PRAGMA off)."""
-    from app.models.berth import (Berth, BerthOutlet, BerthOutletCabinet, MappingComparison,
-                                  OutletNfcTag)
+    from app.models.berth import (Berth, BerthOutlet, BerthOutletCabinet, BerthReservation,
+                                  MappingComparison, OutletNfcTag)
     from app.models.cabinet import Cabinet, CabinetCapability, Outlet
     from app.models.cache import AlarmLog
     from app.models.metering import (CommandAudit, ConsumptionInterval, ConsumptionMonthly,
@@ -309,6 +309,7 @@ def _clear_cabinets(marina_id):
         for model in (ErpSession, CommandAudit, ReconciliationRun, AlarmLog):
             db.query(model).filter(model.cabinet_id.in_(cab_ids)).delete()
         db.query(BerthOutlet).filter(BerthOutlet.berth_id.in_(berth_ids)).delete()
+        db.query(BerthReservation).filter(BerthReservation.berth_id.in_(berth_ids)).delete()
         db.query(Berth).filter(Berth.id.in_(berth_ids)).delete()
         db.query(OutletNfcTag).filter(OutletNfcTag.outlet_id.in_(out_ids)).delete()
         db.query(Outlet).filter(Outlet.id.in_(out_ids)).delete()

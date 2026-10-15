@@ -152,7 +152,9 @@ class CabinetClient:
             return Outcome("not_enabled", key)
 
         url = f"{self.base_url}{path}"
-        ckey = cache_key(key, path, query)
+        # per cabinet SERVER: a marina may have several (D28), and the same path on two
+        # of them (pedestals.health, berths.list, .../pedestals/1/...) is not one fact
+        ckey = f"{cache_key(key, path, query)}@{self.base_url}"
         started = utcnow()
         last_error = None
         retried_auth = False

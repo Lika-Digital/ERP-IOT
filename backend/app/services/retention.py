@@ -20,6 +20,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from ..config import settings
+from ..models.berth import BerthReservation
 from ..models.cache import AlarmLog, AuditLog, PedestalCache, SessionLog, SyncLog
 from ..models.metering import (CommandAudit, ConsumptionInterval, ConsumptionMonthly,
                                ReconciliationRun)
@@ -54,6 +55,9 @@ def windows() -> dict:
                             s.retention_security_alarms_days),
         "decoy_hits": (DecoyHit, DecoyHit.observed_at, s.retention_decoy_hits_days),
         "service_windows": (ServiceWindow, ServiceWindow.to_at, s.retention_service_windows_days),
+        # D28: a reservation explains an occupancy figure for as long as a session does
+        "berth_reservations": (BerthReservation, BerthReservation.ends_at,
+                               s.retention_berth_reservations_days),
     }
 
 

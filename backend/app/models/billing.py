@@ -25,6 +25,8 @@ class Customer(Base):
     external_ref = Column(String(100), nullable=True)   # id from the mobile app
     full_name = Column(String(200), nullable=False)
     email = Column(String(320), nullable=True)
+    # D28: a demo customer (prepaid-zero scenario) — never billed, never in the ledger
+    is_demo = Column(Boolean, nullable=False, default=False, server_default=false())
     created_at = Column(DateTime, nullable=False, default=utcnow)
 
 
@@ -150,3 +152,54 @@ class MarinaBillingPolicy(Base):
                               server_default=text("-2.00"))
     low_credit_warn_pct = Column(Integer, nullable=False, default=20, server_default="20")
     note = Column(Text, nullable=True)
+
+
+# D28: simulated data is never billed. The DATABASE refuses it, like the ledger's
+# append-only rule above — a demo that could leak into money is not a demo.
+# The same DDL is used by migration 012; keep them identical.
+_SIM_BILLING = (
+    "EXISTS (SELECT 1 FROM customers WHERE id = NEW.customer_id AND is_demo) OR "
+    "EXISTS (SELECT 1 FROM sessions s JOIN cabinets c ON c.id = s.cabinet_id "
+    "WHERE s.id = NEW.session_id AND c.is_simulated)")
+_SIM_LEDGER = "EXISTS (SELECT 1 FROM customers WHERE id = NEW.customer_id AND is_demo)"
+SIMULATED_NEVER_BILLED_PG = [
+    f"""CREATE OR REPLACE FUNCTION billing_refuses_simulated() RETURNS trigger AS $$
+BEGIN
+  IF {_SIM_BILLING} THEN
+    RAISE EXCEPTION 'simulated data is never billed (D28): billing_records refused';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql""",
+    """CREATE TRIGGER billing_records_no_simulated BEFORE INSERT OR UPDATE ON billing_records
+FOR EACH ROW EXECUTE FUNCTION billing_refuses_simulated()""",
+    f"""CREATE OR REPLACE FUNCTION ledger_refuses_demo() RETURNS trigger AS $$
+BEGIN
+  IF {_SIM_LEDGER} THEN
+    RAISE EXCEPTION 'a demo customer has no ledger (D28): credit_ledger refused';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql""",
+    """CREATE TRIGGER credit_ledger_no_demo BEFORE INSERT ON credit_ledger
+FOR EACH ROW EXECUTE FUNCTION ledger_refuses_demo()""",
+]
+SIMULATED_NEVER_BILLED_SQLITE = [
+    f"""CREATE TRIGGER billing_records_no_simulated BEFORE INSERT ON billing_records
+WHEN {_SIM_BILLING}
+BEGIN SELECT RAISE(ABORT, 'simulated data is never billed (D28): billing_records refused'); END""",
+    f"""CREATE TRIGGER billing_records_no_simulated_upd BEFORE UPDATE ON billing_records
+WHEN {_SIM_BILLING}
+BEGIN SELECT RAISE(ABORT, 'simulated data is never billed (D28): billing_records refused'); END""",
+    f"""CREATE TRIGGER credit_ledger_no_demo BEFORE INSERT ON credit_ledger
+WHEN {_SIM_LEDGER}
+BEGIN SELECT RAISE(ABORT, 'a demo customer has no ledger (D28): credit_ledger refused'); END""",
+]
+# billing_records is created after customers, sessions and cabinets, so the trigger
+# can name them; credit_ledger's trigger only needs customers.
+for _stmt in SIMULATED_NEVER_BILLED_PG:
+    event.listen(BillingRecord.__table__, "after_create",
+                 DDL(_stmt.replace("%", "%%")).execute_if(dialect="postgresql"))
+for _stmt in SIMULATED_NEVER_BILLED_SQLITE:
+    event.listen(BillingRecord.__table__, "after_create",
+                 DDL(_stmt.replace("%", "%%")).execute_if(dialect="sqlite"))

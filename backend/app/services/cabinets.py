@@ -53,7 +53,8 @@ def provision_cabinet(db: Session, *, marina_id: int, pedestal_pk: int, display_
                       service_password: str, erp_api_key: Optional[str] = None,
                       dock: Optional[str] = None, webhook_key: Optional[str] = None,
                       webhook_hmac: bool = False,
-                      webhook_secret: Optional[str] = None) -> Cabinet:
+                      webhook_secret: Optional[str] = None,
+                      is_simulated: bool = False) -> Cabinet:
     if device_type not in OUTLETS_BY_TYPE:
         raise DomainError(f"device_type must be full|retrofit, got {device_type!r}")
     if webhook_hmac and not webhook_secret:
@@ -65,7 +66,9 @@ def provision_cabinet(db: Session, *, marina_id: int, pedestal_pk: int, display_
                   webhook_key_enc=encrypt_password(webhook_key) if webhook_key else None,
                   webhook_hmac=bool(webhook_hmac),
                   webhook_secret_enc=encrypt_password(webhook_secret) if webhook_secret else None,
-                  dock=dock)
+                  dock=dock,
+                  # D28: said explicitly; the database ties it to the address
+                  is_simulated=bool(is_simulated))
     db.add(cab)
     db.flush()
     for spec in OUTLETS_BY_TYPE[device_type]:

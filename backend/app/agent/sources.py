@@ -33,7 +33,10 @@ SELECT_TABLES = (
 # GRANT SELECT (<columns>) ON <table>
 SELECT_COLUMNS = {
     "cabinets": ("id", "marina_id", "pedestal_pk", "display_id", "device_type", "dock",
-                 "smart_mode", "last_heartbeat_at", "last_polled_at", "created_at"),
+                 "smart_mode", "last_heartbeat_at", "last_polled_at", "created_at",
+                 # D28 (migration 012): real or simulated, and the cabinet SERVER a
+                 # cached snapshot came from (a PK is unique only per server)
+                 "is_simulated", "base_url"),
     "marinas": ("id", "name", "timezone"),
 }
 

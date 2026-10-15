@@ -199,6 +199,47 @@ def _p_security_alarm_twice(c, i):
     _alarm(c)          # same fingerprint: the agent's ON CONFLICT relies on this UNIQUE
 
 
+# ── D28: the demo marina — real and simulated never mix where it costs ─────────
+
+SIM_URL = "http://127.0.0.1:18080/c/SIM_A_02"
+
+
+def _cabinet(c, i, pk=2, url="http://y", sim=False, disp="MAR_PROBE_02"):
+    return c.execute(text(
+        "INSERT INTO cabinets (marina_id, pedestal_pk, display_id, device_type, base_url, "
+        "service_email, service_pw_enc, created_at, is_simulated) "
+        "VALUES (:m, :pk, :d, 'full', :u, 'e@x', 'enc', :t, :s) RETURNING id"),
+        dict(m=i["marina"], pk=pk, d=disp, u=url, t=NOW, s=sim)).scalar_one()
+
+
+def _billing(c, i, session=None, customer=None):
+    tariff = c.execute(text(
+        "INSERT INTO tariffs (marina_id, medium, unit_price, vat_rate, valid_from) "
+        "VALUES (:m, 'electricity', 0.3, 25, '2026-10-01') RETURNING id"),
+        dict(m=i["marina"])).scalar_one()
+    c.execute(text(
+        "INSERT INTO billing_records (customer_id, session_id, medium, quantity, unit_price, "
+        "vat_rate, amount_net, amount_gross, tariff_id, issued_at) VALUES (:c, :s, "
+        "'electricity', 1, 0.3, 25, 0.3, 0.38, :t, :at)"),
+        dict(c=customer or i["customer"], s=session, t=tariff, at=NOW))
+
+
+def _demo_customer(c, i):
+    return c.execute(text(
+        "INSERT INTO customers (marina_id, full_name, created_at, is_demo) "
+        "VALUES (:m, 'Demo', :t, :d) RETURNING id"), dict(m=i["marina"], t=NOW, d=True)).scalar_one()
+
+
+def _sim_session(c, i):
+    cab = _cabinet(c, i, url=SIM_URL, sim=True, disp="SIM_A_02")
+    q1 = c.execute(text("INSERT INTO outlets (cabinet_id, outlet_name, medium) "
+                        "VALUES (:c, 'Q1', 'electricity') RETURNING id"), dict(c=cab)).scalar_one()
+    return c.execute(text(
+        "INSERT INTO sessions (erp_ref, cabinet_id, outlet_id, session_type, status, energy_kwh, "
+        "billing_state, reconciled_at, created_at) VALUES ('sim1', :c, :o, 'electricity', "
+        "'ended', 1, 'pending', :t, :t) RETURNING id"), dict(c=cab, o=q1, t=NOW)).scalar_one()
+
+
 def _p_window_backwards(c, i):
     c.execute(text("INSERT INTO service_windows (cabinet_id, from_at, to_at, announced_by, "
                    "created_at) VALUES (:c, :t, :t, 'serviser', :t)"), dict(c=i["cabinet"], t=NOW))
@@ -234,6 +275,23 @@ MUST_REFUSE: list[tuple[str, Callable]] = [
     ("security_alarms: open but carrying a decision",
      lambda c, i: _alarm(c, at=NOW)),
     ("service_windows: a window that ends when it starts", _p_window_backwards),
+    # D28
+    ("cabinets: a simulated cabinet at a real address",
+     lambda c, i: _cabinet(c, i, url="http://100.64.0.9", sim=True)),
+    ("cabinets: a real cabinet at the simulator's address",
+     lambda c, i: _cabinet(c, i, url=SIM_URL, sim=False)),
+    ("cabinets: the same pedestal twice on one cabinet server",
+     lambda c, i: _cabinet(c, i, pk=1, url="http://x")),
+    ("berth_reservations: a reservation that ends when it starts",
+     lambda c, i: c.execute(text(
+         "INSERT INTO berth_reservations (berth_id, starts_at, ends_at, created_by, created_at) "
+         "VALUES (:b, :t, :t, 'probe', :t)"), dict(b=i["A1"], t=NOW))),
+    ("billing_records: a demo customer is never billed (D28)",
+     lambda c, i: _billing(c, i, customer=_demo_customer(c, i))),
+    ("billing_records: a session from a simulated cabinet is never billed (D28)",
+     lambda c, i: _billing(c, i, session=_sim_session(c, i))),
+    ("credit_ledger: a demo customer has no ledger (D28)",
+     lambda c, i: _ledger(c, _demo_customer(c, i), 10, 10)),
 ]
 
 
@@ -276,6 +334,14 @@ MUST_ALLOW: list[tuple[str, Callable]] = [
     ("users: a marina manager with 2FA confirmed", lambda c, i: _p_user(
         c, role="marina_manager", secret="enc", confirmed=NOW)),
     ("security_alarms: an open alarm, with no decision", lambda c, i: _alarm(c)),
+    # D28
+    ("cabinets: pedestal 1 on two cabinet servers in one marina (Krk and marina-iot)",
+     lambda c, i: _cabinet(c, i, pk=1, url="http://100.64.0.9")),
+    ("cabinets: a simulated cabinet at the simulator's address",
+     lambda c, i: _cabinet(c, i, url=SIM_URL, sim=True, disp="SIM_A_02")),
+    ("billing_records: a real customer's real session is billed",
+     lambda c, i: _billing(c, i, session=_session(c, i, billing="billed", energy=1,
+                                                  reconciled=NOW))),
 ]
 
 
@@ -299,7 +365,10 @@ def run(engine: Engine) -> list[tuple[str, bool, str]]:
                 except Exception as exc:  # noqa: BLE001 — judged below
                     # Only a real refusal counts. A typo in a probe's SQL raises too,
                     # and must not pass as "the database refused it".
-                    real = isinstance(exc, IntegrityError) or "append-only" in str(exc)
+                    # PostgreSQL's RAISE EXCEPTION is not an IntegrityError: the two
+                    # trigger messages are matched by their text
+                    real = (isinstance(exc, IntegrityError) or "append-only" in str(exc)
+                            or "(D28)" in str(exc))
                     results.append((name, real, type(exc).__name__ if real
                                     else f"wrong error, not a refusal: {exc}"[:300]))
             finally:
