@@ -127,3 +127,69 @@ def test_a_snapshot_is_matched_to_its_cabinet_by_server_as_well_as_pk(marina_id)
     _run()
     got = _alarms("door_no_window")
     assert [a["title"] for a in got] == ["MARINA_IOT_01: door open outside a service window"]
+
+
+# ── the collector: cabinet servers in parallel, each on its own ──────────────
+
+class _Router(httpx.AsyncBaseTransport):
+    """Two cabinet servers by host. 'slow' answers only once 'fast' has been asked —
+    so it can only succeed if the two are polled AT THE SAME TIME."""
+
+    def __init__(self):
+        self.fast_seen = asyncio.Event()
+        self.apps = {h: httpx.ASGITransport(app=create_app(make_state("full")))
+                     for h in ("slow", "fast")}
+
+    async def handle_async_request(self, request):
+        if request.url.host == "slow":
+            await asyncio.wait_for(self.fast_seen.wait(), timeout=2)
+        else:
+            self.fast_seen.set()
+        return await self.apps[request.url.host].handle_async_request(request)
+
+
+def _two_servers(marina_id):
+    st = make_state("full")
+    from app.services import cabinets as svc
+    db = TestSession()
+    try:
+        for host in ("slow", "fast"):           # 'slow' first: sequential order meets it first
+            svc.provision_cabinet(
+                db, marina_id=marina_id, pedestal_pk=1, display_id=f"MAR_{host.upper()}_01",
+                device_type="full", base_url=f"http://{host}", service_email=st.service_email,
+                service_password=st.service_password)
+        db.commit()
+    finally:
+        db.close()
+
+
+def _polled():
+    with test_engine.connect() as c:
+        return {r[0]: r[1] is not None for r in c.execute(text(
+            "SELECT display_id, last_polled_at FROM cabinets ORDER BY id"))}
+
+
+def _collector(parallel):
+    from app.services.collector import Collector
+    from app.services.pedestal_api_factory import PedestalAPIClientFactory
+
+    async def no_wait(_s):
+        return None
+    return Collector(factory=PedestalAPIClientFactory(), session_factory=TestSession,
+                     transport=_Router(), sleep=no_wait, parallel=parallel)
+
+
+def test_cabinet_servers_are_polled_at_the_same_time(marina_id):
+    _two_servers(marina_id)
+    asyncio.run(_collector(parallel=2).tick())
+    assert _polled() == {"MAR_SLOW_01": True, "MAR_FAST_01": True}
+
+
+def test_one_failing_server_does_not_stop_the_others(marina_id, caplog):
+    """One at a time, 'slow' waits for 'fast' that never comes and fails (as a dead
+    cabinet would); 'fast' is still collected in the same tick."""
+    _two_servers(marina_id)
+    col = _collector(parallel=1)
+    asyncio.run(col.tick())
+    assert _polled() == {"MAR_SLOW_01": False, "MAR_FAST_01": True}
+    assert "server http://slow failed" in caplog.text

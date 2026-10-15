@@ -63,6 +63,12 @@ EVERY = {
 NIGHTLY_HOUR_UTC = 2
 LEADER_LOCK_ID = 0x45525049   # 'ERPI'
 TICK_SECONDS = 5
+# Cabinet servers polled at once (6.0, D28): one dead server waits out its timeouts
+# (3 attempts x 10 s) without holding up the others. Each server gets its own
+# database session. SQLite stays at 1: a session there that changed rows before an
+# await would hold the file's write lock, and the next server, on the same thread,
+# would wait for it — PostgreSQL locks rows, not the database.
+PARALLEL_SERVERS = 8
 
 
 @dataclass
@@ -136,7 +142,8 @@ def record_reading(db: Session, cab: Cabinet, outlet: Outlet, register_kwh: Deci
 
 class Collector:
     def __init__(self, factory: Optional[PedestalAPIClientFactory] = None,
-                 session_factory=SessionLocal, transport=None, sleep=None):
+                 session_factory=SessionLocal, transport=None, sleep=None,
+                 parallel: Optional[int] = None):
         self.factory = factory or get_pedestal_factory()
         if transport is not None:
             self.factory.transport = transport
@@ -149,6 +156,8 @@ class Collector:
         self._busy_load: dict = {}      # its last load reading showed power or current
         self._last_nightly: Optional[datetime] = None
         self.status = Status()
+        self.parallel = parallel or (PARALLEL_SERVERS if engine.dialect.name == "postgresql"
+                                     else 1)
 
     # ── scheduling ───────────────────────────────────────────────────────────
 
@@ -171,25 +180,47 @@ class Collector:
         counts: dict = {}
         db = self.session_factory()
         try:
-            cabinets = db.query(Cabinet).order_by(Cabinet.id).all()
             servers: dict = {}
-            for cab in cabinets:
-                servers.setdefault((cab.base_url, cab.service_email), []).append(cab)
-            nightly = force_nightly or self._nightly_due(now)
-            for (base_url, _email), cabs in servers.items():
-                try:
-                    client = self.factory.for_cabinet(cabs[0])
-                except ValueError as exc:
-                    self.status.last_error = str(exc)
-                    continue
-                await self._server_tasks(db, base_url, cabs, client, now, counts)
-                for cab in cabs:
-                    await self._cabinet_tasks(db, cab, self.factory.for_cabinet(cab), now,
-                                              counts, nightly)
-            if self._is_due(("retention",), EVERY["retention"], now):
-                counts["retention"] = retention.run(db, now)
+            for cid, url, email in (db.query(Cabinet.id, Cabinet.base_url, Cabinet.service_email)
+                                    .order_by(Cabinet.id)):
+                servers.setdefault((url, email), []).append(cid)
         finally:
             db.close()
+        nightly = force_nightly or self._nightly_due(now)
+        gate = asyncio.Semaphore(self.parallel)
+
+        async def one_server(base_url: str, ids: list) -> dict:
+            async with gate:
+                local: dict = {}
+                sdb = self.session_factory()     # never shared between servers
+                try:
+                    cabs = sdb.query(Cabinet).filter(Cabinet.id.in_(ids)).order_by(Cabinet.id).all()
+                    try:
+                        client = self.factory.for_cabinet(cabs[0])
+                    except ValueError as exc:
+                        self.status.last_error = str(exc)
+                        return local
+                    await self._server_tasks(sdb, base_url, cabs, client, now, local)
+                    for cab in cabs:
+                        await self._cabinet_tasks(sdb, cab, self.factory.for_cabinet(cab), now,
+                                                  local, nightly)
+                except Exception as exc:  # noqa: BLE001 — one bad server never stops the rest
+                    log.exception("[collector] server %s failed", base_url)
+                    self.status.last_error = f"{base_url}: {type(exc).__name__}: {exc}"[:500]
+                finally:
+                    sdb.close()
+                return local
+
+        for local in await asyncio.gather(*(one_server(url, ids)
+                                            for (url, _email), ids in servers.items())):
+            for k, v in local.items():
+                counts[k] = counts.get(k, 0) + v
+        if self._is_due(("retention",), EVERY["retention"], now):
+            db = self.session_factory()
+            try:
+                counts["retention"] = retention.run(db, now)
+            finally:
+                db.close()
         self.status.cycles += 1
         self.status.last_tick_at = now
         self.status.counts = counts
