@@ -3,12 +3,12 @@
 Što se gradi, u kojem redoslijedu, i svaka odluka izrečena tako da ispravak
 košta jedan redak, a ne razgovor.
 
-    Verzija 17 — zamjenjuje v16 od 2026-10-15
+    Verzija 18 — zamjenjuje v17 od 2026-10-15
     Datum 2026-10-15
     Status faze 1–4 ZAVRŠENE i PRIHVAĆENE (§10.1–§10.4); korak 5a (D20), faza 8 (D21) i
-           UI · Lika brand PRIHVAĆENI, na `main` (§10.7–§10.9); 5b u tijeku, korak po korak;
-           D23–D28 upisani, izvode se kao proširena faza 6 (§6.6–§6.11, §10);
-           §1 je prazan (tri pitanja iz v15 odlučena 2026-10-15)
+           UI · Lika brand PRIHVAĆENI, na `main` (§10.7–§10.9); 5b PAUZIRAN do prihvaćanja
+           faze 6 (tvoja odluka 2026-10-15); faza 6 lokalno: **6.0 demo marina ZAVRŠEN**
+           (§10.10), sljedeći 6a; §1 je prazan
 
 Čita se uz `docs/inputs/odluke.md` **v2.6** (odluke, obvezujuće — v2.1 dodaje **D18**, v2.2 **D19**,
 v2.3 ispravak mreže u **D13**, v2.4 **D20**, v2.5 **D21**, **D22** i redoslijed 5a–5e, v2.6 **D23–D28**),
@@ -17,6 +17,15 @@ v2.3 ispravak mreže u **D13**, v2.4 **D20**, v2.5 **D21**, **D22** i redoslijed
 `docs/inputs/ormar_ui_v2_spec.txt` (specifikacija ormara — uzor forme i izvor rječnika stanja).
 
 **Sve u ovom dokumentu je ODLUČENO. §1 je prazan — tri pitanja iz v15 odlučena su 2026-10-15.**
+
+### Što se promijenilo u verziji 18
+
+| | |
+|---|---|
+| **5b pauziran** | tvoja odluka 2026-10-15: prvo faza 6 lokalno (6.0 → 6a → 6b → 6c–6e), prihvaćanje → `main`, tek onda 5b s `main`a. Snimka koraka 1 sačuvana za tada |
+| **6.0 demo marina gotov** (§10.10) | model, simulator 74 ormara, seed s 30 dana povijesti, SVG karta, servis `erp-sim`; O61 uzrok nađen i popravljen |
+| **§6.11 dopunjen izvedbom** | ključ cachea i jedinstvenost ormara po poslužitelju; simulirani ormari: snaga svakih 300 s, bez usklađivanja (izmjereno); koji scenariji rade sada, a koji dolaze s 6d i 7 |
+| **§11** | O61 zatvoren; O62–O64 novi |
 
 ### Što se promijenilo u verziji 17
 
@@ -2304,8 +2313,35 @@ simulirani.
 > marine je brisanje jedne marine, a simulator se gasi jednom naredbom.
 
 **Rast baze:** 74 simulirana ormara puno su više od Krka. Simulirani intervali imaju zasebnu
-retenciju od **30 dana** (ne 400), a `growth_check` dobiva demo profil i mora ostati u budžetu
-od 1 GB (§8.2).
+retenciju od **30 dana** (ne 400) i nikad ne ulaze u mjesečni zbroj.
+
+> **Odlučeno (izvedba 6.0, izmjereno)** · **Simulirani ormari čitaju se svakih 300 s i ne
+> usklađuju se.** Pravim kolektorom protiv 74 simulirana ormara, dva simulirana sata: uz ritam
+> od 60 s nastajalo je **~115 000 intervala dnevno** (30 dana ≈ 3,5 milijuna redaka, oko 800 MB),
+> a usklađivanje svakih 900 s uvijek je padalo (simulirani ormar nema kanal B ni NFC sesija) —
+> 7 100 besmislenih zapisa dnevno. Sada **~24 500 intervala dnevno** (≈ 740 000 redaka u 30 dana),
+> nijedno usklađivanje, `last_error` prazan. Pravi ormari ostaju na 60 / 300 s.
+>
+> **Zašto** · Demo treba sliku od prije pet minuta, ne zapis brojila u minuti; pet minuta je
+> unutar praga svježine kartica (10 min, §6.6).
+>
+> **Ako griješim** · Jedan uvjet u `collector.py`.
+
+> **Odlučeno (izvedba 6.0)** · **Ormar je jedinstven po poslužitelju, ne po marini**, i
+> **spremljena kopija odgovora (cache) je po poslužitelju** (ključ `…@<base_url>`). Krk i
+> marina-iot su svaki `pk 1` na svom poslužitelju; bez toga bi se njihovi `pedestals.health` i
+> `berths.list` prepisivali, a agent D21 bi vrata jednog pripisao drugome. Kolektor proziva do
+> 8 poslužitelja istovremeno na PostgreSQL-u (mrtav poslužitelj više ne zaustavlja ostale), na
+> SQLite-u jedan po jedan.
+
+**Što radi sada, a što dolazi kasnije:**
+
+| | 6.0 | Kasnije |
+|---|---|---|
+| Scenariji | `offline`, `wrong-vessel`, `reset` | `ir-alarm`, `unauthorised-access` s uređajima D25 (**6d**); `prepaid-zero` s NFC tokom (**faza 7**) — naredba to i kaže |
+| Kamere, vrata, senzor, brojač | — | **6d** (registar uređaja §6.8) |
+| Karta u ERP-u, znak „SIM" | SVG i id-evi | **6a** (zaslon čita stanje iz baze, ne zove 76 ormara uživo — O64) |
+| Voda | profil u svijetu postoji | povijest vode **6c** (O62) |
 
 **Testovi (6.0):** id-evi zadovoljavaju shemu i ima ih 150 jedinstvenih; svaki `svg_id` postoji u
 SVG-u i obrnuto; brojilo simuliranog priključka nikad ne pada (i preko restarta); isti seed daje
@@ -2976,6 +3012,54 @@ VPS-a se preklapaju); 5c odmah nakon 5b ako je domena spremna; 5d 2–3 dana; 5e
 faza 6 lokalno protiv simulatora za vrijeme tog tjedna; faza 7 poslije njega. Prijedlog v9
 „faza 5 se piše dok teče 4.5 c" je bespredmetan — 4.5 je obrisana, a 5a kreće odmah.
 
+### §10.10 · Korak 6.0 · Demo marina (D28) — izvještaj (2026-10-15)
+
+**Grana `faza/6-d23-d27`**, na `main` (`f5aee7e`) + spec v15–v17. Lokalno, protiv simulatora;
+5b pauziran. Snimka: `docs/ui/6.0/01-map-world.png` — nacrtana karta obojena **svijetom
+simulatora** u trenutku (provjera rasporeda, id-eva i svijeta; kartu u ERP-u gradi 6a).
+
+| Mjera | Prije (v14) | Kraj 6.0 | Kako izmjereno |
+|---|---|---|---|
+| Backend testova | 496 | **546**, 0 preskočenih | gate |
+| Poziv ormaru (loopback, pravi HTTP) | 268 ms | **6 ms** | `o61_bench`, prije/poslije (O61) |
+| Provjera baze (schema probes) | — | **+7 odbijanja, +3 dopuštenja** za D28; bez okidača padaju točno tri | mutacija na migriranoj bazi |
+| Demo marina | — | 150 vezova, **74 simulirana ormara**, 2 prava (A-01/02, B-01/02 sivi do 5d) | `test_demo_seed.py` |
+| Seed, 30 dana povijesti | — | **17 s**; 65 714 intervala, 328 rezervacija, 13 MB (SQLite) | `python -m app.demo seed` |
+| Zauzeće | — | **70–85 % svaki dan** (60 dana provjereno); na snimci 104 / 146 = 71 % | `test_demo_world.py` |
+| Rast uz kolektor | — | **~24 500 intervala/dan** (bilo ~115 000 prije popravka ritma) | 2 simulirana sata, pravi kolektor |
+| Ciklus kolektora, 74 poslužitelja | — | prosjek **2,7 s**, najviše 7,5 s (SQLite, jedan po jedan) | isto |
+
+**Što je napravljeno:**
+- **Model (migracija 012):** `cabinets.is_simulated` + CHECK „simulirano ⇔ adresa simulatora"
+  u oba smjera; jedinstvenost ormara `(marina, base_url, pk)`; `berths.length_m`;
+  `berth_reservations`; `customers.is_demo`; okidači: `billing_records` odbija demo korisnika i
+  sesiju sa simuliranog ormara, `credit_ledger` odbija demo korisnika; `security_alarms.simulated`.
+- **Agent D21:** nalaz sa simuliranog ormara nosi `simulated`; povijest „nikad prije" ne miješa
+  simulirane i stvarne naredbe; snimka stanja veže se uz ormar i po poslužitelju (dvoznačno →
+  ništa, a ne krivi ormar).
+- **Kolektor:** poslužitelji paralelno (PostgreSQL), poslužitelj koji pukne ne prekida ciklus.
+- **Svijet i simulator:** `simulator/demo_world.py` (funkcije seed × uređaj × vrijeme),
+  `simulator/demo_sim.py` (74 fazna-2 simulatora pod `/c/<id>` na jednom portu, scenariji,
+  pravi id odbijen, testne rute zatvorene, ne raste u memoriji).
+- **ERP:** `python -m app.demo seed | remove`; povijest po satu istom logikom kao kolektor, stanje
+  brojila u trenutku seeda — kolektor nastavlja bez rupe (test).
+- **Karta:** `scripts/demo_map.py` → `frontend/public/maps/demo-marina.svg`, u koordinatama slike
+  (provjereno preklapanjem), boje iz varijabli teme; slika se ne isporučuje.
+- **Servis:** lokalno `python scripts/demo.py start | stop | status | seed | remove | scenario`;
+  VPS `deploy/erp-sim.service` (vlastiti korisnik, samo loopback, gasi se jednom naredbom).
+
+**Nađeno usput, ispravljeno:**
+- **O61** — klijent ormara gradio je novi TLS kontekst za svaki poziv (0,24 s CPU-a na petlji
+  događaja); zaključavanje baze izmjereno i isključeno. 268 → 6 ms.
+- **Cache i agent po marini, a ne po poslužitelju** — s dva prava ormara u jednoj marini (D28)
+  podaci jednog prepisali bi drugi.
+- **Kolektor sekvencijalan** — jedan nedostupan ormar (3 × 10 s po pozivu) zaustavljao bi sve.
+- **Ritam simuliranih ormara** — 115 000 redaka dnevno; sada 24 500.
+
+**Što 6.0 nije mogao:** ERP-ovu kartu sa „SIM" i tri kartice (6a); kamere, vrata, senzor,
+brojač i njihove scenarije (6d); `prepaid-zero` (NFC tok, faza 7); povijest vode (6c); pravi
+ormari na demo karti (5d).
+
 ### §10.9 · UI · Lika brand — izvještaj (2026-10-15)
 
 **Grana `faza/ui-brand`**, od `07a400a` (faza 8). Prijedlog 1 (prijava s 2FA, Vezovi, Sigurnost)
@@ -3299,6 +3383,9 @@ Nađeno usput. Nije u izvedbi gore; tvoje je da odlučiš prioritet.
 | O59 | ~~`docs/ui/marina-demo.png` nije u repou~~ | **zatvoreno v17** — slika u repou; numeracija prema slici (§6.11) |
 | O60 | Drugi pravi ormar (marina-iot): `display_id`, Tailscale adresa, `api_client` račun | potrebno za 5d; do tada B-01 i B-02 sivi, „no contact" |
 | O61 | ~~Provjera u pregledniku povremeno pada: `GET /api/marinas/{id}/berths` ne odgovori u 10 s~~ | **zatvoreno (6.0)** — uzrok izmjeren: klijent ormara stvara `httpx.AsyncClient` po pozivu, a httpx svakom gradi novi TLS kontekst i iznova čita CA paket — **~0,24 s CPU-a na petlji događaja po pozivu**; ruta ima ~10 poziva zaredom, a kolektor isto radi iz svoje niti. Zaključavanje baze izmjereno i **isključeno** (nijedan upis na tom putu ne drži zaključavanje > 0,5 s). Popravak: jedan TLS kontekst za proces (`app/cabinet/client.py` `TLS`, ista provjera certifikata). Poziv simulatoru preko pravog HTTP-a: **268 ms → 6 ms**. Testovi: svaki poziv ormaru dijeli `TLS`; nijedan `httpx` klijent u aplikaciji ne gradi svoj (oba padaju bez popravka). Timeout nije mijenjan |
+| O62 | Voda u demo marini: svijet ima profil, ali simulirani ormar, kao i Krk danas, ne izlaže registar vode (R16) | povijest vode za demo dolazi sa 6c, uz odluku smije li simulirani ormar pokazivati ugovor R16 prije Krka |
+| O63 | Ciklus kolektora za 74 poslužitelja na SQLite-u: prosjek 2,7 s, najviše 7,5 s (jedan po jedan) | na VPS-u (PostgreSQL) do 8 paralelno; izmjeriti u 5b nakon faze 6 |
+| O64 | Zaslon Vezovi (prije 6a) zove uživo **prvi** ormar marine (`get_client`) — za demo marinu prikazuje 2 od 146 povezanih vezova | 6a: zaslon i karta čitaju stanje koje je kolektor spremio, po vezu, iz baze |
 | O44 | `SecurityMiddleware` bilježi 403 kao „Unauthorised access" — s D20 je 403 i običan Manager na Admin ruti | šum u logu; rješava se s O2 (CrowdSec) |
 | O39 | Koja verzija ormara vrti na Krku — R14 b/c i loopback backend objavljeni su na `main` `eac7aa2`, Krk nepoznat | LIVE-01 (§10.5 b1, b7) |
 | O40 | Faza 4 tjedan stvarnog rada ne mjeri naplatu (ERP-ove sesije nastaju tek u fazi 7) | §10.6, prijedlog 2 |
@@ -3594,9 +3681,9 @@ i čeka čovjeka; nikad ne otvara ni ne zaključava vrata.
 
 ---
 
-`docs/erp_spec.md` · verzija 17 · 2026-10-15 · zamjenjuje v16 od 2026-10-15
+`docs/erp_spec.md` · verzija 18 · 2026-10-15 · zamjenjuje v17 od 2026-10-15
 
-Faze 1–4, korak 5a, faza 8 (D21) i UI · Lika brand su završeni i prihvaćeni; 5b ide korak po korak
-(§10.6). D23–D28 su upisani (§6.6–§6.11) i izvode se kao proširena faza 6 (6a–6e); energetski
+Faze 1–4, korak 5a, faza 8 (D21) i UI · Lika brand su završeni i prihvaćeni; 5b je pauziran do
+prihvaćanja faze 6; **6.0 demo marina je završen** (§10.10), sljedeći je 6a. D23–D28 su upisani (§6.6–§6.11) i izvode se kao proširena faza 6 (6a–6e); energetski
 agent (D24) je faza 10. Demo marina (D28, §6.11) je korak 6.0. **§1 je prazan** — tri pitanja iz v15
 odlučena su 2026-10-15.
