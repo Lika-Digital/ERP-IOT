@@ -130,3 +130,13 @@ def test_the_simulator_holds_no_way_to_reach_anything():
         assert not re.search(r"^\s*(import|from)\s+(httpx|requests|aiohttp|socket)\b", text, re.M), f
     demo = (sim / "demo_sim.py").read_text(encoding="utf-8")
     assert demo.count("urlopen(") == 1 and 'f"http://127.0.0.1:{port}{path}"' in demo
+
+
+def test_the_vps_unit_reaches_only_loopback_and_is_off_with_one_command():
+    unit = (Path(__file__).resolve().parents[2] / "deploy" / "erp-sim.service").read_text(
+        encoding="utf-8")
+    for line in ("User=erp-sim", "IPAddressDeny=any", "IPAddressAllow=localhost",
+                 "NoNewPrivileges=yes", "ProtectSystem=strict"):
+        assert f"\n{line}\n" in unit, line
+    assert "sudo systemctl disable --now erp-sim" in unit
+    assert "-m simulator.demo_sim serve" in unit

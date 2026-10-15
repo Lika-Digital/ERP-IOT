@@ -81,3 +81,7 @@ bandit_last.log
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# D28: the local demo simulator (scripts/demo.py)
+backend/.demo-sim.pid
+backend/.demo-sim.log

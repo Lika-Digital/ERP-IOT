@@ -1,0 +1,65 @@
+# ERP-IOT demo marina simulator (D28, spec §6.11) — 74 simulated cabinets on one port.
+#
+# It only ANSWERS, on 127.0.0.1, to the ERP. The limits marked [D28] are the point
+# of the unit: it can reach nothing but loopback (a real cabinet is never more than
+# a Tailscale address away, and the kernel refuses that), and it owns nothing of
+# the ERP — its own user, no database, no secrets of the ERP's.
+#
+# Off with ONE command, and it stays off across reboots:
+#   sudo systemctl disable --now erp-sim
+# The simulated berths then turn grey, "no contact" — which is true.
+#
+# Not installed by the repo, and NOT part of 5b — it comes with phase 6:
+#   useradd --system --no-create-home --shell /usr/sbin/nologin erp-sim
+#   install -m 0644 deploy/erp-sim.service /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now erp-sim
+#   sudo -u erp /opt/erp-iot/backend/.venv/bin/python -m app.demo seed   # once
+
+[Unit]
+Description=ERP-IOT demo marina simulator (D28)
+After=network.target
+
+[Service]
+Type=simple
+# [D28] its own system user: nothing of the ERP's is readable to it
+User=erp-sim
+Group=erp-sim
+WorkingDirectory=/opt/erp-iot/backend
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=DEMO_SIM_PORT=18080
+Environment=DEMO_SIM_SEED=28
+# the cabinets' service password; the ERP holds the same, encrypted (app.demo seed)
+LoadCredential=demo_sim_password:/etc/erp-iot/demo_sim_password
+ExecStart=/bin/sh -c 'DEMO_SIM_PASSWORD="$(cat "$CREDENTIALS_DIRECTORY/demo_sim_password")" exec /opt/erp-iot/backend/.venv/bin/python -m simulator.demo_sim serve'
+Restart=on-failure
+RestartSec=10
+
+# [D28] loopback only, in and out: it answers the ERP and can call nobody
+IPAddressDeny=any
+IPAddressAllow=localhost
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryMax=256M
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+
+[Install]
+WantedBy=multi-user.target
