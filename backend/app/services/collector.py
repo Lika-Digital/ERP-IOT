@@ -292,6 +292,10 @@ class Collector:
         busy = (self._busy_sessions.get(cab.id) or self._busy_load.get(cab.id)
                 or self._erp_session_open(db, cab))
         every = EVERY["load_active"] if busy else EVERY["load_idle"]
+        if cab.is_simulated:
+            # D28: 74 demo cabinets at the 60 s cadence were ~115 000 interval rows a
+            # day (measured); a demo needs a five-minute picture, not a meter record
+            every = EVERY["load_idle"]
         if self._is_due(("load", cab.id), every, now):
             out = await client.pedestal_load(cab.pedestal_pk, db)
             if out.ok and isinstance(out.data, dict):
@@ -300,6 +304,8 @@ class Collector:
                     counts[k] = counts.get(k, 0) + v
         if self._is_due(("status", cab.id), EVERY["status"], now):
             await client.pedestal_status(cab.pedestal_pk, db)
+        if cab.is_simulated:
+            return          # D28: no channel B, no NFC sessions — nothing to reconcile
         if nightly or self._is_due(("reconcile", cab.id), EVERY["reconcile"], now):
             run = await reconciler.reconcile(db, cab, client, now, nightly=nightly)
             counts["reconcile_runs"] = counts.get("reconcile_runs", 0) + 1

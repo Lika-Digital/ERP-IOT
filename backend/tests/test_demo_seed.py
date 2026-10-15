@@ -129,3 +129,33 @@ def test_simulated_history_is_deleted_after_30_days_and_never_rolled_up(seeded, 
     retention.run(db, now=NOW + timedelta(days=31 + DAYS))
     assert db.query(ConsumptionInterval).filter(ConsumptionInterval.outlet_id.in_(outs)).count() == 0
     assert db.query(ConsumptionMonthly).filter(ConsumptionMonthly.outlet_id.in_(outs)).count() == 0
+
+
+def test_simulated_cabinets_are_read_every_five_minutes_and_never_reconciled(seeded, db):
+    """Measured: at the 60 s cadence the 74 demo cabinets wrote ~115 000 interval rows
+    a day, and every 900 s a reconciliation that could only fail (no channel B)."""
+    from app.models.metering import ReconciliationRun
+    from app.services.collector import Collector
+    from app.services.pedestal_api_factory import PedestalAPIClientFactory
+    from app.utils import time as erp_time
+
+    t = {"now": NOW + timedelta(hours=1)}
+    erp_time._simulated_clock = lambda: t["now"]
+    try:
+        world = DemoWorld(seed=28, password="pw", clock=lambda: t["now"])
+        app = create_demo_app(world)
+        col = Collector(factory=PedestalAPIClientFactory(), session_factory=TestSession,
+                        transport=httpx.ASGITransport(app=app),
+                        sleep=lambda s: asyncio.sleep(0))
+        loads = []
+        for minute in range(0, 10):
+            t["now"] = NOW + timedelta(hours=1, minutes=minute)
+            before = len(world.states["SIM_A_02"].calls)
+            asyncio.run(col.tick())
+            calls = world.states["SIM_A_02"].calls[before:]
+            loads += [minute for _m, path in calls if path.endswith("/load")]
+    finally:
+        erp_time._simulated_clock = None
+    assert loads == [0, 5]                                # every 300 s, even while busy
+    cabs = [c.id for c in db.query(Cabinet.id).filter(Cabinet.marina_id == seeded["marina_id"])]
+    assert db.query(ReconciliationRun).filter(ReconciliationRun.cabinet_id.in_(cabs)).count() == 0
