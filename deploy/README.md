@@ -12,6 +12,7 @@ Repo na VPS-u (javni, samo za čitanje):
 | Korak | Skripta | Mijenja sustav? |
 |---|---|---|
 | 1 | `01_stanje.sh` — snimka stanja | ne, samo čita |
+| 2 | `02_osnova.sh` — UTC, NTP, swap 1 GB (swappiness 10), sigurnosna ažuriranja; DNS samo provjerava | da; ponovljivo, povratak ispiše na kraju |
 
 Datoteke koje koraci instaliraju (ne instalira ih repo):
 
