@@ -3,15 +3,15 @@
 Što se gradi, u kojem redoslijedu, i svaka odluka izrečena tako da ispravak
 košta jedan redak, a ne razgovor.
 
-    Verzija 28 — zamjenjuje v27 od 2026-10-16
+    Verzija 29 — zamjenjuje v28 od 2026-10-16
     Datum 2026-10-16
     Status faze 1–4 ZAVRŠENE i PRIHVAĆENE (§10.1–§10.4); korak 5a (D20), faza 8 (D21) i
            UI · Lika brand PRIHVAĆENI, na `main` (§10.7–§10.9); **faza 6 ZATVORENA na 6b**
            (6.0, 6a, 6b PRIHVAĆENI, §10.10–§10.14; 6c–6e odgođeni); **sljedeće: put do
            prvog čitanja s pravog ormara (§10.15)** — 5b VPS, pa 5d samo čitanje;
            **v26–v28: prijedlog v3 — četiri modula, višemarinski model i D32 live
-           prikaz (§14, §10.16) ČEKA ODOBRENJE**; §1 ima 24 otvorena pitanja
-           (§1.5–§1.25, §1.29–§1.31)
+           prikaz (§14, §10.16) ČEKA ODOBRENJE**; §1 ima 20 otvorenih pitanja
+           (§1.5–§1.24); D32 pitanja §1.25–§1.31 ODLUČENA
 
 Čita se uz `docs/inputs/odluke.md` **v2.6** (odluke, obvezujuće — v2.1 dodaje **D18**, v2.2 **D19**,
 v2.3 ispravak mreže u **D13**, v2.4 **D20**, v2.5 **D21**, **D22** i redoslijed 5a–5e, v2.6 **D23–D28**),
@@ -21,8 +21,20 @@ v2.3 ispravak mreže u **D13**, v2.4 **D20**, v2.5 **D21**, **D22** i redoslijed
 `docs/inputs/ormar_ui_v2_spec.txt` (specifikacija ormara — uzor forme i izvor rječnika stanja).
 
 **Sve u ovom dokumentu je ODLUČENO, osim §14 i §10.16 (prijedlog v3, v26–v28) i otvorenih pitanja u §1.**
-D32 (live prikaz) i njegov put slike su tvoja odluka (§14.8.2); prava gledanja su §1.25.
+D32 (live prikaz), njegov put slike (§14.8.2) i prava gledanja (§1.25, §1.29–§1.31) su tvoja odluka.
 Tri pitanja iz v15 odlučena su 2026-10-15.
+
+### Što se promijenilo u verziji 29
+
+Tvoje odluke 2026-10-16 o D32.
+
+| | |
+|---|---|
+| **§1.25 odlučeno** | prijedlog prava prihvaćen; Admin samo u admin modeu s razlogom; **„plovilo na vezu" = signal NIJE KRIVO** (prazan vez dopušten, tuđe plovilo ne) |
+| **§1.29 odlučeno** | kupčev račun u ERP-u, **odvojen od osoblja** (dvije prijave) |
+| **§1.30 odlučeno** | kvota prometa po marini, 40 GB/mj zadano |
+| **§1.31 odlučeno** | kupci ne gledaju prije CRM ugovora (M2); osoblje od L1 |
+| **§14.8.3, §14.8.4, §14.8.5** | usklađeni: ključ `other_vessel` umjesto `vessel_not_present` / `vessel_left` |
 
 ### Što se promijenilo u verziji 28
 
@@ -571,7 +583,7 @@ sesije, a `session_l` je uvijek `null` (`ext_pedestal_endpoints.py:363`); alarm 
 
 ## §1 Blokirajuće
 
-**v26–v28: otvorena su 24 pitanja iz v3** (§1.5–§1.25, §1.29–§1.31; §1.25–§1.31 su D32). Tri pitanja iz v15 (§1.2–§1.4) odlučena su
+**v26–v29: otvoreno je 20 pitanja iz v3** (§1.5–§1.24). D32 pitanja §1.25–§1.31 odlučena su 2026-10-16. Tri pitanja iz v15 (§1.2–§1.4) odlučena su
 2026-10-15; u svakom je prihvaćena preporuka, a tekst ostaje radi razloga.
 
 Sekcija ostaje jer je mjesto kamo ide prva odluka koja mi zatreba. Pravilo iz prompta vrijedi
@@ -700,7 +712,11 @@ samo §1.5–§1.9 i §1.24**; ostala se mogu odlučiti prije faze u kojoj su (s
 
 ### §1.25–§1.31 · Pitanja iz D32 — live prikaz (§14.8) *(v28)*
 
-#### §1.25 · Tko gleda koji vez — tvoj prijedlog, s ocjenom *(otvoreno: potvrdi dvije dopune)*
+#### §1.25 · Tko gleda koji vez *(v29 → **odlučeno 2026-10-16: prihvaćeno, s dopunama**)*
+
+> **Odlučeno** · Prijedlog niže vrijedi, uz dvije dopune: (1) **Admin gleda samo u admin modeu, s
+> razlogom**; (2) **„plovilo na vezu" = signal plovila NIJE KRIVO** — prazan vez je dopušten, tuđe
+> plovilo na kupčevu vezu nije. Tekst ispod ostaje radi razloga; gdje kaže PRAVO, vrijedi NIJE KRIVO.
 
 **Tvoj prijedlog (2026-10-16):**
 - **Osoblje** (Owner, Manager, Glavni mornar, Recepcija) gleda sve vezove svoje marine, do 10 min.
@@ -747,9 +763,9 @@ rečenica i DPIA. Izreza po vezu nema, jer postoji jedna kamera po ormaru (točk
 
 | # | Pitanje | Preporuka | Treba za |
 |---|---|---|---|
-| **1.29** | Kako se kupac prijavljuje u aplikaciji? ERP danas nema nikakvu prijavu kupca, a slika ide „s ERP-ovom autentikacijom" | **kupčev račun u ERP-u**, odvojen od osoblja (zasebna tablica, poziv iz ugovora, lozinka + drugi faktor). Članovi organizacije dobivaju vlastiti račun kad ih nositelj ovlasti. Tako dnevnik zna **koja osoba** je gledala, ne samo koja aplikacija | L2 |
-| **1.30** | Promet VPS-a i SIM-a ormara (§14.8.6) | **kvota po marini** (zadano 40 GB/mj, postavka); Owner vidi potrošnju i procjenu za SIM prije uključivanja; streaming na zaseban čvor kad video prijeđe 50 % prometa VPS-a | L1 |
-| **1.31** | Što je „važeći ugovor za vez" prije CRM-a? Danas veze kupac → vez nema: ugovori za vez ne postoje (M2), a vlasnika u pravoj marini P-5 ne dopušta | **kupci ne gledaju prije M2.** Osoblje gleda od L1 | L2 |
+| **1.29** ✔ *odlučeno: da — dvije prijave* | Kako se kupac prijavljuje u aplikaciji? ERP danas nema nikakvu prijavu kupca, a slika ide „s ERP-ovom autentikacijom" | **kupčev račun u ERP-u**, odvojen od osoblja (zasebna tablica, poziv iz ugovora, lozinka + drugi faktor). Članovi organizacije dobivaju vlastiti račun kad ih nositelj ovlasti. Tako dnevnik zna **koja osoba** je gledala, ne samo koja aplikacija | L2 |
+| **1.30** ✔ *odlučeno: da* | Promet VPS-a i SIM-a ormara (§14.8.6) | **kvota po marini** (zadano 40 GB/mj, postavka); Owner vidi potrošnju i procjenu za SIM prije uključivanja; streaming na zaseban čvor kad video prijeđe 50 % prometa VPS-a | L1 |
+| **1.31** ✔ *odlučeno: da* | Što je „važeći ugovor za vez" prije CRM-a? Danas veze kupac → vez nema: ugovori za vez ne postoje (M2), a vlasnika u pravoj marini P-5 ne dopušta | **kupci ne gledaju prije M2.** Osoblje gleda od L1 | L2 |
 
 ## §2 Ugovor s ormarom
 
@@ -4649,7 +4665,7 @@ odlučena su 2026-10-15.
 ## §14 Četiri modula i višemarinski model — v3 (PRIJEDLOG, čeka odobrenje)
 
 > **Status** · Sve u §14 je **prijedlog**. Nijedan redak koda se ne piše dok ga ne odobriš
-> (§0.0). Pitanja koja traže tvoju odluku su u **§1.5–§1.30**; tamo gdje je ovdje napisano
+> (§0.0). Pitanja koja traže tvoju odluku su u **§1.5–§1.24**; tamo gdje je ovdje napisano
 > „preporuka", odluka je tvoja.
 
 Ulaz: `docs/inputs/moduli_v3_ulaz.md` (2026-10-16; isti sadržaj kao
@@ -5509,7 +5525,7 @@ kamera ─▶ ORMAR (:80, /api/ext/*, token api_client) ─── Tailscale ─�
 | **Owner, Manager, Glavni mornar, Recepcija** | svi vezovi svoje marine, **od prvog dana** | do 10 min (granica ormara), zatim ponovni klik |
 | Admin | svi vezovi marine, samo u **admin modeu** s razlogom (§14.1.4) | kao osoblje |
 | ostale uloge | — | — |
-| **Kupac** | **kameru ormara koji služi njegov vez** (slika pokazuje sve vezove tog ormara), uz **važeći ugovor za svoj vez** i **dok je njegovo plovilo na njegovu vezu**. Aktivna sesija nije uvjet | **3 min**, zatim ponovni klik |
+| **Kupac** | **kameru ormara koji služi njegov vez** (slika pokazuje sve vezove tog ormara), uz **važeći ugovor za svoj vez** i **dok na njegovu vezu nije tuđe plovilo** (signal plovila NIJE KRIVO; prazan vez dopušten, §1.25). Aktivna sesija nije uvjet | **3 min**, zatim ponovni klik |
 | član organizacije kupca | kao nositelj, **ako ga nositelj ovlasti** (`customer_members.can_access`, §14.3.1) | kao kupac |
 
 **Kupčevo gledanje je ISKLJUČENO** dok ormar ne isporuči masku (R37) i dok marina ne napravi DPIA.
@@ -5521,7 +5537,7 @@ oznaku DPIA dokumenta. Osoblje gleda od prvog dana.
 `camera_views(marina_id, camera_id, berth_id, viewer_kind ('user'|'customer'), viewer_id,
 started_at, ended_at, end_reason, bytes_out)`, s RLS-om (§14.1).
 - `end_reason` ima jedan od ključeva: `viewer_closed`, `limit_customer_3min`,
-  `limit_cabinet_10min`, `cabinet_unreachable`, `cabinet_stopped`, `vessel_left`,
+  `limit_cabinet_10min`, `cabinet_unreachable`, `cabinet_stopped`, `other_vessel`,
   `right_ended`, `quota`.
 - **Nikad slika.** Retencija je **12 mjeseci**. Owner vidi popis.
 
@@ -5547,7 +5563,7 @@ Ključ dolazi s ormara (`live_status`) ili iz ERP-ove provjere. Rečenica se ra�
 | `not_enabled` | „Live view is not enabled on this pedestal." |
 | `customer_not_enabled` | „Live view for guests is not enabled for this berth yet." |
 | `no_right` | „You can watch this berth while your contract for it is valid." |
-| `vessel_not_present` | „Your vessel is not at the berth." |
+| `other_vessel` | „Another vessel is at your berth — live view is not available." |
 | `quota` | „This month's live-view limit for the marina has been reached." |
 
 **Što se kupcu kaže: slika nije samo njegov vez.** Postoji jedna kamera po ormaru i nema izreza.
