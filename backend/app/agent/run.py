@@ -38,6 +38,9 @@ _INSERT_SQLITE = text(
     ":simulated) "
     "ON CONFLICT (fingerprint) DO NOTHING")
 
+_PASS = text("INSERT INTO security_agent_passes (finished_at, rules, opened) "
+             "VALUES (:finished_at, :rules, :opened)")
+
 
 def utcnow() -> datetime:
     """Naive UTC, the contract of every DateTime column (spec §4.0)."""
@@ -73,5 +76,8 @@ def run_once(c: Connection, now: datetime | None = None,
                 log.info("shadow rule=%s fingerprint=%s severity=%s title=%s",
                          f.rule_id, f.fingerprint[:16], f.severity, f.title)
         out[rule.rule_id] = {"mode": mode, "found": len(findings), "opened": opened}
+    # "I ran" — the dashboard's Safety & Security card is stale without it (§6.6)
+    c.execute(_PASS, _p(c, finished_at=now, rules=len(out),
+                        opened=sum(v["opened"] for v in out.values())))
     c.commit()
     return out

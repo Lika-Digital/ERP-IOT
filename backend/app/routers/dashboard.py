@@ -1,16 +1,18 @@
 """Dashboard router — aggregated marina overview data, and the berth view (spec §3, §6.2)."""
 import logging
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..cabinet import berth_view, cabinet_config
 from ..database import get_db
+from ..models.marina import Marina
 from ..models.user import User
 from ..models.cache import PedestalCache
+from ..services import overview
 from ..services.pedestal_api_factory import PedestalAPIClientFactory, get_pedestal_factory
 from ._cabinet import marina_client, read
-from .auth import get_current_user
+from .auth import get_current_user, require_marina_access
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/marinas", tags=["dashboard"])
@@ -60,6 +62,24 @@ async def get_dashboard(
         "temperature_map": temperature_map,
         "readings_map": readings_map,
     }
+
+
+@router.get("/{marina_id}/overview")
+def get_overview(
+    marina_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """The main dashboard (D23, §6.6): map, three cards, cabinets — from the database.
+
+    No cabinet is called: the collector already stored what they said (O64). Every
+    number, its freshness and sentence come from app/services/overview.py.
+    """
+    marina = db.get(Marina, marina_id)
+    if not marina:
+        raise HTTPException(status_code=404, detail="Marina not found")
+    require_marina_access(marina_id, user, db)
+    return overview.build(db, marina)
 
 
 @router.get("/{marina_id}/health")

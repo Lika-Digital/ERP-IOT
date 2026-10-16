@@ -25,7 +25,7 @@ from ..models.cabinet import Cabinet, Outlet
 from ..models.cache import AlarmLog, AuditLog, PedestalCache, SessionLog, SyncLog
 from ..models.metering import (CommandAudit, ConsumptionInterval, ConsumptionMonthly, OutletMeterState,
                                ReconciliationRun)
-from ..models.security import DecoyHit, SecurityAlarm, ServiceWindow
+from ..models.security import DecoyHit, SecurityAgentPass, SecurityAlarm, ServiceWindow
 from ..models.user import AuthAudit, SetupToken
 from ..utils.time import utcnow
 
@@ -59,6 +59,9 @@ def windows() -> dict:
         # D28: a reservation explains an occupancy figure for as long as a session does
         "berth_reservations": (BerthReservation, BerthReservation.ends_at,
                                s.retention_berth_reservations_days),
+        # D23: "the agent ran" — the dashboard needs only the newest row
+        "security_agent_passes": (SecurityAgentPass, SecurityAgentPass.finished_at,
+                                  s.retention_security_agent_passes_days),
     }
 
 

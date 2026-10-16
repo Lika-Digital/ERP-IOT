@@ -197,6 +197,10 @@ def agt02(c) -> list[tuple[str, bool, str]]:
         "ON CONFLICT (fingerprint) DO NOTHING"))
     out.append(("AGT-02 INSERT ... ON CONFLICT DO NOTHING into security_alarms as erp_agent",
                 code is None, f"SQLSTATE {code}" if code else "inserted"))
+    code = _attempt(c, "INSERT INTO security_agent_passes (finished_at, rules, opened) "
+                       "VALUES (now() AT TIME ZONE 'UTC', 0, 0)")
+    out.append(("AGT-02 INSERT into security_agent_passes as erp_agent (D23, \"I ran\")",
+                code is None, f"SQLSTATE {code}" if code else "inserted"))
     code = _attempt(c, "SELECT count(*) FROM security_alarms JOIN cabinets ON true "
                        "JOIN auth_audit ON true LIMIT 1")
     out.append(("AGT-02 reading the sources as erp_agent works", code is None,

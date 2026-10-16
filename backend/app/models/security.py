@@ -62,6 +62,22 @@ class SecurityAlarm(Base):
     simulated = Column(Boolean, nullable=False, default=False, server_default=false())
 
 
+class SecurityAgentPass(Base):
+    """One row per agent pass (D23, §6.6): the Safety & Security card knows whether the
+    agent runs. Zero open alarms from an agent that does not run is not zero. The agent
+    may INSERT here; the backend deletes rows older than 7 days (retention.py)."""
+    __tablename__ = "security_agent_passes"
+    __table_args__ = (
+        CheckConstraint("rules >= 0 AND opened >= 0", name="ck_security_agent_passes_counts"),
+        Index("ix_security_agent_passes_finished_at", "finished_at"),
+    )
+
+    id = Column(BigInteger().with_variant(Integer(), "sqlite"), primary_key=True)
+    finished_at = Column(DateTime, nullable=False)
+    rules = Column(Integer, nullable=False)
+    opened = Column(Integer, nullable=False)
+
+
 class ServiceWindow(Base):
     __tablename__ = "service_windows"
     __table_args__ = (

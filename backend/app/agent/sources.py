@@ -40,8 +40,9 @@ SELECT_COLUMNS = {
     "marinas": ("id", "name", "timezone"),
 }
 
-# GRANT INSERT ON <table> — the only write
-INSERT_TABLES = ("security_alarms",)
+# GRANT INSERT ON <table> — the only writes: an alarm, and "I ran" (migration 013,
+# D23: the dashboard card must know whether the agent runs at all)
+INSERT_TABLES = ("security_alarms", "security_agent_passes")
 
-# GRANT USAGE ON SEQUENCE — only the one the only write needs
-SEQUENCES = ("security_alarms_id_seq",)
+# GRANT USAGE ON SEQUENCE — only the ones those writes need
+SEQUENCES = ("security_alarms_id_seq", "security_agent_passes_id_seq")

@@ -27,6 +27,8 @@ bcrypt==4.0.1
 httpx==0.28.1
 # O61: one TLS context for every cabinet call (app/cabinet/client.py)
 certifi==2026.2.25
+# D23: marina-local day (Europe/Zagreb) on hosts without a zone database (Windows)
+tzdata==2026.5
 python-multipart==0.0.24
 starlette==1.0.0
 # D20: QR kod za povezivanje 2FA (cisti Python, bez ovisnosti)

@@ -61,6 +61,7 @@ class Settings(BaseSettings):
     retention_service_windows_days: int = 400  # counted from the window's end
     retention_berth_reservations_days: int = 400  # D28; counted from the reservation's end
     retention_simulated_intervals_days: int = 30   # D28: demo history, never rolled up
+    retention_security_agent_passes_days: int = 7  # D23: only the newest row matters
 
     # ── Decoys, layer 2 (spec §7.1, D13) — comma-separated; empty = that decoy is off ──
     # Nobody legitimate uses these: a sign-in with a decoy e-mail, or a webhook

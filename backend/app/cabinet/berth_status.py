@@ -6,9 +6,17 @@ Four independent signals (D2), never merged into one another:
   power       YES | NO | UNKNOWN          active ELECTRICITY session on the berth's outlet
   reservation YES | NO | UNKNOWN          ERP reservations (phase 3+)
 
-and one ranked table (§3.2): the highest rank that is true wins. The frontend
-never derives a status; it renders `berth_colour` and `status_sentence`.
-Tests talk about `status_code`, never about the sentence.
+and two tables (§3.2, split in v17 by your decision §1.2 (a)):
+
+  _TABLE   occupancy — the berth's ONE colour; the highest rank that is true wins.
+           Red is only `vessel_mismatch`, "Wrong vessel".
+  _ALARMS  the cabinet's alarms (ranks 3-7) — never a colour: the list `alarm`,
+           worst first, drawn as a separate marker on the berth.
+
+Grey (ranks 1, 2, 2.5) still beats everything: then occupancy is not known. With no
+contact the alarms are not known either, so `alarm` is empty — not "no alarms".
+The frontend never derives a status; it renders `berth_colour`, `status_sentence`
+and `alarm`. Tests talk about codes, never about the sentence.
 
 A state with no row in the table is not drawn as free: it becomes
 `unclassified` / unknown / grey, "Something needs checking" (§3.2).
@@ -23,17 +31,13 @@ OFFLINE_AFTER = timedelta(minutes=10)          # D2
 VESSEL_FRESH_FOR = timedelta(minutes=30)       # §3.1
 DEFAULT_HEARTBEAT_INTERVAL = timedelta(seconds=60)
 
-# rank, status_code, status, berth_colour, sentence
+# rank, status_code, status, berth_colour, sentence — OCCUPANCY, one colour per berth
 _TABLE: list[tuple[float, str, str, str, str]] = [
+    # D23/D28: an ERP berth no cabinet serves yet (the real demo berths until 5d)
+    (0,   "no_cabinet",           "unknown",   "grey",   "No cabinet is connected to this berth"),
     (1,   "no_contact",           "unknown",   "grey",   "No connection to this cabinet"),
     (2,   "standalone",           "unknown",   "grey",   "The cabinet is running on its own"),
     (2.5, "outlet_silent",        "unknown",   "grey",   "This outlet has not reported"),
-    (3,   "water_leak",           "attention", "red",    "Water leak detected"),
-    (4,   "too_hot",              "attention", "red",    "The cabinet is overheating"),
-    (5,   "auto_off_overload",    "attention", "red",
-     "Power switched off automatically — overload"),
-    (6,   "breaker_tripped",      "attention", "red",    "Breaker tripped — needs a reset"),
-    (7,   "measurement_missing",  "attention", "red",    "Consumption not measured — needs a check"),
     (8,   "vessel_mismatch",      "attention", "red",    "The vessel does not match the berth"),
     (9,   "power_without_vessel", "attention", "orange", "Power is on, but there is no vessel"),
     (10,  "reserved_empty",       "attention", "yellow", "Reserved, the berth is empty"),
@@ -41,8 +45,19 @@ _TABLE: list[tuple[float, str, str, str, str]] = [
     (12,  "free",                 "ok",        "green",  ""),
 ]
 UNCLASSIFIED = ("unclassified", "unknown", "grey", "Something needs checking")
+GREY_CODES = frozenset(("no_cabinet", "no_contact", "standalone", "outlet_silent"))
+
+# rank, alarm code, sentence — the cabinet's ALARMS, never a colour (v17)
+_ALARMS: list[tuple[int, str, str]] = [
+    (3, "water_leak",          "Water leak detected"),
+    (4, "too_hot",             "The cabinet is overheating"),
+    (5, "auto_off_overload",   "Power switched off automatically — overload"),
+    (6, "breaker_tripped",     "Breaker tripped — needs a reset"),
+    (7, "measurement_missing", "Consumption not measured — needs a check"),
+]
 
 STATUS_CODES = frozenset(r[1] for r in _TABLE) | {UNCLASSIFIED[0]}
+ALARM_CODES = frozenset(r[1] for r in _ALARMS)
 _BY_CODE = {r[1]: r for r in _TABLE}
 
 
@@ -65,6 +80,7 @@ class BerthSignals:
     power_active: Optional[bool] = None  # electricity only; water never counts
     reserved: Optional[bool] = None
     heartbeat_interval: timedelta = DEFAULT_HEARTBEAT_INTERVAL
+    has_cabinet: bool = True             # False: no cabinet serves this berth (yet)
 
 
 @dataclass(frozen=True)
@@ -79,6 +95,11 @@ class BerthStatus:
     reservation: str
     data_as_of: Optional[str] = None
     signals: dict = field(default_factory=dict)
+    alarm: tuple = ()                    # alarm codes, worst first
+
+    def alarm_rows(self) -> list:
+        sentence = {code: text for _r, code, text in _ALARMS}
+        return [{"code": c, "sentence": sentence[c]} for c in self.alarm]
 
     def to_dict(self) -> dict:
         return {
@@ -93,6 +114,7 @@ class BerthStatus:
                 "reservation": self.reservation,
             },
             "data_as_of": self.data_as_of,
+            "alarm": self.alarm_rows(),
         }
 
 
@@ -126,16 +148,12 @@ def compute(s: BerthSignals) -> BerthStatus:
     reservation = _tri(s.reserved)
 
     truth = {
+        "no_cabinet": not s.has_cabinet,
         # A cabinet that did not answer just now is "no contact", whatever the
         # cached data says: the cache is what it said, not what it is (§2.5).
         "no_contact": connection == "OFFLINE" or s.data_is_stale,
         "standalone": s.smart_mode is False,
         "outlet_silent": s.outlet_silent,
-        "water_leak": s.water_leak,
-        "too_hot": s.too_hot,
-        "auto_off_overload": s.auto_off_overload,
-        "breaker_tripped": s.breaker_tripped,
-        "measurement_missing": s.measurement_missing,
         "vessel_mismatch": vessel == "WRONG",
         "power_without_vessel": power == "YES" and vessel == "NONE",
         "reserved_empty": reservation == "YES" and vessel == "NONE",
@@ -150,10 +168,20 @@ def compute(s: BerthSignals) -> BerthStatus:
     else:
         code, status, colour, sentence = UNCLASSIFIED
 
+    alarm: tuple = ()
+    if code not in ("no_cabinet", "no_contact"):   # then the alarms are not known either
+        raised = {"water_leak": s.water_leak, "too_hot": s.too_hot,
+                  "auto_off_overload": s.auto_off_overload,
+                  "breaker_tripped": s.breaker_tripped,
+                  "measurement_missing": s.measurement_missing}
+        alarm = tuple(c for _r, c, _t in _ALARMS if raised[c])
+    if alarm and code not in GREY_CODES:
+        status = "attention"
+
     as_of = None
     if s.data_is_stale and s.data_synced_at is not None:
         as_of = s.data_synced_at.strftime("%H:%M")
         sentence = f"{sentence} — podaci od {as_of}"
 
     return BerthStatus(code, status, colour, sentence, connection, vessel, power,
-                       reservation, data_as_of=as_of)
+                       reservation, data_as_of=as_of, alarm=alarm)

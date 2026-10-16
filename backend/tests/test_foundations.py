@@ -330,10 +330,12 @@ def test_tc_erp_auth_01_protected_count_matches_graph():
     Faza 8 (D21): 53 od 66 — devet ruta /api/security (alarmi, pravila, servisni
     prozori, uvoz datoteka; sve samo Admin) i četiri JAVNA mamca (GET i POST na
     /api/ext/admin/debug i /api/admin/debug), koji odgovaraju 404 kao nepostojeća ruta.
+    Faza 6a (D23): 54 od 67 — GET /api/marinas/{id}/overview (glavni dashboard),
+    zasticena i vezana uz pristup marini.
     Broj se mijenja samo svjesno, u istom commitu kao ruta.
     """
     rs = _routes()
-    assert (sum(p for _, _, p in rs), len(rs)) == (53, 66)
+    assert (sum(p for _, _, p in rs), len(rs)) == (54, 67)
 
 
 def test_tc_erp_auth_01_no_credentials_is_strictly_401(client):

@@ -240,6 +240,10 @@ def _sim_session(c, i):
         "'ended', 1, 'pending', :t, :t) RETURNING id"), dict(c=cab, o=q1, t=NOW)).scalar_one()
 
 
+def _map(c, i, name):
+    c.execute(text("UPDATE marinas SET map_svg = :n WHERE id = :m"), dict(n=name, m=i["marina"]))
+
+
 def _p_window_backwards(c, i):
     c.execute(text("INSERT INTO service_windows (cabinet_id, from_at, to_at, announced_by, "
                    "created_at) VALUES (:c, :t, :t, 'serviser', :t)"), dict(c=i["cabinet"], t=NOW))
@@ -292,6 +296,14 @@ MUST_REFUSE: list[tuple[str, Callable]] = [
      lambda c, i: _billing(c, i, session=_sim_session(c, i))),
     ("credit_ledger: a demo customer has no ledger (D28)",
      lambda c, i: _ledger(c, _demo_customer(c, i), 10, 10)),
+    # D23
+    ("marinas: a map that is a path, not a file name",
+     lambda c, i: _map(c, i, "../../etc/x.svg")),
+    ("marinas: a map that is not an .svg",
+     lambda c, i: _map(c, i, "map.html")),
+    ("security_agent_passes: a negative count",
+     lambda c, i: c.execute(text("INSERT INTO security_agent_passes (finished_at, rules, opened) "
+                                 "VALUES (:t, 7, -1)"), dict(t=NOW))),
 ]
 
 
@@ -323,6 +335,7 @@ def _p_billed_reconciled(c, i):
 
 
 MUST_ALLOW: list[tuple[str, Callable]] = [
+    ("marinas: a map file name under /maps/ (D23)", lambda c, i: _map(c, i, "demo-marina.svg")),
     ("berth_outlets: a valve MAY be shared between berths (D1)", _p_valve_shared),
     ("contracts: billing_mode defaults to prepaid in the database (D9)", _p_contract_default_prepaid),
     ("marina_billing_policy: defaults 1.00 / -2.00 / 20 %", _p_policy_defaults),

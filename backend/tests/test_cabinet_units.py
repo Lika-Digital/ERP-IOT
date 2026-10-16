@@ -180,9 +180,33 @@ def test_standalone_is_unknown_not_attention():
     assert (r.status_code, r.status) == ("standalone", "unknown")
 
 
-def test_highest_rank_wins():
+def test_alarms_are_a_separate_list_never_the_colour():
+    """v17, §1.2 (a): the colour is occupancy only; ranks 3-7 travel in `alarm`, worst first."""
     r = bs.compute(_sig(water_leak=True, breaker_tripped=True, state_code=2))
-    assert r.status_code == "water_leak"
+    assert (r.status_code, r.berth_colour) == ("vessel_mismatch", "red")
+    assert r.alarm == ("water_leak", "breaker_tripped")
+    assert [a["code"] for a in r.to_dict()["alarm"]] == ["water_leak", "breaker_tripped"]
+
+
+def test_a_leak_on_an_occupied_berth_stays_occupied():
+    r = bs.compute(_sig(state_code=1, water_leak=True))
+    assert (r.status_code, r.berth_colour, r.status) == ("vessel_present", "blue", "attention")
+    assert r.alarm == ("water_leak",)
+
+
+def test_red_is_only_wrong_vessel():
+    for flag in ("water_leak", "too_hot", "auto_off_overload", "breaker_tripped",
+                 "measurement_missing"):
+        r = bs.compute(_sig(**{flag: True}))
+        assert (r.status_code, r.berth_colour) == ("free", "green"), flag
+        assert r.alarm == (flag,)
+
+
+def test_no_contact_knows_no_alarms_but_standalone_still_shows_them():
+    r = bs.compute(_sig(last_heartbeat=NOW - timedelta(minutes=11), water_leak=True))
+    assert (r.status_code, r.alarm) == ("no_contact", ())
+    r = bs.compute(_sig(smart_mode=False, water_leak=True))
+    assert (r.status_code, r.status, r.alarm) == ("standalone", "unknown", ("water_leak",))
 
 
 def test_vessel_unknown_is_never_drawn_free():
@@ -201,5 +225,6 @@ def test_stale_connection_is_a_signal_not_a_status():
 
 
 def test_every_row_has_a_distinct_code():
-    codes = [row[1] for row in bs._TABLE]
-    assert len(codes) == len(set(codes)) == 13
+    codes = [row[1] for row in bs._TABLE] + [row[1] for row in bs._ALARMS]
+    assert len(codes) == len(set(codes)) == 14
+    assert [r[1] for r in bs._TABLE if r[3] == "red"] == ["vessel_mismatch"]

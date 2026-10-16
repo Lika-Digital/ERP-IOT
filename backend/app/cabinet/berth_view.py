@@ -99,6 +99,7 @@ def build(
     config: CabinetConfig,
     controls_enabled: bool,
     now: Optional[datetime] = None,
+    reserved: Optional[set] = None,     # cabinet berth ids reserved now; None = not known
 ) -> dict:
     now = now or utcnow()
     reads = [health, berths, alarms, sessions, *status.values(), *load.values(),
@@ -164,7 +165,8 @@ def build(
             state_code=b.get("state_code"),
             last_analyzed=parse_iso(b.get("last_analyzed")),
             power_active=power,
-            reserved=None,                      # reservations: phase 3+
+            # the ERP's own signal (D2, D28): given -> YES / NO, not given -> UNKNOWN
+            reserved=None if reserved is None else bid in reserved,
         )
         status_row = bs.compute(signals)
 

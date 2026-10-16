@@ -151,13 +151,15 @@ def test_agt01_migration_grants_exactly_what_sources_py_lists():
 
     m = load("m011", "011_d21_security_agent.py")
     m12 = load("m012", "012_d28_demo_marina.py")     # D28: is_simulated, base_url
-    assert m.ROLE == m12.ROLE == sources.ROLE == "erp_agent"
+    m13 = load("m013", "013_d23_dashboard.py")       # D23: security_agent_passes
+    assert m.ROLE == m12.ROLE == m13.ROLE == sources.ROLE == "erp_agent"
     assert set(m.SELECT_TABLES) == set(sources.SELECT_TABLES)
     granted = {t: tuple(cols) + tuple(m12.ADDED_SELECT_COLUMNS.get(t, ()))
                for t, cols in m.SELECT_COLUMNS.items()}
     assert granted == sources.SELECT_COLUMNS
-    assert m.INSERT_TABLES == sources.INSERT_TABLES == ("security_alarms",)
-    assert m.SEQUENCES == sources.SEQUENCES
+    assert m.INSERT_TABLES + m13.ADDED_INSERT_TABLES == sources.INSERT_TABLES == (
+        "security_alarms", "security_agent_passes")
+    assert m.SEQUENCES + m13.ADDED_SEQUENCES == sources.SEQUENCES
 
 
 def test_agt01_no_secret_column_is_granted():
@@ -382,7 +384,7 @@ def test_agt06_prompt_injection_is_quoted_into_evidence_and_nothing_else(cab, ma
     counts1, users1, modes1 = _snapshot()
 
     grew = {t for t in counts0 if counts1[t] != counts0[t]}
-    assert grew == {"security_alarms"}
+    assert grew == {"security_alarms", "security_agent_passes"}   # an alarm, and "I ran"
     assert users1 == users0 and modes1 == modes0
     assert {a["rule_id"] for a in _alarms()} == {"login_spray", "door_no_window"}
     assert sum(v["opened"] for v in summary.values()) == 2

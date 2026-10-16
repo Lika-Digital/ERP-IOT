@@ -53,6 +53,7 @@ def seed(db: Session, *, port: int = DEFAULT_PORT, seed_value: int = DEFAULT_SEE
     now = (now or utcnow()).replace(microsecond=0)
     specs = w.cabinets()
     marina = Marina(name=DEMO_MARINA, location="Demo", timezone="Europe/Zagreb",
+                    map_svg="demo-marina.svg",            # D23: frontend/public/maps/
                     pedestal_api_base_url=sim_url(port, specs[0].display_id), status="active")
     db.add(marina)
     db.commit()
