@@ -102,8 +102,8 @@ _TABLE = [
              _N, _M, "breaker alarms per marina"),
     # D30 (spec §6.12): no camera endpoint — snapshot, frame_ext, stream, stream_ext — is in
     # the ERP's contract. Pictures stay on the cabinet; only state and results come here.
-    Endpoint("usage.history", "GET", "/api/pedestals/{pedestal_id}/usage/history", _PK, _M,
-             "reconciliation"),
+    # usage.* is gone (spec §2.2/§2.3): the cabinet closed it — it carries customer
+    # identifiers (D6.2). Reconciliation goes by erp_ref and end time (R14).
     Endpoint("controls.socket_cmd", "POST",
              "/api/controls/pedestal/{pedestal_id}/socket/{socket_name}/cmd", _PK, _B,
              "operator path (D3)"),

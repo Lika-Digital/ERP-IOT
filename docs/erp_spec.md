@@ -31,7 +31,7 @@ Tvoje odluke 2026-10-16 uz odgovor mobilne v2 (`docs/inputs/odgovor_erp_na_mobil
 | | |
 |---|---|
 | **§1.25 dopuna (3)** | signal plovila **NEPOZNATO** (nema reference, ormar offline, analiza starija od 30 min) **ne priječi** kupčevo gledanje — pravilo je NIJE KRIVO, a nepoznato nije krivo; §14.8 usklađen |
-| **§2.3 · ispravljeno (nalaz ormara)** | Monitor = **točno 17 ključeva prvog testa** (§10.15); `berths.occupancy_ext`, `load.socket_history_ext`, `load.marina_alarms_ext`, `breakers.pedestal_history_ext`, `breakers.marina_alarms_ext` → tablica „kasnije, uz obrazloženje"; **`usage.history` uklonjen iz §2.3** (ormar ga je zatvorio: nosi identifikatore kupaca, D6.2); u §2.2 označen „ne uključuje se" dok se ne ukloni iz `contract.py` |
+| **§2.3 · ispravljeno (nalaz ormara)** | Monitor = **točno 17 ključeva prvog testa** (§10.15); `berths.occupancy_ext`, `load.socket_history_ext`, `load.marina_alarms_ext`, `breakers.pedestal_history_ext`, `breakers.marina_alarms_ext` → tablica „kasnije, uz obrazloženje"; **`usage.history` uklonjen** iz §2.2, §2.3, `contract.py` i simulatora (ormar ga je zatvorio: nosi identifikatore kupaca, D6.2); test pada ako se `usage.*` vrati |
 | **QR marine** | `https://lika.digital/marina/<public_code>` (ne `/m/`); ruta u UI-ju i u `PUBLIC_APP_BASE_URL` putanjama kad dođu (v3 M0 / MOB-0b) |
 
 ### Što se promijenilo u verziji 29
@@ -844,7 +844,7 @@ Dvije obitelji, dva pravila (`ormar_gateway_izvjestaj.md` NALAZ 1.1):
 | `breakers.marina_alarms_ext` | GET | `/api/ext/marinas/{marina_id}/breaker/alarms` | **PK** | — | isto, po marini |
 | ~~`camera.frame_ext`~~ | — | **uklonjeno v21 (D30)** — ERP ne zove kameru; slika ostaje na ormaru | | | |
 | ~~`camera.stream_ext`~~ | — | **uklonjeno v21 (D30)**; *v28: ostaje uklonjeno; D32 koristi `camera.live_*` (R35, §14.8)* | | | |
-| `usage.history` | GET | `/api/ext/pedestals/{pedestal_id}/usage/history` | PK | — | **v30: ne uključuje se** — ormar je zatvorio `usage.*` (identifikatori kupaca, D6.2); usklađivanje po `erp_ref` i vremenu završetka (R14). Iz ugovora u kodu (`contract.py`) uklanja se zasebno, uz tvoj OK |
+| ~~`usage.history`~~ | — | **uklonjeno v30** — ormar je zatvorio `usage.*` (identifikatori kupaca, D6.2); maknut iz `contract.py`, simulatora i tablice, test pada ako se vrati; usklađivanje po `erp_ref` i vremenu završetka (R14) | | | |
 | `controls.socket_cmd` | POST | `/api/ext/controls/pedestal/{pedestal_id}/socket/{socket_name}/cmd` | PK | **da** | **operaterski put** (D3) |
 | `controls.water_cmd` | POST | `/api/ext/controls/pedestal/{pedestal_id}/water/{valve_name}/cmd` | PK | **da** | operaterski put, voda |
 | `controls.allow` | POST | `/api/ext/controls/{session_id}/allow` | PK | **da** | odobri sesiju |

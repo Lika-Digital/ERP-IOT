@@ -97,7 +97,6 @@ FAMILY_A = {
     "analytics.summary": ("GET", "/api/analytics/sessions/summary"),
     "sockets.config_list": ("GET", "/api/pedestals/{pedestal_id}/sockets/config"),
     "valves.config_list": ("GET", "/api/pedestals/{pedestal_id}/valves/config"),
-    "usage.history": ("GET", "/api/pedestals/{pedestal_id}/usage/history"),
     "controls.socket_cmd": ("POST", "/api/controls/pedestal/{pedestal_id}/socket/{socket_name}/cmd"),
     "controls.water_cmd": ("POST", "/api/controls/pedestal/{pedestal_id}/water/{valve_name}/cmd"),
     "controls.allow": ("POST", "/api/controls/{session_id}/allow"),
