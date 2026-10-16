@@ -18,7 +18,8 @@ bad=0
 echo "  ss -ltn:"
 while read -r addr; do
     port=${addr##*:}
-    host=${addr%:*}; host=${host#[}; host=${host%]}; host=${host%%%*}
+    # prvo oznaka zone (%tailscale0, %lo), pa zagrade IPv6: [fd7a::1]%tailscale0 → fd7a::1
+    host=${addr%:*}; host=${host%%\%*}; host=${host#[}; host=${host%]}
     verdict=GREŠKA
     if [ "$port" = "5432" ]; then
         verdict="GREŠKA (Postgres mora biti samo socket)"
