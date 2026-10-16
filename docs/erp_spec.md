@@ -3,12 +3,12 @@
 Što se gradi, u kojem redoslijedu, i svaka odluka izrečena tako da ispravak
 košta jedan redak, a ne razgovor.
 
-    Verzija 21 — zamjenjuje v20 od 2026-10-16
+    Verzija 22 — zamjenjuje v21 od 2026-10-16
     Datum 2026-10-16
     Status faze 1–4 ZAVRŠENE i PRIHVAĆENE (§10.1–§10.4); korak 5a (D20), faza 8 (D21) i
            UI · Lika brand PRIHVAĆENI, na `main` (§10.7–§10.9); 5b PAUZIRAN do prihvaćanja
            faze 6 (tvoja odluka 2026-10-15); faza 6 lokalno: **6.0 demo marina ZAVRŠEN**
-           (§10.10) i PRIHVAĆEN; **6a PRIHVAĆEN** (§10.11); **6b u izvedbi** po novom opsegu (§10.12);
+           (§10.10) i PRIHVAĆEN; **6a PRIHVAĆEN** (§10.11); **6b izveden osim uploada reference** (§10.13; upload čeka P1/P2);
            §1 je prazan
 
 Čita se uz `docs/inputs/odluke.md` **v2.6** (odluke, obvezujuće — v2.1 dodaje **D18**, v2.2 **D19**,
@@ -18,6 +18,14 @@ v2.3 ispravak mreže u **D13**, v2.4 **D20**, v2.5 **D21**, **D22** i redoslijed
 `docs/inputs/ormar_ui_v2_spec.txt` (specifikacija ormara — uzor forme i izvor rječnika stanja).
 
 **Sve u ovom dokumentu je ODLUČENO. §1 je prazan — tri pitanja iz v15 odlučena su 2026-10-15.**
+
+### Što se promijenilo u verziji 22
+
+| | |
+|---|---|
+| **§10.13** | izvještaj 6b: koraci 1–4 i 6–8 iz §10.12 gotovi; korak 5 (upload) čeka P1 i P2 |
+| **§2.2 / §2.3** | `camera.frame_ext` i `camera.stream_ext` uklonjeni iz ugovora (D30) |
+| **§11** | O67 novi (retencija podataka vlasnika bivšeg plovila) |
 
 ### Što se promijenilo u verziji 21
 
@@ -3279,6 +3287,48 @@ VPS-a se preklapaju); 5c odmah nakon 5b ako je domena spremna; 5d 2–3 dana; 5e
 faza 6 lokalno protiv simulatora za vrijeme tog tjedna; faza 7 poslije njega. Prijedlog v9
 „faza 5 se piše dok teče 4.5 c" je bespredmetan — 4.5 je obrisana, a 5a kreće odmah.
 
+### §10.13 · Korak 6b — izvještaj (2026-10-16)
+
+**Grana `faza/6-d23-d27`.** Snimke `docs/ui/6b/`: `01-dashboard-light.png` (vez s alarmom
+odabran, tooltip na B-03), `02-dashboard-dark.png`, `03-mobile-map.png` (360 px, oznake spojene u
+„Alarm 2"), `04-mobile-zoomed.png` (uvećano i pomaknuto — oznake razdvojene),
+`05-berth-detail.png` (vlasnik prikazan na zahtjev), `06-pedestal-control.png` (ormari uživo).
+Pravi ERP, pravi kolektor i agent protiv simulatora demo marine; sat svijeta postavljen na
+14. 10. 04:5x UTC radi alarma ormara (SIM_A_08), uz `wrong-vessel C-11` i `offline SIM_E_03`.
+
+| Mjera | Kraj 6a | Kraj 6b |
+|---|---|---|
+| Backend testova | 573 | **595**, 0 preskočenih |
+| Rute (zaštićene / ukupno) | 54 / 67 | **56 / 69** (−2 kamere, +4 detalj veza) |
+| Kamernih ključeva u ugovoru / ruta / poziva u frontendu | 2 / 2 / 3 | **0 / 0 / 0** (`test_d30.py`) |
+| Na snimci: boje karte | — | 108 plavih, 21 zelenih, 10 žutih, 4 crvene, **1 narančasta**, 2 sive, **4 „Not connected yet"** |
+| Vodoravni pomak, 360 px i 1440 px, obje teme | 0 | **0**; greške u konzoli: 0 |
+
+**Napravljeno:**
+1. **Popravci UI-ja:** dashboard bez živog dijela (ormari uživo u Pedestal control); T1 „Not
+   connected yet" (`berth_colour: none`, Occupancy broji zasebno); T2 tooltip, broj prvog veza
+   svakog gata u crtežu, zoom i pomicanje ispod 640 px, oznake alarma spojene po zoomu (O66);
+   T3 svaki dan jedan „Power without vessel"; T4 `en-GB` kroz jedan pomoćnik; ime marine u
+   izborniku.
+2. **D30:** kamere izvan ugovora, klijenta, ruta i frontenda; test.
+3. **D21.1:** test stupaca (`id, finished_at, rules, opened`; model i migracija).
+4. **Plovilo veza** (migracija 014): detalj veza na `/marinas/{id}/berth/{bid}`; vlasnik samo na
+   zahtjev, svako čitanje u auditu bez podataka vlasnika; Admin uređuje s razlogom; uređivanje
+   imena ne briše vlasnika; baza dopušta jedno trenutno plovilo po vezu.
+6. **Rezultat ormara:** zauzeće, match, score, broj referentnih slika iz spremljenog `berths.list`.
+7. **Zauzeće, match, sektor, guard:** „Not available on this cabinet" (R27–R30), bez kontrola.
+8. **Webhook:** nazivi ormara; nepoznat oblik 422 i `sync_log` po obliku, ne po sadržaju.
+
+**Nije napravljeno:** korak **5 — upload referentne slike** čeka tvoju odluku o P1 i P2 (§6.12).
+
+**Nađeno usput:**
+- Na stroju je radio demo simulator na 18080 (`scripts/demo.py start`, 10:06) koji nisam ja
+  pokrenuo; nisam ga dirao, snimke su na 18090. Skripta za snimke sada provjerava da odgovara
+  njezin simulator.
+- Ormari uživo u Pedestal control za demo marinu pokazuju samo prvi ormar („Ormar 1"), jer ide na
+  prvi poslužitelj marine — to je O65 (5d).
+- O67: koliko dugo čuvati podatke vlasnika bivšeg plovila — čeka odluku.
+
 ### §10.12 · Korak 6b — opseg (v21, odobreno 2026-10-16)
 
 Redom, jedna stvar u isto vrijeme:
@@ -4034,7 +4084,7 @@ i čeka čovjeka; nikad ne otvara ni ne zaključava vrata.
 
 ---
 
-`docs/erp_spec.md` · verzija 21 · 2026-10-16 · zamjenjuje v20 od 2026-10-16
+`docs/erp_spec.md` · verzija 22 · 2026-10-16 · zamjenjuje v21 od 2026-10-16
 
 Faze 1–4, korak 5a, faza 8 (D21) i UI · Lika brand su završeni i prihvaćeni; 5b je pauziran do
 prihvaćanja faze 6; **6.0 demo marina je završen i prihvaćen** (§10.10), **6a je prihvaćen** (§10.11); **6b** po novom opsegu (§10.12, D30). D23–D28 su upisani (§6.6–§6.11) i izvode se kao proširena faza 6 (6a–6e); energetski
