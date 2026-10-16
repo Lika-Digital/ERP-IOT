@@ -317,3 +317,46 @@ prijema i radnika.
   procjena za 10, 50 i 100 marina po 75 ormara; RAM i CPU VPS-a.
 - Jedna točka kvara (jedan VPS): što i kada se odvaja (baza na zaseban stroj,
   drugi API čvor).
+
+---
+
+## 10. D32 — Live prikaz veza (kamera), izmjena D30 — ODLUKA VLASNIKA 2026-10-16
+
+### 10.1 Odluka vlasnika
+- U ERP-u na 2D karti uz vez/ormar postoji **ikona kamere**: zelena = kamera
+  aktivna i dostupna za prijenos; siva = nedostupna; bez ikone = nema kamere.
+  Status računa server.
+- Klik na ikonu otvara **live prijenos veza** u ERP-u.
+- Ista funkcija postoji u mobilnoj aplikaciji ("My Ship live") — kupac gleda
+  SVOJ vez; zaposlenik po pravima uloge.
+
+### 10.2 Odnos prema D30
+- D30 ostaje za **analizu**: referentne slike, match, zauzeće — procjena na
+  ormaru, prema ERP-u samo rezultat.
+- D32 dodaje **živi prijenos na zahtjev** kao zasebnu funkciju s vlastitim
+  pravilima (ispod). Ništa se ne snima ni ne sprema na ERP-u.
+
+### 10.3 Pravila (prijedlog arhitekta — Code ih piše kao trojke u §1)
+- **Put prijenosa (D12):** kamera → ormar (nginx :80, ext ključ za stream) →
+  ERP → preglednik/aplikacija. Aplikacija i preglednik nikad ne idu na ormar ni
+  na kameru. ERP pokreće povlačenje s ormara SAMO dok netko gleda.
+- **Medijski sloj:** prijedlog lagani media relay na VPS-u (npr. MediaMTX) koji
+  na zahtjev povlači stream s ormara i daje ga gledateljima (HLS ili WebRTC);
+  jedan dolazni stream po kameri bez obzira na broj gledatelja.
+- **Ograničenja:** najviše N istovremenih gledatelja po kameri, najdulje
+  trajanje gledanja (npr. 2–5 min, pa ponovni klik), niža rezolucija/bitrate
+  (veza ormara je često LTE), bez snimanja.
+- **Prava:** kupac samo kamera svog veza (vez iz važećeg ugovora); zaposlenik
+  po matrici prava; Admin u admin modu. Svako gledanje ide u audit (tko, kada,
+  koja kamera, koliko dugo).
+- **GDPR (D15):** živi video ljudi u marini je videonadzor. Obavezno: oznaka
+  videonadzora u marini; maske privatnosti (privacy mask) na kameri tako da se
+  vidi samo vez; zamagljivanje osoba na ormaru prije slanja ako je izvedivo u
+  stvarnom vremenu — ako nije, za §1 s prijedlogom; nema snimanja; svrha i
+  pravna osnova zapisani.
+- **Sigurnost:** stream s ormara samo preko Tailscalea; kratkotrajni potpisani
+  URL za gledatelja (vezan uz korisnika i kameru, istječe); nikakve trajne
+  adrese kamera u klijentu.
+- **Zahtjevi prema ormaru (§7.2):** uključiti `camera.stream_ext` (i status
+  kamere) u gateway za ERP; maske privatnosti; zamagljivanje osoba (izvedivost i
+  cijena CPU-a na ormaru); stream samo dok ERP traži.
