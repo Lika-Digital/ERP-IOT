@@ -167,3 +167,32 @@ class BerthVessel(Base):
     valid_from = Column(DateTime, nullable=False, default=utcnow)
     valid_to = Column(DateTime, nullable=True)
     assigned_by = Column(String(320), nullable=False)
+
+
+class VesselPhoto(Base):
+    """A reference photo sent to the cabinet (P2, P5, spec §6.12): what was sent, never the
+    picture. sha256 is of the re-encoded JPEG that actually went to the cabinet."""
+    __tablename__ = "vessel_photos"
+    __table_args__ = (
+        CheckConstraint("length(sha256) = 64", name="ck_vessel_photos_sha256"),
+        CheckConstraint("size_bytes > 0 AND size_bytes <= 10485760", name="ck_vessel_photos_size"),
+        CheckConstraint("content_type = 'image/jpeg'", name="ck_vessel_photos_type"),
+        CheckConstraint("length(trim(reason)) >= 3", name="ck_vessel_photos_reason"),
+        CheckConstraint("no_people_confirmed", name="ck_vessel_photos_no_people"),
+        Index("ix_vessel_photos_berth_id", "berth_id"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    vessel_id = Column(Integer, ForeignKey("vessels.id", ondelete="CASCADE"), nullable=False)
+    berth_id = Column(Integer, ForeignKey("berths.id", ondelete="CASCADE"), nullable=False)
+    cabinet_id = Column(Integer, ForeignKey("cabinets.id", ondelete="CASCADE"), nullable=False)
+    sha256 = Column(String(64), nullable=False)
+    size_bytes = Column(Integer, nullable=False)
+    content_type = Column(String(40), nullable=False)
+    reason = Column(Text, nullable=False)
+    no_people_confirmed = Column(Boolean, nullable=False)
+    uploaded_by = Column(String(320), nullable=False)
+    uploaded_at = Column(DateTime, nullable=False, default=utcnow)
+    outcome = Column(String(40), nullable=True)
+    cabinet_status = Column(Integer, nullable=True)
+    cabinet_detail = Column(Text, nullable=True)

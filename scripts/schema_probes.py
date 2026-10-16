@@ -263,6 +263,21 @@ def _p_vessel_history(c, i):
     _berth_vessel(c, i, _vessel(c, i, "Now"))
 
 
+def _upload_record(c, i, by="admin@erp", reason="gateway set bidirectional"):
+    c.execute(text("INSERT INTO cabinet_capabilities (cabinet_id, capability, available, "
+                   "checked_at, set_by, reason) VALUES (:c, 'reference_upload', :y, :t, :b, :r)"),
+              dict(c=i["cabinet"], y=True, t=NOW, b=by, r=reason))
+
+
+def _photo(c, i, size=1000, ctype="image/jpeg", people=True, reason="new season photo"):
+    c.execute(text(
+        "INSERT INTO vessel_photos (vessel_id, berth_id, cabinet_id, sha256, size_bytes, "
+        "content_type, reason, no_people_confirmed, uploaded_by, uploaded_at) "
+        "VALUES (:v, :b, :c, :h, :s, :ct, :r, :p, 'admin@erp', :t)"),
+        dict(v=_vessel(c, i), b=i["A1"], c=i["cabinet"], h="a" * 64, s=size, ct=ctype,
+             r=reason, p=people, t=NOW))
+
+
 def _map(c, i, name):
     c.execute(text("UPDATE marinas SET map_svg = :n WHERE id = :m"), dict(n=name, m=i["marina"]))
 
@@ -329,6 +344,14 @@ MUST_REFUSE: list[tuple[str, Callable]] = [
     ("berth_vessels: two current vessels on one berth", _p_two_current_vessels),
     ("berth_vessels: a period that ends before it starts",
      lambda c, i: _berth_vessel(c, i, _vessel(c, i), frm=NOW, to=NOW)),
+    # P5 (§6.12)
+    ("cabinet_capabilities: the upload record without who set it",
+     lambda c, i: _upload_record(c, i, by=None)),
+    ("cabinet_capabilities: the upload record without a reason",
+     lambda c, i: _upload_record(c, i, reason=" ")),
+    ("vessel_photos: more than 10 MB", lambda c, i: _photo(c, i, size=10485761)),
+    ("vessel_photos: anything but the re-encoded JPEG", lambda c, i: _photo(c, i, ctype="image/png")),
+    ("vessel_photos: without the no-people confirmation", lambda c, i: _photo(c, i, people=False)),
     ("security_agent_passes: a negative count",
      lambda c, i: c.execute(text("INSERT INTO security_agent_passes (finished_at, rules, opened) "
                                  "VALUES (:t, 7, -1)"), dict(t=NOW))),
@@ -365,6 +388,8 @@ def _p_billed_reconciled(c, i):
 MUST_ALLOW: list[tuple[str, Callable]] = [
     ("marinas: a map file name under /maps/ (D23)", lambda c, i: _map(c, i, "demo-marina.svg")),
     ("berth_vessels: a past vessel and a current one on the same berth (D27)", _p_vessel_history),
+    ("cabinet_capabilities + vessel_photos: a recorded upload and its photo record (P5)",
+     lambda c, i: (_upload_record(c, i), _photo(c, i))),
     ("berth_outlets: a valve MAY be shared between berths (D1)", _p_valve_shared),
     ("contracts: billing_mode defaults to prepaid in the database (D9)", _p_contract_default_prepaid),
     ("marina_billing_policy: defaults 1.00 / -2.00 / 20 %", _p_policy_defaults),

@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 from simulator import demo_world as w
 from simulator.demo_sim import DEFAULT_PORT, DEFAULT_SEED, SERVICE_EMAIL
 
-from ..models.berth import Berth, BerthReservation, BerthVessel, Vessel
+from ..models.berth import Berth, BerthReservation, BerthVessel, Vessel, VesselPhoto
 from ..models.billing import Customer
 from ..models.cabinet import Cabinet, Outlet
 from ..models.marina import Marina
@@ -169,6 +169,7 @@ def remove(db: Session) -> bool:
             (OutletNfcTag, OutletNfcTag.outlet_id, outs),
             (BerthOutlet, BerthOutlet.berth_id, berths),
             (BerthReservation, BerthReservation.berth_id, berths),
+            (VesselPhoto, VesselPhoto.berth_id, berths),
             (BerthVessel, BerthVessel.berth_id, berths)):
         db.query(model).filter(col.in_(ids)).delete(synchronize_session=False)
     db.query(Vessel).filter(Vessel.marina_id == m.id).delete(synchronize_session=False)

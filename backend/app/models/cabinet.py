@@ -62,17 +62,28 @@ class Cabinet(Base):
 
 
 class CabinetCapability(Base):
+    """What a cabinet has. 'reference_upload' is different (P1, P5, spec §6.12): not read
+    from the cabinet but the ERP Admin's record that its gateway allows
+    berths.push_image_ext — who set it and why, and a note when the cabinet's 403/503
+    switched it off."""
     __tablename__ = "cabinet_capabilities"
     __table_args__ = (
         CheckConstraint(
             "capability IN ('power', 'water', 'vessel_detect', 'camera', 'door', 'breaker', "
-            "'load_meter')", name="ck_capability_name"),
+            "'load_meter', 'reference_upload')", name="ck_capability_name"),
+        CheckConstraint(
+            "capability <> 'reference_upload' OR "
+            "(set_by IS NOT NULL AND reason IS NOT NULL AND length(trim(reason)) >= 3)",
+            name="ck_capability_reference_upload_who"),
     )
 
     cabinet_id = Column(Integer, ForeignKey("cabinets.id", ondelete="CASCADE"), primary_key=True)
     capability = Column(String(30), primary_key=True)
     available = Column(Boolean, nullable=False)
     checked_at = Column(DateTime, nullable=False, default=utcnow)
+    set_by = Column(String(320), nullable=True)
+    reason = Column(Text, nullable=True)
+    note = Column(Text, nullable=True)
 
 
 class Outlet(Base):

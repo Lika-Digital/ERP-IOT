@@ -2360,8 +2360,9 @@ vessels              id, marina_id, name, registration, owner_name, owner_contac
                      created_at, created_by
 berth_vessels        berth_id, vessel_id, valid_from, valid_to         -- glavno plovilo veza
 vessel_photos        id, vessel_id, berth_id, cabinet_id, sha256, size_bytes, content_type,
-                     reason, uploaded_by, uploaded_at, cabinet_status NULL, cabinet_detail NULL
-                     -- P2 (§6.12): bez path i bytes, slika se ne sprema
+                     reason, no_people_confirmed, uploaded_by, uploaded_at, outcome NULL,
+                     cabinet_status NULL, cabinet_detail NULL
+                     -- P2 (§6.12): bez path i bytes, slika se ne sprema (migracija 015)
 berth_match_config   marina_id, berth_id NULL (nadjačava), mode CHECK (pedestal | erp | both)
 vessel_match_results berth_id, source (cabinet | erp), verdict (match | mismatch | unclear),
                      score, model, observed_at, frame_sha256 NULL      -- bez slike (§1.4)

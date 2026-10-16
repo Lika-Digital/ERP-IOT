@@ -557,6 +557,9 @@ def test_every_growing_table_has_a_window_or_is_named_as_kept():
         # D27 phase 1: one row per vessel, one per change of a berth's vessel. How long a
         # PAST owner's data is kept is open (spec O67) — not decided here
         "vessels", "berth_vessels",
+        # P5: one row per reference photo SENT to a cabinet — the photo itself is never
+        # kept (P2); goes with its vessel (ON DELETE CASCADE)
+        "vessel_photos",
     }
     managed = set(retention.windows()) | {"consumption_intervals"}
     tables = set(Base.metadata.tables)
