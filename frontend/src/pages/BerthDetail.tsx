@@ -154,6 +154,7 @@ function ReferencePhoto({ detail, available, sentence, marinaId, berthId, onDone
   const [file, setFile] = useState<File | null>(null)
   const [reason, setReason] = useState('')
   const [noPeople, setNoPeople] = useState(false)
+  const [formKey, setFormKey] = useState(0)   // a new key empties the file input
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null)
   const ref = detail.reference
@@ -180,7 +181,7 @@ function ReferencePhoto({ detail, available, sentence, marinaId, berthId, onDone
     uploadReferencePhoto(marinaId, berthId, file, reason.trim())
       .then((r) => {
         setMessage({ ok: true, text: `Sent to ${detail.cabinet?.display_id} · sha256 ${r.sha256.slice(0, 12)}…` })
-        setFile(null); setReason(''); setNoPeople(false); onDone()
+        setFile(null); setReason(''); setNoPeople(false); setFormKey((k) => k + 1); onDone()
       })
       .catch((e) => setMessage({ ok: false, text: cabinetSentence(e, detailOf(e, 'The photo could not be sent.')) }))
       .finally(() => setBusy(false))
@@ -207,7 +208,7 @@ function ReferencePhoto({ detail, available, sentence, marinaId, berthId, onDone
       {available && (
         <div className="flex flex-col gap-3 max-w-xl" data-upload-form>
           <label><span className="label">Photo (JPEG, PNG or WebP)</span>
-            <input className="input" type="file" accept="image/jpeg,image/png,image/webp"
+            <input key={formKey} className="input" type="file" accept="image/jpeg,image/png,image/webp"
               onChange={(e) => setFile(e.target.files?.[0] ?? null)} /></label>
           <p className="text-xs text-fg-muted">
             Sent to the cabinet as a JPEG of at most 10 MB, with every metadata tag (location, device, time) removed.

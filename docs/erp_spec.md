@@ -3,12 +3,13 @@
 Što se gradi, u kojem redoslijedu, i svaka odluka izrečena tako da ispravak
 košta jedan redak, a ne razgovor.
 
-    Verzija 23 — zamjenjuje v22 od 2026-10-16
+    Verzija 24 — zamjenjuje v23 od 2026-10-16
     Datum 2026-10-16
     Status faze 1–4 ZAVRŠENE i PRIHVAĆENE (§10.1–§10.4); korak 5a (D20), faza 8 (D21) i
            UI · Lika brand PRIHVAĆENI, na `main` (§10.7–§10.9); 5b PAUZIRAN do prihvaćanja
            faze 6 (tvoja odluka 2026-10-15); faza 6 lokalno: **6.0 demo marina ZAVRŠEN**
-           (§10.10) i PRIHVAĆEN; **6a PRIHVAĆEN** (§10.11); **6b prihvaćen** (§10.13) uz nalaz o živim pločama (§6.13); upload reference odlučen (P1, P2);
+           (§10.10) i PRIHVAĆEN; **6a PRIHVAĆEN** (§10.11); **6b ZAVRŠEN** (§10.13, §10.14:
+           P3, P4, upload reference P5) — čeka tvoj pregled;
            §1 je prazan
 
 Čita se uz `docs/inputs/odluke.md` **v2.6** (odluke, obvezujuće — v2.1 dodaje **D18**, v2.2 **D19**,
@@ -18,6 +19,15 @@ v2.3 ispravak mreže u **D13**, v2.4 **D20**, v2.5 **D21**, **D22** i redoslijed
 `docs/inputs/ormar_ui_v2_spec.txt` (specifikacija ormara — uzor forme i izvor rječnika stanja).
 
 **Sve u ovom dokumentu je ODLUČENO. §1 je prazan — tri pitanja iz v15 odlučena su 2026-10-15.**
+
+### Što se promijenilo u verziji 24
+
+| | |
+|---|---|
+| **§10.14** | završni izvještaj 6b: P3, P4, P5 (upload reference) izvedeni; snimke `docs/ui/6b/06–12` |
+| **§6.12 · P5** | odlučen i izveden; na pravim ormarima zapis P1 čeka R26 |
+| **§2.2 / §2.3 / §12 / §1.3** | `berths.push_image_ext` u ugovoru, samo po ormaru uz zapis P1 |
+| **§6.13 · P4**, **§8.4 · P3** | odlučeni i izvedeni |
 
 ### Što se promijenilo u verziji 23
 
@@ -3480,6 +3490,59 @@ VPS-a se preklapaju); 5c odmah nakon 5b ako je domena spremna; 5d 2–3 dana; 5e
 faza 6 lokalno protiv simulatora za vrijeme tog tjedna; faza 7 poslije njega. Prijedlog v9
 „faza 5 se piše dok teče 4.5 c" je bespredmetan — 4.5 je obrisana, a 5a kreće odmah.
 
+### §10.14 · Korak 6b — završni izvještaj (2026-10-16)
+
+**Grana `faza/6-d23-d27`.** Nakon §10.13 napravljeno je ono što je čekalo odluke: P3, P4 i
+korak 5 (upload referentne slike, P5). CI za `c0455a8` (P3 + P4): **zelen**.
+
+| Mjera | §10.13 | Kraj 6b |
+|---|---|---|
+| Backend testova | 595 | **624** (+6 P3, +5 P4, +11 P5, ostalo ugovor/foundations) |
+| Provjera u pregledniku (BOOT-01b) | 16 / 16 | **17 / 17** (nova stavka P4; D20 provjerava i „Server unreachable") |
+| Probe sheme | 53 | **59** (+5 odbijenih, +1 dopuštena za P5) |
+| Rute (zaštićene / ukupno) | 56 / 69 | **59 / 72** (+`control/cabinets`, +zapis P1, +upload) |
+| Migracije | 014 | **015** |
+| Ugovor: ključeva / „nikad" | 30 / 13 | **31 / 12** (`berths.push_image_ext` po ormaru uz zapis P1) |
+
+**Snimke** (`docs/ui/6b/`, pravi ERP, kolektor i agent protiv simulatora demo marine na 18090,
+pravi bundle, Chromium; 0 grešaka u konzoli, 0 vodoravnog pomaka):
+- `06-pedestal-control.png` — **nakon P4**: odabir ormara iz ERP-a („SIM_A_02 · SIM · Online"),
+  sesije i živa ploča tog ormara imenovani `SIM_A_02`; „Ormar 1" nema nigdje na stranici; Stop
+  postoji jer je ormar Online i Smart Mode ON.
+- `07-pedestal-control-offline.png` — odabran tihi `SIM_E_03`: **nula** upravljačkih gumba i
+  rečenica „The cabinet is offline. No commands until it is back."
+- `08-upload-form.png` — detalj veza B-07 (`SIM_B_04`, zapis P1 upisan): datoteka s EXIF-om
+  (Make „SecretCam" + GPS), razlog, kvačica „No person can be recognised".
+- `09-upload-sent.png` — poslano: „Sent to SIM_B_04 · sha256 b608d52940b1…", popis poslanih po
+  `sha256`. Simulator je primio **jednu** sliku, 7803 B, istog `sha256`, **bez** „SecretCam".
+- `10-upload-not-recorded.png` — vez ormara bez zapisa P1: rečenica, **nema obrasca**.
+- `11-mobile-pedestal-control.png`, `12-mobile-upload.png` — isto na 360 px.
+
+**Napravljeno:**
+1. **P3** (§8.4): na PostgreSQL-u bez `create_all`; start samo na `head`, inače poruka s
+   naredbom; `/setup` „Server unreachable" kad backend ne odgovara.
+2. **P4** (§6.13): Pedestal control po ormaru iz ERP-a (`?cabinet=`), naziv uvijek `display_id`,
+   gumbi samo za `controllable`; u demo marini naredba pravom ormaru → 409
+   `demo_marina_real_cabinet` prije poziva, upis u `command_audit` (test broji nula poziva).
+3. **P5** (§6.12): migracija 015; zapis P1 po ormaru (Admin, razlog; pravi ormar → 409 dok ne
+   stigne R26; 403/503 ormara ga gasi s bilješkom); upload: EXIF i svi metapodaci van, JPEG
+   ≤ 10 MB, `sha256` nad poslanim bajtovima, `command_audit` prije, `vessel_photos` poslije —
+   slika se ne sprema; simulator s rutom ormara.
+
+**Nađeno usput:**
+- Simulator iz faze 2 imao je krivu putanju za upload (`…/image` umjesto `…/reference-image`
+  iz `e80a4c1`); ispravljeno.
+- Svi demo ormari imaju `pedestal_pk` 1, pa je naredba po `pedestal_id` mogla otići prvom
+  ormaru marine; od P4 naredba nosi ERP-ov `cabinet`, a kriva kombinacija daje 422.
+- Webhook očitanja nose samo `pedestal_id`; u marini gdje ga dijeli više ormara živa ploča ih
+  ne prikazuje (zato „—" za temperaturu i snagu na snimci 06). Pravo rješenje je webhook po
+  ormaru (`webhook_key`), dio 5d.
+- Broj „Reference photos" na detalju veza raste tek kad kolektor ponovno pročita `berths.list`.
+- `vessel_photos` je u testu retencije označen kao trajan (jedan redak po poslanoj slici, bez
+  slike; briše se s plovilom). Ako želiš rok, to je jedan redak u `retention.windows()`.
+- **Nije u ovom koraku:** posao retencije za O67 (odlučeno u v23) — nije bio u redoslijedu;
+  sljedeći je kandidat.
+
 ### §10.13 · Korak 6b — izvještaj (2026-10-16)
 
 **Grana `faza/6-d23-d27`.** Snimke `docs/ui/6b/`: `01-dashboard-light.png` (vez s alarmom
@@ -3513,6 +3576,7 @@ Pravi ERP, pravi kolektor i agent protiv simulatora demo marine; sat svijeta pos
 8. **Webhook:** nazivi ormara; nepoznat oblik 422 i `sync_log` po obliku, ne po sadržaju.
 
 **Nije napravljeno:** korak **5 — upload referentne slike** čeka tvoju odluku o P1 i P2 (§6.12).
+*(Napravljen nakon odluka — §10.14.)*
 
 **Nađeno usput:**
 - Na stroju je radio demo simulator na 18080 (`scripts/demo.py start`, 10:06) koji nisam ja
