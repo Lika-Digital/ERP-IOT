@@ -3,15 +3,15 @@
 Što se gradi, u kojem redoslijedu, i svaka odluka izrečena tako da ispravak
 košta jedan redak, a ne razgovor.
 
-    Verzija 27 — zamjenjuje v26 od 2026-10-16
+    Verzija 28 — zamjenjuje v27 od 2026-10-16
     Datum 2026-10-16
     Status faze 1–4 ZAVRŠENE i PRIHVAĆENE (§10.1–§10.4); korak 5a (D20), faza 8 (D21) i
            UI · Lika brand PRIHVAĆENI, na `main` (§10.7–§10.9); **faza 6 ZATVORENA na 6b**
            (6.0, 6a, 6b PRIHVAĆENI, §10.10–§10.14; 6c–6e odgođeni); **sljedeće: put do
            prvog čitanja s pravog ormara (§10.15)** — 5b VPS, pa 5d samo čitanje;
-           **v26–v27: prijedlog v3 — četiri modula, višemarinski model i D32 live
-           prikaz (§14, §10.16) ČEKA ODOBRENJE**; §1 ima 26 otvorenih pitanja
-           (§1.5–§1.30)
+           **v26–v28: prijedlog v3 — četiri modula, višemarinski model i D32 live
+           prikaz (§14, §10.16) ČEKA ODOBRENJE**; §1 ima 24 otvorena pitanja
+           (§1.5–§1.25, §1.29–§1.31)
 
 Čita se uz `docs/inputs/odluke.md` **v2.6** (odluke, obvezujuće — v2.1 dodaje **D18**, v2.2 **D19**,
 v2.3 ispravak mreže u **D13**, v2.4 **D20**, v2.5 **D21**, **D22** i redoslijed 5a–5e, v2.6 **D23–D28**),
@@ -20,9 +20,24 @@ v2.3 ispravak mreže u **D13**, v2.4 **D20**, v2.5 **D21**, **D22** i redoslijed
 `docs/inputs/moduli_v3_ulaz.md` (ulaz za v3: četiri modula i višemarinski model, 2026-10-16) i
 `docs/inputs/ormar_ui_v2_spec.txt` (specifikacija ormara — uzor forme i izvor rječnika stanja).
 
-**Sve u ovom dokumentu je ODLUČENO, osim §14 i §10.16 (prijedlog v3, v26–v27) i pitanja §1.5–§1.30.**
-D32 (live prikaz) je tvoja odluka; prijedlog su njegova pravila (§14.8).
+**Sve u ovom dokumentu je ODLUČENO, osim §14 i §10.16 (prijedlog v3, v26–v28) i otvorenih pitanja u §1.**
+D32 (live prikaz) i njegov put slike su tvoja odluka (§14.8.2); prava gledanja su §1.25.
 Tri pitanja iz v15 odlučena su 2026-10-15.
+
+### Što se promijenilo u verziji 28
+
+Tvoje odluke o D32 (2026-10-16): put slike, kašnjenje, ERP kao jedini potrošač i tvoj prijedlog
+prava.
+
+| | |
+|---|---|
+| **§14.8 · prepisan** | put: ERP kao `api_client` zove `camera.live_start/keepalive/stop/status`; lista i segmenti s tokenom; **ERP povlači svaki segment jednom** i poslužuje iz međuspremnika u memoriji. **Nema MediaMTX-a ni LL-HLS-a** (v27 povučen). HLS 8–12 s s oznakom „about 10 s delay"; keepalive svakih 10 s dok postoji gledatelj, `live_stop` kad nestane zadnji; dnevnik `camera_views` 12 mj.; rečenica za svaki slučaj bez slike |
+| **§1.25** | tvoj prijedlog prava, ocijenjen s trojkom i dvije dopune (Admin u admin modeu; „plovilo na vezu" = signal PRAVO); §1.26–§1.28 spojeni u njega |
+| **§1.31 · novo** | kupci tek s CRM ugovorom (M2) |
+| **§7.2 R35–R39** | R35 je sada ugovor `camera.live_*` s osam pitanja ormaru; **R39 povučen**: jedna kamera po ormaru, bez rezanja |
+| **Tvoja točka 5** | slika pokazuje sve vezove ormara → pravo kupca je „važeći ugovor za vez koji služi ovaj ormar"; rečenica kupcu na gumbu i na slici (§14.8.3) |
+| **D30 test** | sužava se na analizu i slike (§14.8.1) |
+| **`mobilna_zahtjevi_iz_ERP.md` M16** | „media relay na VPS-u" ne vrijedi; relej je ERP |
 
 ### Što se promijenilo u verziji 27
 
@@ -30,7 +45,7 @@ Tvoja odluka **D32 — live prikaz veza** (ulaz §10, izmjena D30), 2026-10-16. 
 
 | | |
 |---|---|
-| **§14.8 · novo** | ikona kamere na karti (status sa servera), put kamera → ormar :80 → MediaMTX na VPS-u (na zahtjev, LL-HLS, bez transkodiranja i snimanja) → klijent; potpisani URL na 60 s, jednokratan; ograničenja; prava; audit `camera_views`; GDPR preduvjeti (oznaka, maske, DPIA) |
+| **§14.8 · novo** *(put slike povučen u v28)* | ikona kamere na karti (status sa servera), put kamera → ormar :80 → MediaMTX na VPS-u (na zahtjev, LL-HLS, bez transkodiranja i snimanja) → klijent; potpisani URL na 60 s, jednokratan; ograničenja; prava; audit `camera_views`; GDPR preduvjeti (oznaka, maske, DPIA) |
 | **§14.8.2 · nalaz** | na `Cloud_IOT@e80a4c1` `camera.stream_ext` vraća **RTSP adresu kamere** i očekuje izravno spajanje (`ext_pedestal_endpoints.py:459-506`), što je suprotno putu iz D32 → **R35** |
 | **§14.8.5 · opterećenje** | ~17 MB po gledanju od 3 min (768 kbit/s); uplink ormara ovisi o broju kamera, izlaz VPS-a o broju gledatelja; ~40 GB/mj po marini → kvota i zaseban medijski čvor |
 | **§1.25–§1.30** | trajanje, zamagljivanje, kamera kad plovila nema, kamera koja gleda više vezova, identitet kupca u aplikaciji, promet SIM-a |
@@ -556,7 +571,7 @@ sesije, a `session_l` je uvijek `null` (`ext_pedestal_endpoints.py:363`); alarm 
 
 ## §1 Blokirajuće
 
-**v26–v27: otvoreno je 26 pitanja iz v3, §1.5–§1.30** (§1.25–§1.30 su D32). Tri pitanja iz v15 (§1.2–§1.4) odlučena su
+**v26–v28: otvorena su 24 pitanja iz v3** (§1.5–§1.25, §1.29–§1.31; §1.25–§1.31 su D32). Tri pitanja iz v15 (§1.2–§1.4) odlučena su
 2026-10-15; u svakom je prihvaćena preporuka, a tekst ostaje radi razloga.
 
 Sekcija ostaje jer je mjesto kamo ide prva odluka koja mi zatreba. Pravilo iz prompta vrijedi
@@ -683,22 +698,58 @@ samo §1.5–§1.9 i §1.24**; ostala se mogu odlučiti prije faze u kojoj su (s
   D15 je pisan za zaslone ERP-IOT-a, kad CRM nije postojao. Precizira se, ne ukida.
   **Ako griješim:** vidljivost je matrica u jednoj tablici (§14.1.3).
 
-### §1.25–§1.30 · Pitanja iz D32 — live prikaz (§14.8) *(v27 — otvoreno)*
+### §1.25–§1.31 · Pitanja iz D32 — live prikaz (§14.8) *(v28)*
+
+#### §1.25 · Tko gleda koji vez — tvoj prijedlog, s ocjenom *(otvoreno: potvrdi dvije dopune)*
+
+**Tvoj prijedlog (2026-10-16):**
+- **Osoblje** (Owner, Manager, Glavni mornar, Recepcija) gleda sve vezove svoje marine, do 10 min.
+  Ostale uloge ne gledaju.
+- **Kupac** gleda **kameru ormara koji služi njegov vez**, samo uz važeći ugovor za taj vez **i** dok
+  je njegovo plovilo na **njegovu** vezu. Gledanje traje 3 min, zatim ponovni klik. Aktivna sesija nije uvjet.
+- **Članovi organizacije** gledaju kao nositelj, ako ih nositelj ovlasti.
+- **Kupčevo gledanje je isključeno** dok ormar ne isporuči masku (R37) i dok marina ne napravi
+  DPIA. Izreza po vezu nema (točka 5), pa DPIA mora obuhvatiti i to da kupac vidi susjedne vezove. Marina ga uključuje po kameri. Osoblje gleda od prvog dana.
+
+**Tvoja dopuna (točka 5, 2026-10-16):** slika pokazuje **sve vezove ovog ormara**. Postoji jedna
+kamera po ormaru i nema izreza. Zato se pravo kupca formulira kao **„kupac s važećim ugovorom za
+vez koji služi ovaj ormar"**, a ne „kupac veza broj 3". Kupcu se to mora reći rečenicom, da prikaz
+ne izgleda kao slika samo njegova veza (§14.8.5).
+
+**Ocjena: preporučujem prihvatiti, uz dvije dopune.**
+
+1. **Admin** gleda samo u **admin modeu** s razlogom (§14.1.4). Tvoj prijedlog Admina ne
+   spominje, a bez toga bi Lika kao izvršitelj gledala tuđu marinu bez traga.
+2. **„Plovilo na vezu" je signal plovila PRAVO** (D2, `state_code` 1, match s referentnom slikom
+   D30). Provjerava se **pri svakom pokretanju**. Kod NEMA, KRIVO ili NEPOZNATO (ormar OFFLINE ili
+   STALE, Smart Mode OFF, nema reference) kupac dobiva rečenicu umjesto slike. Posljedica: kupac
+   može gledati samo na ormaru na kojem D30 match radi za taj vez. To je strože, ali jedino
+   provjerljivo.
+
+> **Zašto** · Pravilo je uže od mog (mornar ne gleda) i bolje od mog u dvije točke.
+> - **Plovilo na vezu kao uvjet** zatvara slučajeve kad kupac nema razloga gledati: prazan vez
+>   i tuđe plovilo na njegovu vezu. Susjedne vezove svog ormara vidi uvijek (točka 5), i to mu
+>   rečenica kaže prije nego slika krene.
+> - **Uključenje po kameri nakon DPIA i maske** stavlja odluku tamo gdje je odgovornost: marina je
+>   voditelj obrade (D15).
+> - **Bez uvjeta sesije**, jer kupac najviše gleda kad je odsutan.
+> - **3 min za kupca** drži promet i trajanje izloženosti malima. Osoblju ograničenje ormara od
+>   10 min ne smeta.
+>
+> **Ako griješim** · Svaki uvjet je jedna provjera u funkciji prava i jedan ključ rečenice
+> (§14.8.5). Uloge su redak matrice (§14.1.3). Ako je PRAVO prestrogo (match još ne radi
+> pouzdano), blaža granica je „nije KRIVO": prazan vez je dopušten, tuđe plovilo nije. To je tvoja
+> odluka, ne moja.
+
+§1.26 (zamagljivanje), §1.27 (plovilo nije na vezu) i §1.28 (kamera gleda više vezova) iz v27
+**spojeni su u §1.25**. Zamagljivanje u stvarnom vremenu (R38) nije uvjet: kupca drže maska (R37),
+rečenica i DPIA. Izreza po vezu nema, jer postoji jedna kamera po ormaru (točka 5).
 
 | # | Pitanje | Preporuka | Treba za |
 |---|---|---|---|
-| **1.25** | Trajanje jednog gledanja | **3 min**, zatim ponovni klik; bez dnevne granice, ali svako gledanje je u auditu i u kvoti prometa | L1 |
-| **1.26** | Zamagljivanje osoba u stvarnom vremenu na ormaru (R38) | **L1 (osoblje) ne čeka zamagljivanje**: maske privatnosti (R37) + oznaka + svrha. **L2 (kupci) čeka** ili R38 s izmjerenim CPU-om ormara, ili DPIA marine koja izričito prihvaća prijenos bez zamagljivanja uz maske | L2 |
-| **1.27** | Kamera kad plovilo **nije** na vezu (signal plovila NEMA ili nepoznat) | **kupac: ne** („Your vessel is not at the berth"); osoblje: da | L2 |
-| **1.28** | Jedna kamera po ormaru gleda **2–4 veza** (§14.8.2): kupac bi vidio i susjedna plovila | **kupac vidi samo stream izrezan na sektor svog veza** (R39 + sektor R29, rez na ormaru); dok to ne postoji, D32 za kupce je ugašen, osoblje gleda cijeli kadar s maskama | L2 |
-| **1.29** | Kako se kupac prijavljuje u aplikaciji („My Ship live")? Kupci danas nemaju prijavu u ERP (D6: aplikacija je zaseban proizvod) | **kupac nema ERP račun**: aplikacija je strojni klijent ERP-a (ključ po aplikaciji, D20 t. 5) i traži token za `erp_ref` kupca; ERP provjerava ugovor i izdaje isti potpisani URL. Kako se kupac dokazuje aplikaciji, odlučuje aplikacija | L2 |
-| **1.30** | Promet: VPS i SIM ormara (§14.8.5) | **kvota 40 GB/mj po marini** (postavka); Owner vidi potrošnju i procjenu troška SIM-a prije uključivanja; zaseban medijski čvor kod 50 % prometa VPS-a ili 5. marine s D32 | L1 |
-
-**Zašto ovako** · D32 je odlučen, ali kupac koji gleda u marinu je videonadzor koji vodi
-netko treći (D15). Zato su L1 i L2 odvojeni. Osoblje već ima svrhu i pravnu osnovu, a marina je
-voditelj obrade. Kupcu treba izrezan kadar, njegov vez i njegovo plovilo.
-**Ako griješim** · Svaki uvjet je zastavica po marini ili kameri. Kad ormar isporuči R38 i R39,
-L2 se pali bez promjene modela.
+| **1.29** | Kako se kupac prijavljuje u aplikaciji? ERP danas nema nikakvu prijavu kupca, a slika ide „s ERP-ovom autentikacijom" | **kupčev račun u ERP-u**, odvojen od osoblja (zasebna tablica, poziv iz ugovora, lozinka + drugi faktor). Članovi organizacije dobivaju vlastiti račun kad ih nositelj ovlasti. Tako dnevnik zna **koja osoba** je gledala, ne samo koja aplikacija | L2 |
+| **1.30** | Promet VPS-a i SIM-a ormara (§14.8.6) | **kvota po marini** (zadano 40 GB/mj, postavka); Owner vidi potrošnju i procjenu za SIM prije uključivanja; streaming na zaseban čvor kad video prijeđe 50 % prometa VPS-a | L1 |
+| **1.31** | Što je „važeći ugovor za vez" prije CRM-a? Danas veze kupac → vez nema: ugovori za vez ne postoje (M2), a vlasnika u pravoj marini P-5 ne dopušta | **kupci ne gledaju prije M2.** Osoblje gleda od L1 | L2 |
 
 ## §2 Ugovor s ormarom
 
@@ -764,7 +815,7 @@ Dvije obitelji, dva pravila (`ormar_gateway_izvjestaj.md` NALAZ 1.1):
 | `breakers.pedestal_history_ext` | GET | `/api/ext/pedestals/{pedestal_id}/breaker/history` | **PK** | — | dijagnostika |
 | `breakers.marina_alarms_ext` | GET | `/api/ext/marinas/{marina_id}/breaker/alarms` | **PK** | — | isto, po marini |
 | ~~`camera.frame_ext`~~ | — | **uklonjeno v21 (D30)** — ERP ne zove kameru; slika ostaje na ormaru | | | |
-| ~~`camera.stream_ext`~~ | — | **uklonjeno v21 (D30)**; *v27: vraća se tek u obliku R35 (D32, §14.8)* | | | |
+| ~~`camera.stream_ext`~~ | — | **uklonjeno v21 (D30)**; *v28: ostaje uklonjeno; D32 koristi `camera.live_*` (R35, §14.8)* | | | |
 | `usage.history` | GET | `/api/ext/pedestals/{pedestal_id}/usage/history` | PK | — | usklađivanje |
 | `controls.socket_cmd` | POST | `/api/ext/controls/pedestal/{pedestal_id}/socket/{socket_name}/cmd` | PK | **da** | **operaterski put** (D3) |
 | `controls.water_cmd` | POST | `/api/ext/controls/pedestal/{pedestal_id}/water/{valve_name}/cmd` | PK | **da** | operaterski put, voda |
@@ -2700,7 +2751,8 @@ adresi simulatora; scenarij s pravim id-em ne radi ništa; simulator ne otvara i
 >   Što ormar još ne izlaže (R27–R30) ERP prikazuje kao **„Not available on this cabinet"** i ne
 >   gradi ga ni u ERP-u ni u simulatoru dok ormar ne potvrdi oblik ugovora.
 > - **ERP ne zove nijedan kamerni endpoint** (`snapshot`, `frame_ext`, `stream`, `stream_ext`).
->   *(v27: iznimka D32 — samo R35/R36 i samo iz modula live prikaza, §14.8.1.)*
+>   *(v28: iznimka D32 — samo `camera.live_*` i samo iz modula live prikaza; test D30 se sužava
+>   na analizu i slike, §14.8.1.)*
 >   Test: ugovor ERP-a nema nijedan ključ `camera.*`, nijedna ruta ERP-a i nijedan dio frontenda
 >   ne vode do kamere.
 >
@@ -3014,11 +3066,10 @@ na dan čitanja i služi prioritizaciji — **ugovorna provjera je TC-ERP-LIVE-0
 | **R32** *(v26, D31)* | **Store-and-forward:** kad veza s ERP-om padne, ormar čuva događaje i očitanja (sesije, alarmi, registri brojila) i šalje ih **redom** kad se veza vrati. Čuva najmanje 7 dana, a najstarije briše tek kad je prostor pun i tada to javlja alarmom. Svaki zapis nosi `event_id` (R22) i vrijeme mjerenja, ne vrijeme slanja | prijedlog v3 (ulaz §9.4) | **ne** | ništa danas: pull (D7) ionako čita stanje registra pa prekid ne gubi kWh. Bez R32 gubi se samo **kada** je unutar prekida nešto počelo ili stalo |
 | **R33** *(v26, D31)* | **`event_id` jedinstven po ormaru i redni broj (`seq`) koji raste** u svakom događaju (webhook, MQTT, odgođeni zapisi R32) | proširuje R22 | **ne** | red čekanja (§14.7) preskače duplikat po `event_id`; `seq` otkriva rupu i pokreće pull |
 | **R34** *(v26, D31, kad ormar dobije MQTT prema van)* | **MQTT klijent prema ERP-ovom brokeru:** TLS, korisnik i lozinka **po ormaru** (ili certifikat), objavljuje samo pod `marina/<marina>/cabinet/<display_id>/…`, QoS 1, poruke u obliku R22. Ormar ne prima naredbe preko MQTT-a od ERP-a | prijedlog v3 (ulaz §9.3, korak 2) | **ne** | korak 2 iz §14.7.3; do tada pull |
-| **R35** *(v27, D32)* | **Live stream preko ormara, ne izravno s kamere:** `camera.stream_ext` u novom obliku vraća **relativni put na ormaru** (npr. `/api/ext/pedestals/{id}/cameras/{camera_id}/live/…`) koji ormar poslužuje **sam na :80**, iza ext ključa (`api_client`), kao RTSP-over-HTTP ili HLS. Stream se pokreće **samo dok ga ERP traži** i staje kad ga nitko ne čita. Šalje se **niska kvaliteta** (pod-stream kamere, H.264, ≤ 720p, ≤ 15 fps, ≤ 768 kbit/s), bez ponovnog kodiranja ako kamera ima pod-stream. **Adresa kamere i njezini podaci za prijavu nikad ne izlaze s ormara** | `e80a4c1:…/routers/ext_pedestal_endpoints.py:459-506` (vraća `stream_url` kamere, „ERP client connects directly") | **ne** | D32 u cijelosti (§14.8) |
-| **R36** *(v27, D32)* | **Status kamere bez adrese:** `GET /api/ext/pedestals/{id}/cameras` → `[{camera_id, reachable, last_checked, privacy_mask: bool, live_enabled: bool}]`, **monitor** | danas `reachable` postoji samo u odgovoru koji nosi adresu (`:500-505`) | **ne** | ikona na karti (§14.8.6) |
-| **R37** *(v27, D32)* | **Maske privatnosti po kameri**, postavljene na kameri ili ormaru, primijenjene **prije** slanja; ormar javlja `privacy_mask: true` tek kad je maska postavljena | nema u katalogu (`api_catalog.py`, `e80a4c1`) | **ne** | D32 za kupce (§1.26, §1.28) |
-| **R38** *(v27, D32)* | **Zamagljivanje osoba u stvarnom vremenu** na pod-streamu, na ormaru, ako je izvedivo. **Ormar mjeri i javlja CPU** na NUC-u uz postojeći YOLO (`yolo_openvino.py`) i guard | — | **ne** | L2 prema §1.26 |
-| **R39** *(v27, D32)* | **Kamera → vezovi:** koja kamera gleda koje vezove (i sektor po vezu, R29), i **više kamera po ormaru** (danas jedna `camera_stream_url` po pedestalu); po mogućnosti stream izrezan na sektor veza | `PedestalConfig.camera_stream_url` | **ne** | ikona po vezu; kupac vidi samo svoj vez (§1.28) |
+| **R35** *(v28, D32)* | **Ugovor `camera.live_*`** — `camera.live_start`, `camera.live_keepalive`, `camera.live_stop`, `camera.live_status` na `/api/ext/*`, token `api_client`; lista i segmenti traže isti token. **ERP treba potvrdu ovih osam stvari:** (1) putanje, metode, tijela; monitor ili bidirectional; traži li išta Smart Mode ON · (2) `live_start` vraća **relativnu** putanju liste; je li ponovni `start` na kameri koja radi idempotentan · (3) **stabilni ključevi stanja** u `live_status` (npr. `starting`, `live`, `stopped_idle`, `stopped_limit`, `camera_unreachable`, `not_enabled`) · (4) smije li se nakon granice od 10 min odmah ponovno pokrenuti; koliko kamera po ormaru smije raditi istodobno · (5) trajanje segmenta, dužina liste, kodek, rezolucija, bitrate · (6) potvrda da je **jedna kamera po ormaru** i da slika pokazuje sve njegove vezove (točka 5) · (7) jesu li maske primijenjene prije nego slika dođe do ERP-a (R37) · (8) oblik grešaka 409/429/503 kao na ostalim ext rutama | na `Cloud_IOT` `origin/main` `5ec542e` (2026-10-16) **ne postoji**; katalog odbija sve kamerne rute (`api_catalog.py`, `PHASE1_NO_IMAGES_TO_ERP = True`) | **ne** | D32 u cijelosti (§14.8) |
+| **R37** *(v27, D32)* | **Maske privatnosti po kameri**, primijenjene **prije** slanja; ormar javlja da je maska postavljena (npr. u `live_status`) | nema u katalogu | **ne** | uključenje za kupce (§1.25) |
+| **R38** *(v27, D32; više nije uvjet)* | Zamagljivanje osoba u stvarnom vremenu, ako je izvedivo, uz izmjeren CPU NUC-a | — | **ne** | ništa (§1.25) |
+| ~~R39~~ *(v27 → povučen u v28)* | ~~Kamera → vezovi, izrez po vezu~~ — **jedna kamera po ormaru, bez rezanja** (tvoja točka 5, 2026-10-16); vezovi kamere = vezovi ormara, koje ERP već zna | — | — | ništa |
 | **R6** | *(bespredmetno dok Krk ne dobije zastavicu)* operaterski put bez `nfc_tag_id` | `a709cf8:…/config.py:194`; **`nfc_cross_check_required` ne postoji na Krku** | **ne postoji** | ništa — §1.1 je odlučen kao (a), pa R6 nije potreban |
 
 #### R27–R30 · predloženi ugovor prema ormaru (v21, D30)
@@ -3200,8 +3251,8 @@ ormara; stvarna brojka se mjeri u §10.5 c):
 
 > **Odlučeno** · **Video kamere nikad ne prolazi kroz ERP.** `camera.stream_ext` vraća samo
 > RTSP adresu (kao danas); ERP ne proxyja stream.
-> *(v27: **D32 ovo mijenja** za live prikaz veza: video prolazi kroz relej na VPS-u, uz kvotu
-> prometa i ograničenja, §14.8.3 i §14.8.5. Prijedlog čeka odobrenje.)*
+> *(v28: **D32 ovo mijenja** za live prikaz veza: video prolazi kroz ERP, koji svaki segment
+> povlači jednom i poslužuje iz međuspremnika, uz kvotu prometa, §14.8.2 i §14.8.6.)*
 >
 > **Zašto** · Stream od 1–2 Mbps je 0,5–0,9 GB na sat gledanja; kroz VPS bi deset dana
 > stalnog gledanja potrošilo cijeli mjesečni promet. To je jedini izvor koji može probiti
@@ -3635,8 +3686,8 @@ prioritet. Faze 7–10 ostaju kako su; M2 i faza 7 dijele `customers` i katalog,
 | **M5** | **Finance II i eRačun** (§14.5.4–5): eRačun prema posredniku (adapter + simulator posrednika), ulazni računi, izvještavanje o naplati, arhiva; upravljačka knjiga, uvoz plaća, poslovni plan i projekcija | **račun prošao kroz testnu okolinu posrednika** i vratio status; projekcija do 31.12. iz plana i ugovora | 5–6 tjedana (ovisi o posredniku) |
 | **M6** | **Dodatne usluge** (§14.3.5): sobe s cjenikom A/B/C i boravišnom pristojbom (§1.18), najam plovila, parking, ugostiteljstvo kao stavka, provedba prava pristupa u Safety & Security (D25, uz 6d) | soba od rezervacije do računa; pravo pristupa iz ugovora vidljivo u S&S | 4 tjedna |
 
-| **L1** | **D32 za osoblje** (§14.8): relej MediaMTX kao servis, potpisani URL i auth hook, ikona na karti, ograničenja i kvota, `camera_views`, sintetički stream u simulatoru; uključenje po marini tek uz oznaku, svrhu i maske (R37). **Nakon §10.15 i 5c, kad ormar isporuči R35 i R36** — neovisno o M-fazama | gledanje s VPS-a na **pravom ormaru**: jedan dolazni stream za 3 gledatelja (izmjereno), prekid nakon T, nijedna datoteka na disku, svaki pogled u auditu | 2 tjedna |
-| **L2** | **D32 za kupce** (aplikacija, §1.29): token za `erp_ref`, ugovor danas, plovilo na vezu (§1.27), izrezan kadar (§1.28) | kupac vidi samo svoj vez; svaka odbijenica ima razlog; DPIA marine zapisana | 2 tjedna, **nakon M2** (ugovori) i R37–R39 |
+| **L1** | **D32 za osoblje** (§14.8): `camera.live_*` u klijentu, brojač gledatelja i keepalive, međuspremnik segmenata i prepisivanje liste, token gledanja, ikona na karti, rečenice §14.8.5, `camera_views`, kvota, sintetički HLS u simulatoru, test D30 sužen. **Nakon §10.15 i 5c, kad ormar isporuči R35** — neovisno o M-fazama | na **pravom ormaru**: 3 gledatelja = **jedan dohvat po segmentu** (izmjereno na ormaru i na ERP-u), `live_stop` ≤ 15 s nakon zadnjeg gledatelja, ništa na disku, svako gledanje u dnevniku | 2 tjedna |
+| **L2** | **D32 za kupce** (§1.25, §1.29, §1.31): kupčeva prijava, pravo iz ugovora, plovilo na vezu, 3 min, članovi organizacije, uključenje po kameri s DPIA | kupac vidi samo svoj vez; svaka odbijenica ima rečenicu; nijedna adresa ormara u odgovorima aplikaciji (test) | 2 tjedna, **nakon M2** i R37 |
 
 **Procjena** je u radnim tjednima uz današnji ritam: Code gradi, ti pregledavaš svaku fazu. Nije
 mjerena. Koraci 6.0–6b izvedeni su u dva dana (2026-10-15 i 16) uz isti ritam, ali M-faze imaju više novog
@@ -4326,8 +4377,9 @@ Nađeno usput. Nije u izvedbi gore; tvoje je da odlučiš prioritet.
   stavka računa (§14.3.5).
 - *(v26)* **Ne uvodim Kafku** i **ne dijelim bazu po marini** bez mjerenja i tvoje odluke
   (§14.7, §1.5).
-- *(v27, D32)* **Ne snimam live prijenos** ni na VPS-u ni u releju, **ne transkodiram** na VPS-u
-  i **ne dajem klijentu adresu ormara ni kamere** (§14.8).
+- *(v28, D32)* **Ne snimam live prijenos** (međuspremnik je samo u memoriji), **ne transkodiram**
+  i **ne dajem klijentu adresu ormara ni kamere** (§14.8). **Ne gradim niže kašnjenje od HLS-a**
+  bez tvoje odluke.
 - *(v26)* **Ne pratim zaposlenike skriveno.** KPI po osobi su vidljivi osobi, sa svrhom na
   zaslonu (§1.19).
 
@@ -4762,7 +4814,7 @@ user_marina_access         -- postojeća (models/user.py:57); postaje članstvo
 | Finance: izvješća, KPI | ✓ ² | ✓ | č ⁴ | — | — | — | — | — | — | ✓ |
 | Finance: plaće (uvezene), po osobi | — | ✓ | — ⁴ | — | — | — | — | — | — | ✓ |
 | Računi, uplate, eRačun | ✓ ² | ✓ | č | ✓ uplate | — | — | — | — | — | ✓ |
-| Live camera (D32, §14.8) | ✓ ² | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — | — | — |
+| Live camera (D32, §1.25) | ✓ ² | ✓ | ✓ | ✓ | ✓ | — | — | — | — | — |
 | Korisnici marine | ✓ | ✓ | — | — | — | — | — | — | — | — |
 | Predlošci, brand, numeracija, uvoz | ✓ | ✓ | — | — | — | — | — | — | — | č |
 
@@ -5345,8 +5397,8 @@ Tri zaključka, svaki s brojkom:
 ljudskim tempom. Rizik je u tome da ih kolektor uspori, ne u njihovu broju. Danas kolektor radi u
 **vlastitoj niti** istog procesa (`collector.py`, `CollectorThread`), pa API dijeli GIL s njim.
 
-**Video (D32) je zaseban teret** i ne ide kroz red ni kroz bazu: relej, promet po gledatelju i
-veza ormara su u **§14.8.5**. Ondje je i zaseban medijski čvor kao prvo odvajanje od VPS-a.
+**Video (D32) je zaseban teret** i ne ide kroz red ni kroz bazu: promet po gledatelju i veza
+ormara su u **§14.8.6**. Ondje je i zaseban čvor za streaming kao prvo odvajanje od VPS-a.
 
 #### §14.7.3 · Načelo i koraci
 
@@ -5399,167 +5451,145 @@ za osoblje.
 
 ### §14.8 · D32 — live prikaz veza (kamera), izmjena D30 — ODLUKA VLASNIKA 2026-10-16
 
-Ulaz §10. **Odluka je tvoja i ne ulazi u §1:**
-- na 2D karti uz vez i ormar stoji **ikona kamere**;
-- klik na nju otvara **živi prijenos** u ERP-u;
-- ista funkcija postoji u aplikaciji za kupce („My Ship live");
+Ulaz §10 i tvoje odluke od 2026-10-16. **Odlučeno je, i ne mijenja se:**
+- **ikona kamere** na 2D karti otvara živi prijenos;
+- isto postoji u aplikaciji za kupce („My Ship live");
 - ništa se ne snima ni ne sprema;
-- **D30 ostaje za analizu**: referentne slike, match, zauzeće i sektor.
+- **D30 ostaje za analizu**: referentne slike, match, zauzeće i sektor;
+- **put slike**, kašnjenje i jedan stream po kameri (§14.8.2).
 
-Pravila niže su **prijedlog** (ulaz §10.3). Ono što traži tvoju odluku je u §1.25–§1.30.
+**Prava gledanja** su tvoj prijedlog, ocijenjen u **§1.25**. Otvoreno ostaje §1.29–§1.31.
 
 #### §14.8.1 · Što se mijenja u postojećim odlukama
 
-| Gdje | Danas | Uz D32 (prijedlog) |
+| Gdje | Danas | Uz D32 |
 |---|---|---|
-| D30 (§6.12), test „ERP ne zove nijedan kamerni endpoint" | ERP ne zove `snapshot`, `frame_ext`, `stream`, `stream_ext` | ERP zove **samo `camera.stream_ext` u novom obliku (R35) i status kamere (R36)**, i samo za D32. `frame_ext`, `snapshot` i `stream` ostaju zabranjeni. Test se mijenja u **„jedini kamerni poziv je R35/R36, i samo iz modula D32"** |
-| §8.2, „**Video kamere nikad ne prolazi kroz ERP**" | odlučeno, zbog prometa VPS-a | **ukida se za D32**, uz ograničenja i kvotu prometa (§14.8.5). Razlog iz §8.2 i dalje vrijedi, pa kvota nije opcija nego dio izvedbe |
-| §2.2 i §2.3 | `camera.stream_ext` uklonjen iz ugovora (v21) | vraća se **tek u obliku R35**. Današnji oblik (RTSP adresa kamere) ERP i dalje **ne uključuje** |
-| D15 (videonadzor) | ERP prima događaje, ne stream (§6.8) | živi stream je **videonadzor**: oznaka, svrha, pravna osnova, maske, bez snimanja (§14.8.4) |
+| D30 (§6.12), `tests/test_d30.py` (četiri testa) | ERP ne zove nijedan kamerni endpoint | test se **sužava na analizu i slike**. ERP i dalje ne zove `snapshot`, `frame_ext`, `stream` ni `stream_ext`. Jedini dopušteni kamerni pozivi su `camera.live_*`, i samo iz modula D32. Mijenja se jednim pregledanim commitom, kao ormarov `PHASE1_NO_IMAGES_TO_ERP` |
+| §8.2, „Video kamere nikad ne prolazi kroz ERP" | odlučeno, zbog prometa | **ukida se za D32**. Kvota prometa (§14.8.6) zato je dio izvedbe, ne opcija |
+| §2.2 i §2.3 | `camera.frame_ext` i `camera.stream_ext` uklonjeni (v21) | ostaju uklonjeni. Ulaze **`camera.live_start`, `camera.live_keepalive`, `camera.live_stop`, `camera.live_status`** (§7.2 R35) |
+| D15 (videonadzor) | ERP prima događaje, ne stream (§6.8) | živi stream je videonadzor: oznaka, svrha, maske, DPIA za kupce, bez snimanja (§14.8.4) |
+| `mobilna_zahtjevi_iz_ERP.md` M16 | „media relay na VPS-u" | **ne vrijedi:** relej je sam ERP (§14.8.2). Aplikacija ne dobiva nikakav vanjski link kamere |
 
-#### §14.8.2 · Nalaz iz koda ormara — današnji `stream_ext` ne odgovara D32
-
-Na `Cloud_IOT@e80a4c1` (`main`) ruta je
-`backend/app/routers/ext_pedestal_endpoints.py:459-506`. Vraća
-`{pedestal_id, stream_url, reachable, last_checked}`, gdje je `stream_url` **adresa kamere**
-(`PedestalConfig.camera_stream_url`), uz napomenu „Does not proxy the stream — ERP client
-connects directly" (`:462-463`).
-
-To ne odgovara D32 iz četiri razloga:
-1. ERP do kamere ne može doći. ACL dopušta samo `tag:erp → tag:cabinet:80` (§10.15), a kamera je
-   iza ormara.
-2. Adresa kamere izašla bi do klijenta, a ulaz §10.3 to zabranjuje.
-3. RTSP adresa kamere često nosi korisnika i lozinku kamere.
-4. Postoji **jedna kamera po ormaru** (`camera_stream_url` po pedestalu), a ormar služi 2–4 veza.
-
-**Zato je put iz D32 zahtjev prema ormaru R35, a ne nešto što ERP može sam.**
-
-#### §14.8.3 · Put i medijski sloj
+#### §14.8.2 · Put slike (odlučeno)
 
 ```
-kamera ──RTSP (LAN ormara)──▶ ORMAR: relej na :80, iza ext ključa (R35)
-                                 │  samo dok ga ERP traži; H.264, niski profil
-                                 ▼  Tailscale (tag:erp → tag:cabinet:80)
-VPS: media relay (MediaMTX), na zahtjev ─── jedan dolazni stream po kameri ───┐
-      │  provjera tokena na svakom gledatelju (HTTP auth hook → ERP API)       │
-      ▼  LL-HLS preko nginxa (i Cloudflare tunela, 5c)                         │
-preglednik / aplikacija  ◀── kratkotrajni potpisani URL iz ERP API-ja ────────┘
+kamera ─▶ ORMAR (:80, /api/ext/*, token api_client) ─── Tailscale ───▶ ERP (VPS)
+          live_start / live_keepalive / live_stop / live_status         │ jedan dohvat po segmentu,
+          lista (.m3u8) i segmenti traže token                          │ međuspremnik zadnjih 3,
+                                                                        │ lista prepisana na ERP-ove putanje
+                                                     nginx (+ 5c tunel) ▼
+                                    preglednik / aplikacija ◀── ERP-ova prijava + token gledanja
 ```
 
-> **Prijedlog** · Relej je **MediaMTX** na VPS-u, kao zaseban systemd servis i zaseban
-> korisnik. Sluša samo na `127.0.0.1`, a vani je iza nginxa. Izvor se **povlači na zahtjev**
-> (`sourceOnDemand`) i **zatvara 10 s nakon zadnjeg gledatelja**. Prema gledatelju ide
-> **LL-HLS** (2–4 s kašnjenja). **Bez transkodiranja** na VPS-u: ormar šalje već nisku kvalitetu.
->
-> **Zašto** · Jedan dolazni stream po kameri, koliko god gledatelja bilo: veza ormara (često LTE)
-> nosi jednog, ne N. HLS je obični HTTP i prolazi kroz nginx i Cloudflare tunel (5c) bez
-> ijednog novog otvorenog porta. WebRTC treba UDP ili TURN, a to je novi otvoreni put (D13).
-> Transkodiranje bi bilo jedini skupi CPU na VPS-u (§14.7.2).
->
-> **Ako griješim** · WebRTC (manje kašnjenje) je druga izlazna strana istog MediaMTX-a i jedan
-> TURN servis, kad zatreba. Relej je zamjenjiv, jer ERP s njim govori samo kroz auth hook i URL.
+- **ERP je jedini potrošač** slike s ormara. Prijavljuje se kao `api_client` i koristi isti
+  servisni token kao za sve ostalo (`cabinet/client.py`, rok iz JWT-a, jedna ponovna prijava na
+  401).
+- **Jedan stream s ormara, koliko god ljudi gledalo.** ERP sam povlači listu i **svaki segment
+  jednom**, pa ga drži u međuspremniku. Međuspremnik je u memoriji API procesa, sadrži zadnja 3
+  segmenta po kameri (~1–2 MB) i nikad ne ide na disk. Svi gledatelji dobivaju istu kopiju.
+  Lista se prepisuje: svaki URI postaje ERP-ova putanja
+  `/api/live/{view_token}/seg/{n}.ts`, pa **nijedna adresa ormara ne dolazi do klijenta**.
+- **Brojanje gledatelja i keepalive.** Gledatelj je živ dok dohvaća listu, ili najdulje 15 s
+  nakon zadnjeg dohvata. Dok je barem jedan živ, ERP šalje `camera.live_keepalive` svakih 10 s,
+  ispod ormarovih 30 s. Kad nestane zadnji, ERP šalje `camera.live_stop`. Ormar sam gasi nakon
+  30 s bez keepalivea i nakon 10 min. ERP to zna iz `live_status` i ne pokušava produljiti.
+- **Kašnjenje: HLS, 8–12 s do mobitela** (tvoja odluka). Za namjenu „je li mi brod u redu" to
+  je dovoljno. Uz sliku stoji **„Live · about 10 s delay"**, a upravljanje utičnicom ili vratima
+  **nikad se ne potvrđuje slikom**, nego stanjem s ormara. Niže kašnjenje se ne gradi bez tvoje
+  odluke.
+- **Token gledanja** izdaje ERP nakon provjere prava (§1.25). Vezan je uz gledatelja, kameru i
+  vrijeme, vrijedi najdulje koliko i gledanje i koristi se samo kroz ERP.
+- **Jedan proces drži stream:** brojač i međuspremnik su u API procesu (uvicorn, 1 worker,
+  `deploy/erp-iot.service`). Kad bude više API čvorova (§14.7.4), kamera se veže na jedan čvor.
 
-**Tok gledanja:**
-1. Klik na ikonu.
-2. `POST /api/marinas/{id}/cameras/{camera_id}/view` provjerava pravo (§14.8.4), kvotu i status.
-3. ERP vraća **potpisani URL**: HMAC nad `{user, camera, view_id, exp}`. Za početak vrijedi
-   **60 s**, a gledanje traje najdulje **T** (§1.25).
-4. Relej pri spajanju pita ERP (auth hook), a ERP svaki token prihvaća **jednom**.
-5. Nakon T relej prekida gledatelja. Ponovni klik je novo gledanje i novi audit.
+#### §14.8.3 · Prava gledanja — prema §1.25
 
-URL ne nosi ni adresu ormara ni adresu kamere. U klijentu ne postoji nijedna trajna adresa
-(ulaz §10.3).
-
-**Ograničenja (zadano; postavka marine, s gornjom granicom platforme):**
-- najviše **3 gledatelja po kameri** istodobno, a četvrti dobiva „Camera busy — try again
-  shortly";
-- najviše **20 istodobnih streamova po marini**;
-- trajanje **T = 3 min** (§1.25);
-- bitrate s ormara **≤ 768 kbit/s, ≤ 720p, ≤ 15 fps** (R35);
-- **bez snimanja**: MediaMTX `record: no`, a test provjerava konfiguraciju i da na disku nema
-  datoteka.
-
-#### §14.8.4 · Prava, audit, GDPR
-
-| Tko | Smije gledati | Uvjet |
+| Tko | Što | Koliko |
 |---|---|---|
-| **Kupac** (aplikacija, „My Ship live") | samo kameru **svog** veza | važeći ugovor na tom mjestu **danas** (§14.3); dodatni uvjeti u §1.27–§1.29 |
-| Admin | sve kamere marine | **admin mode** (§14.1.4) i razlog |
-| Owner, Manager, Recepcija, Gl. mornar, Mornar, Vod. servisa | kamere svoje marine | matrica §14.1.3 (novi redak „Live camera") |
-| Serviser, Čišćenje, Računovodstvo | — | nemaju operativnu potrebu |
+| **Owner, Manager, Glavni mornar, Recepcija** | svi vezovi svoje marine, **od prvog dana** | do 10 min (granica ormara), zatim ponovni klik |
+| Admin | svi vezovi marine, samo u **admin modeu** s razlogom (§14.1.4) | kao osoblje |
+| ostale uloge | — | — |
+| **Kupac** | **kameru ormara koji služi njegov vez** (slika pokazuje sve vezove tog ormara), uz **važeći ugovor za svoj vez** i **dok je njegovo plovilo na njegovu vezu**. Aktivna sesija nije uvjet | **3 min**, zatim ponovni klik |
+| član organizacije kupca | kao nositelj, **ako ga nositelj ovlasti** (`customer_members.can_access`, §14.3.1) | kao kupac |
 
-**Audit svakog gledanja:** `camera_views(marina_id, camera_id, berth_id, viewer_kind
-('user'|'customer'), viewer_id, started_at, ended_at, end_reason, bytes_out)`, s RLS-om. Zapis
-nastaje pri izdavanju tokena, a završava ga relej. Owner vidi popis. Gledanje kupca vidi i kupac
-(„tko je gledao moj vez" nije u opsegu). Retencija je 12 mjeseci, kao dokaz pristupa
-videonadzoru (D15: evidencija pristupa).
+**Kupčevo gledanje je ISKLJUČENO** dok ormar ne isporuči masku (R37) i dok marina ne napravi DPIA.
+DPIA obuhvaća i to da kupac vidi susjedne vezove svog ormara, jer izreza nema. **Marina ga uključuje po kameri**, a uključenje bilježi autora, vrijeme i
+oznaku DPIA dokumenta. Osoblje gleda od prvog dana.
 
-**GDPR (D15) — preduvjeti, ne opcije:**
-1. **Oznaka videonadzora** na ulazu u marinu. To je obveza marine, a ERP ne pali D32 za marinu
-   dok Owner ne potvrdi oznaku i ne upiše svrhu i pravnu osnovu (postavka, s auditom).
-2. **Maske privatnosti na kameri (R37):** vidi se samo vez ili vezovi, a ne gat, susjedni
-   objekti ni prolaz. Bez potvrđene maske kamera je siva za **kupce**.
-3. **Zamagljivanje osoba na ormaru u stvarnom vremenu (R38)**, ako je izvedivo: **§1.26**.
-4. **Bez snimanja** ni na VPS-u ni u releju (gore). Ormar može imati vlastito snimanje (guard,
-   D30), ali to nije dio D32.
-5. **Procjena učinka (DPIA)** prije uključivanja za kupce: sustavno praćenje prostora je tipičan
-   slučaj u kojem se traži. Pravni posao marine; Lika daje opis obrade (izvršitelj, D15).
+#### §14.8.4 · Dnevnik gledanja i GDPR
 
-#### §14.8.5 · Opterećenje: VPS i veza ormara po gledatelju (dopuna §14.7)
+`camera_views(marina_id, camera_id, berth_id, viewer_kind ('user'|'customer'), viewer_id,
+started_at, ended_at, end_reason, bytes_out)`, s RLS-om (§14.1).
+- `end_reason` ima jedan od ključeva: `viewer_closed`, `limit_customer_3min`,
+  `limit_cabinet_10min`, `cabinet_unreachable`, `cabinet_stopped`, `vessel_left`,
+  `right_ended`, `quota`.
+- **Nikad slika.** Retencija je **12 mjeseci**. Owner vidi popis.
 
-Računica, nije mjerenje. Mjeri se u fazi L1 na simulatoru i na prvom pravom ormaru. Bitrate je
-768 kbit/s ≈ **5,8 MB/min**.
+GDPR (D15):
+- **oznaka videonadzora** u marini;
+- **svrha i pravna osnova** upisane u ERP prije prvog uključenja (postavka s auditom);
+- **maske** prije nego slika dođe do ERP-a (R37);
+- **bez snimanja**: test provjerava da međuspremnik nikad ne piše na disk;
+- **DPIA** prije kupaca.
 
-| Mjera | Po gledanju (T = 3 min) | Ovisi o |
+#### §14.8.5 · Kad slike nema — uvijek rečenica
+
+Ključ dolazi s ormara (`live_status`) ili iz ERP-ove provjere. Rečenica se računa na serveru, kao
+§2.5 i §3.2. Prazan ekran bez objašnjenja ne postoji.
+
+| Ključ | Rečenica (engleski, §6.0) |
+|---|---|
+| `starting` | „Starting the stream — this takes a few seconds." |
+| `cabinet_unreachable` | „The pedestal is not responding. Try again later." |
+| `camera_unreachable` | „The camera is not responding." |
+| `limit_cabinet_10min` | „The 10-minute limit was reached — tap to watch again." |
+| `limit_customer_3min` | „Viewing ends after 3 minutes — tap to watch again." |
+| `not_enabled` | „Live view is not enabled on this pedestal." |
+| `customer_not_enabled` | „Live view for guests is not enabled for this berth yet." |
+| `no_right` | „You can watch this berth while your contract for it is valid." |
+| `vessel_not_present` | „Your vessel is not at the berth." |
+| `quota` | „This month's live-view limit for the marina has been reached." |
+
+**Što se kupcu kaže: slika nije samo njegov vez.** Postoji jedna kamera po ormaru i nema izreza.
+Rečenicu računa server, s brojevima vezova iz ERP-a. Prikazuje se na dva mjesta:
+- **na gumbu, prije pokretanja:** „Watch pedestal A-03 · shows berths A-09 to A-12, including
+  yours (A-11)";
+- **na samoj slici, trajno, dok traje:** „Live · about 10 s delay · Camera of pedestal A-03 — you
+  see all its berths (A-09 to A-12), not only yours. Please respect your neighbours' privacy."
+
+Ako vezovi ormara nisu uzastopni, rečenica ih nabraja („berths A-09, A-10, B-02"). Osoblje vidi
+isti natpis bez rečenice o privatnosti. Tekst je engleski (§6.0); jezik aplikacije je stvar
+aplikacije.
+
+#### §14.8.6 · Opterećenje: VPS i veza ormara po gledatelju (dopuna §14.7)
+
+Ovo je računica, ne mjerenje; mjeri se u L1. Bitrate s ormara nije poznat dok ga ormar ne potvrdi
+(R35). Računam s **768 kbit/s ≈ 5,8 MB/min**.
+
+| Mjera | Ovisi o | Primjer |
 |---|---|---|
-| uplink ormara (LTE) | **~17 MB**, jednom po kameri dok netko gleda | broju **kamera** s gledateljem, **ne** broju gledatelja |
-| ulaz VPS-a | ~17 MB po aktivnoj kameri | isto |
-| izlaz VPS-a | **~17 MB po gledatelju** | broju gledatelja |
-| CPU VPS-a | samo premotavanje paketa, bez transkodiranja; procjena < 1 % jezgre po streamu | — |
-| RAM | MediaMTX, procjena 30–60 MB + ~2 MB po streamu | mjeri se |
+| uplink ormara (LTE) i ulaz VPS-a | broju **kamera** koje netko gleda, **ne** broju gledatelja (jedan dohvat po segmentu) | 10 min jedne kamere ≈ 58 MB, i za 1 i za 5 gledatelja |
+| izlaz VPS-a | broju **gledatelja** | kupac 3 min ≈ 17 MB; osoblje 10 min ≈ 58 MB |
+| CPU VPS-a | prosljeđivanje bajtova, bez transkodiranja | mjeri se u L1 |
+| RAM | međuspremnik ~1–2 MB po aktivnoj kameri, u API procesu | 20 kamera ≈ 40 MB |
 
-**Promet mjesečno, po marini.** Pretpostavka je 50 gledanja dnevno (osoblje + kupci), prosječno
-3 min, a polovica gledanja dijeli kameru s drugim gledateljem.
-- izlaz: 50 × 30 × 17 MB ≈ **26 GB**;
-- ulaz: ≈ **13 GB**;
-- ukupno **~40 GB/mj po marini**.
+Mjesečno po marini, uz 50 gledanja dnevno: oko **30–45 GB** prometa VPS-a, ovisno o udjelu
+osoblja. Kod 10 marina to je iznad pretpostavke od 200 GB (§8.2). Zato:
+- **kvota po marini** (§1.30);
+- brojač u `camera_views.bytes_out`;
+- streaming na zaseban čvor kad video prijeđe **50 % mjesečnog prometa VPS-a**.
 
-Kod 10 marina to je ~400 GB/mj, iznad pretpostavke od 200 GB iz §8.2. **Promet je granica D32,
-kao što je §8.2 i predvidio.** Odatle tri pravila:
-- **kvota po marini** (zadano 40 GB/mj). Kad se potroši, ikona je siva uz „Monthly live-view
-  quota reached";
-- **brojač prometa** u `camera_views.bytes_out` i na Owner dashboardu;
-- **zaseban medijski čvor** (drugi mali VPS samo s relejem) kad ukupni video promet prijeđe
-  **50 % mjesečnog prometa VPS-a**, ili kod **5. marine s D32**. To je prirodno odvajanje, jer
-  relej ne treba bazu, nego samo auth hook.
+SIM ormara: jedna kamera gledana 10 min dnevno je ~1,7 GB/mj.
 
-**Veza ormara:** jedan stream od 768 kbit/s uz LTE uplink je u redu. Kod 10 gledanja dnevno po
-ormaru to je ~5 GB/mj podatkovnog prometa SIM-a po ormaru. To je trošak marine i mora biti
-vidljiv prije uključivanja (**§1.30**).
+#### §14.8.7 · Ikona na karti
 
-#### §14.8.6 · Ikona na karti i status
+Status ikone računa server:
+- **zelena:** kamera postoji, ormar je ONLINE, a `live_status` kaže da je kamera dostupna;
+- **siva**, uz riječ zašto: ključevi iz §14.8.5;
+- **bez ikone:** ormar tog veza nema kameru. Jedna kamera po ormaru, pa sve vezove tog ormara pokazuje
+  ista ikona i ista slika.
 
-Status ikone računa **server**, kao i boju veza (§6.0):
-- **zelena** „Live": kamera postoji, ormar je ONLINE, a ormarov status kamere je `reachable`
-  (R36);
-- **siva** (riječ uz ikonu kaže zašto):
-  - ormar je OFFLINE ili STALE;
-  - kamera je nedostupna;
-  - R35 nije uključen na gatewayu;
-  - maska nije potvrđena (samo za kupce);
-  - kvota je potrošena;
-- **bez ikone:** nema kamere za taj vez (R39). Odsutno se ne iscrtava (§6.0).
-
-Status kamere čita kolektor **svakih 300 s, samo za ormare s kamerom**: R36, bez adrese, +0,2
-zahtjeva po ormaru u minuti uz §14.7.1. Pri kliku se provjerava još jednom. **Simulirani
-ormari** (D28) daju sintetički testni prijenos iz simulatora, generiran, bez ijedne snimke
-stvarnog prostora. Ikona kaže „SIM".
-
-#### §14.8.7 · Što D32 traži od ormara — §7.2 R35–R39
-
-Sažeto, puni tekst je u §7.2:
-- **R35:** stream preko :80 iza ext ključa, samo na zahtjev, niska kvaliteta, bez adrese kamere;
-- **R36:** status kamere bez adrese;
-- **R37:** maske privatnosti po kameri;
-- **R38:** zamagljivanje osoba u stvarnom vremenu, s izmjerenim CPU-om;
-- **R39:** koju kameru gleda koji vez, i više kamera po ormaru.
+Za kupca je ikona siva i kad mu kamera nije uključena (§14.8.3). Kolektor čita `live_status` **samo
+za ormare s kamerom, svakih 300 s**. Pri kliku se provjerava još jednom. Simulirani ormari (D28)
+daju sintetički HLS iz simulatora, generiran i bez ijedne snimke stvarnog prostora, a ikona kaže
+„SIM".
