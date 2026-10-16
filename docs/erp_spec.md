@@ -30,6 +30,7 @@ Tvoje odluke 2026-10-16 (pregled 6b).
 | **O67 odlučen** | podaci vlasnika bivšeg plovila brišu se 90 dana nakon uklanjanja; ime i registracija ostaju |
 | **§6.13 · nalaz** | Pedestal control u demo marini je govorio „Ormar 1 · Krk" za simulirani ormar; pravila koja to zatvaraju, i izvedba **P4** (odobreno, izvedeno) |
 | **§8.4 runbook** | uloga `erp_agent` stvara se **prije** `alembic upgrade head` kad vlasnik baze nema CREATEROLE; **P3** (odobreno, izvedeno): bez `create_all` na PostgreSQL-u, start na bazi koja nije na `head` odbija se; `/setup` razlikuje „server unreachable" |
+| **§6.12 · P5** *(čeka odobrenje)* | upload reference: D30/P1/P2 proturječe trima starijim pravilima (§2.3 „nikad", §12, §1.3) i `cabinet_capabilities` nema mjesta za zapis P1 — prijedlog kako ih uskladiti |
 
 ### Što se promijenilo u verziji 22
 
@@ -2614,6 +2615,45 @@ način gatewaya koji dopušta upravljanje (P1, ispod).
 > **Zašto** · D30: slike ostaju na ormaru. Kopija u ERP-u treba tek načinu ERP, a on je faza 2.
 >
 > **Ako griješim** · Stupac `path` i spremište vraćaju se s fazom 2.
+
+**Nalaz pri izvedbi (2026-10-16), prije koda:** D30, P1 i P2 dopuštaju upload, ali tri starija
+pravila ga i dalje zabranjuju, a kod ih provodi:
+- **§2.3** „Izrijekom NE uključivati": `berths.push_image_ext` — „ERP ne piše slike"; u kodu
+  `NEVER_ENABLE` (`app/cabinet/contract.py:123`), test `test_never_enabled_keys_are_not_callable`;
+- **§12** „Ne uključujem … `berths.push_image_ext` prije ormarovog popravka 2.3";
+- **§1.3** (preporuka 2026-10-15): slanje po ormaru tek kad živa provjera potvrdi **R4**; do tada
+  „fotografija se sprema u ERP" — a P2 kaže da ERP sliku ne čuva.
+
+I zapis iz P1 nema gdje stati: `cabinet_capabilities` ima samo `available` i `checked_at`, a
+CHECK dopušta sedam sposobnosti, ne „upload".
+
+> **PRIJEDLOG P5 — čeka tvoje odobrenje** · **Upload ide samo po ormaru, uz zapis iz P1; ništa
+> drugo se ne otključava.**
+> - **§2.3:** `berths.push_image_ext` izlazi iz „nikad" u novi redak „samo po ormaru, uz zapis P1
+>   (§6.12)". U kodu: ključ ulazi u ugovor (putanja iz kataloga ormara
+>   `/api/ext/pedestals/{pedestal_id}/berths/{berth_id}/reference-image`, `e80a4c1:…/api_catalog.py:64`),
+>   a klijent ga **odbija prije slanja** kad ormar nema zapis P1 — test. Ostala dva (`breakers.socket_reset_ext`,
+>   `load.auto_stop_ack_ext`) ostaju „nikad".
+> - **§12:** redak se mijenja u „Ne uključujem `breakers.socket_reset_ext` ni `load.auto_stop_ack_ext`;
+>   `berths.push_image_ext` samo po ormaru uz zapis P1 (§6.12)".
+> - **§1.3:** **zapis P1 zamjenjuje uvjet „R4 potvrđen živom provjerom"** za ERP-ovo slanje: zapis je
+>   izjava Admina da je na tom ormaru upload namjerno uključen, a 403/503 ga gasi. R4 ostaje
+>   otvoren prema ormaru (rizik je ruta dosežna drugima, ne ERP-ovo slanje). Rečenica „fotografija se
+>   sprema u ERP" briše se — P2.
+> - **Shema (migracija 015):** `cabinet_capabilities` dobiva sposobnost `reference_upload` i stupce
+>   `set_by`, `reason`, `note` (zašto je ugašen: „cabinet answered 403"); `vessel_photos` po P2:
+>   `vessel_id`, `berth_id`, `cabinet_id`, `sha256`, `size_bytes`, `content_type`, `reason`,
+>   `uploaded_by`, `uploaded_at`, `cabinet_status`, `cabinet_detail` — bez `path` i `bytes`.
+> - **Pri učitavanju** Admin potvrđuje kvačicom da na slici nema prepoznatljivih ljudi (§6.10).
+> - **Simulator** dobiva istu rutu (oblik iz `ext_pedestal_endpoints.py:212-258`) da se upload
+>   testira; R27–R30 i dalje ne.
+> - **Krk:** `scripts/krk/krk_gateway_config.py` se ne mijenja — test samo za čitanje i dalje
+>   uklanja `berths.push_image_ext`.
+>
+> **Zašto** · D30 i P1 su novije tvoje odluke i izričito traže upload; stara zabrana štitila je od
+> „kontrole koja izgleda isključena" — zapis P1 i odgovor ormara su upravo ta provjera, po ormaru.
+>
+> **Ako griješim** · Ako želiš i R4: jedan uvjet više u istoj provjeri prije slanja.
 
 ### §6.13 · Žive ploče ormara — tko je iza njih (nalaz 6b, v23)
 
