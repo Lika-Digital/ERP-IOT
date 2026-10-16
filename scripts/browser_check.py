@@ -17,6 +17,9 @@ Then the DOM checks the spec asks to be made in the DOM, not in JSON:
   SIM-02 retrofit: no water element anywhere
   SIM-05 silent cabinet: every berth grey
   SIM-07 no plug: the cabinet's sentence is shown, no error page
+  P4     Pedestal control: the cabinet is named by its ERP display_id, never by the
+         simulator's "Ormar 1"; a marina whose cabinet is not in the ERP shows the
+         sessions with zero command buttons (spec §6.13)
   D21    a decoy touch -> one agent pass -> the alarm on the Security screen, its
          evidence (markup in a User-Agent) shown as text; the Admin acknowledges
   UI     at 360 px wide, in the light and the dark theme, every screen (sign-in,
@@ -69,6 +72,8 @@ EXPECTED = [
     "SIM-02: retrofit - no water element anywhere",
     "SIM-05: silent cabinet - every berth grey",
     "SIM-07: no plug - the cabinet's sentence is shown",
+    "P4: Pedestal control - cabinets named by the ERP, never by the cabinet; no command "
+    "button for a cabinet the ERP has not connected or that cannot take commands",
     "D21: Security screen - decoy touch -> agent -> alarm, evidence shown as text, Admin decides",
     "UI: every screen fits 360 px without horizontal scroll, light and dark; theme switch",
     "BOOT-01b: no page errors and no console errors in any scenario",
@@ -443,6 +448,58 @@ def main() -> int:
                 fail(12, f"a native browser dialog appeared: {native}")
             ok(12)
 
+            # ── P4: who is behind Pedestal control (spec §6.13) ──────────────
+            http("PATCH", f"{sim_url}/__sim/state", {"sessions": [
+                {"id": 41, "pedestal_id": 1, "socket_id": 1, "type": "electricity",
+                 "status": "active", "started_at": "2026-10-16T06:00:00"},
+                {"id": 42, "pedestal_id": 1, "socket_id": 3, "type": "electricity",
+                 "status": "pending"}]})
+            code, body = http("POST", f"{erp_url}/api/marinas", {
+                "name": "No cabinet in the ERP (sim)", "pedestal_api_base_url": sim_url,
+                "pedestal_service_email": SIM_EMAIL, "pedestal_service_password": SIM_PASSWORD,
+            }, token=token)
+            if code not in (200, 201):
+                fail(13, f"marina: {code} {body[:300]}")
+            bare_id = json.loads(body)["id"]
+            commands = "[data-session-command], button:has-text('Stop'), button:has-text('Allow')"
+            try:
+                page.goto(f"{spa_url}/marinas/{marina_id}/control")
+                page.wait_for_selector("[data-control-cabinet] ", timeout=15000)
+                page.wait_for_selector("[data-live-name]", timeout=15000)
+                if page.get_attribute("[data-control-cabinet]", "data-control-cabinet") != "MAR_KRK_ORM_01":
+                    fail(13, "the chosen cabinet is not named by its ERP display_id")
+                names = set(page.locator("[data-live-name]").all_inner_texts())
+                if names != {"MAR_KRK_ORM_01"}:
+                    fail(13, f"the live panel names the cabinet {names}, not by the ERP")
+                if "Ormar 1" in page.inner_text("[data-page]"):
+                    fail(13, "the simulator's own name is on the screen")
+                page.wait_for_selector("text=Session #41", timeout=15000)
+                controllable = page.get_attribute("[data-control-cabinet]", "data-controllable") == "true"
+                buttons = page.locator("[data-session-command]").count()
+                if controllable != (buttons == 3):
+                    fail(13, f"controllable={controllable} but {buttons} command buttons")
+                if not controllable and page.locator("[data-no-control]").count() != 1:
+                    fail(13, "a cabinet without commands does not say why")
+                # the finding itself: the cabinet is not in the ERP -> no button anywhere
+                page.goto(f"{spa_url}/marinas/{bare_id}/control")
+                page.wait_for_selector("[data-no-cabinets]", timeout=15000)
+                if page.locator(commands).count():
+                    fail(13, "Pedestal control offers a command for a cabinet the ERP has not connected")
+                page.goto(f"{spa_url}/marinas/{bare_id}/pedestals/1")
+                page.click("button:has-text('Controls')")
+                page.wait_for_selector("text=Session #41", timeout=15000)
+                page.wait_for_selector("[data-no-control]", timeout=15000)
+                if page.locator(commands).count():
+                    fail(13, "the pedestal page offers a command for a cabinet the ERP has not connected")
+                if "Ormar 1" in page.inner_text("[data-page]"):
+                    fail(13, "the pedestal page shows the simulator's own name")
+            except SystemExit:
+                raise
+            except Exception as exc:  # noqa: BLE001
+                fail(13, f"{type(exc).__name__}: {exc}")
+            http("PATCH", f"{sim_url}/__sim/state", {"sessions": []})
+            ok(13)
+
             # ── D21: a decoy touch, the agent's pass, the Security screen ──────
             # The decoy is hit with markup in the User-Agent: the screen must show it
             # as text (a log line is data, never instruction — nor HTML).
@@ -451,31 +508,31 @@ def main() -> int:
                                          headers={"User-Agent": ua})
             try:
                 urllib.request.urlopen(req, timeout=10)  # noqa: S310 — 127.0.0.1 only
-                fail(13, "the decoy answered 2xx")
+                fail(14, "the decoy answered 2xx")
             except urllib.error.HTTPError as e:
                 if e.code != 404:
-                    fail(13, f"the decoy answered {e.code}, not 404")
+                    fail(14, f"the decoy answered {e.code}, not 404")
             code, body = http("PUT", f"{erp_url}/api/security/rules/decoy_touch",
                               {"mode": "active"}, token)
             if code != 200:
-                fail(13, f"switching the rule on: {code} {body[:200]}")
+                fail(14, f"switching the rule on: {code} {body[:200]}")
             agent_env = {k: v for k, v in erp_env.items()
                          if k not in ("DATABASE_URL", "JWT_SECRET", "ERP_ENCRYPTION_KEY")}
             agent_env["AGENT_DATABASE_URL"] = db_url
             r = subprocess.run([sys.executable, "-m", "app.agent", "--once"], cwd=str(BACKEND),
                                env=agent_env, capture_output=True, text=True, timeout=60)
             if r.returncode != 0 or '"opened": 1' not in r.stdout:
-                fail(13, f"agent pass: exit {r.returncode}\n{(r.stdout + r.stderr)[-1500:]}")
+                fail(14, f"agent pass: exit {r.returncode}\n{(r.stdout + r.stderr)[-1500:]}")
             page.goto(f"{spa_url}/security")
             try:
                 page.wait_for_selector("[data-alarm='decoy_touch']", timeout=15000)
             except Exception as exc:  # noqa: BLE001
-                fail(13, f"no decoy alarm on the Security screen: {exc}")
+                fail(14, f"no decoy alarm on the Security screen: {exc}")
             alarm = page.locator("[data-alarm='decoy_touch']")
             if page.locator("[data-injected]").count() != 0:
-                fail(13, "markup from the User-Agent was rendered as an element")
+                fail(14, "markup from the User-Agent was rendered as an element")
             if "<img src=x data-injected" not in alarm.inner_text():
-                fail(13, "the User-Agent is not shown, as text, in the evidence")
+                fail(14, "the User-Agent is not shown, as text, in the evidence")
             alarm.locator("button:has-text('Acknowledge')").click()
             page.wait_for_selector("[data-reason-dialog]", timeout=10000)
             page.fill("[data-reason-input]", "browser check")
@@ -484,8 +541,8 @@ def main() -> int:
                 page.wait_for_selector("[data-alarm='decoy_touch'] >> text=acknowledged",
                                        timeout=10000)
             except Exception as exc:  # noqa: BLE001
-                fail(13, f"the decision did not show: {exc}")
-            ok(13)
+                fail(14, f"the decision did not show: {exc}")
+            ok(14)
 
             # ── UI: 360 px, light and dark, and the theme switch ──────────────
             shots = os.environ.get("SCREENSHOT_DIR")
@@ -580,14 +637,14 @@ def main() -> int:
                 wide.append("the theme switch did not flip to dark, or did not remember it")
             ctx.close()
             if wide:
-                fail(14, "\n         ".join(wide))
-            ok(14)
+                fail(15, "\n         ".join(wide))
+            ok(15)
 
             browser.close()
 
         if problems:
-            fail(15, "\n         ".join(problems[:10]))
-        ok(15)
+            fail(16, "\n         ".join(problems[:10]))
+        ok(16)
         server.should_exit = True
     except Exception as exc:  # noqa: BLE001 — a step that blew up: say which, with the ERP's log
         erp_log = t / "erp.log"

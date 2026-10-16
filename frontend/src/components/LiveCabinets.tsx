@@ -1,10 +1,13 @@
 /**
- * Cabinets, live from the marina's cabinet server — moved here from the dashboard in 6b:
- * D23 gives the dashboard the map, three cards, Needs attention and Cabinets, nothing
- * live. Each card leads to the cabinet's detail. No camera here (D30).
+ * The chosen cabinet, live — moved here from the dashboard in 6b (D23: the dashboard
+ * shows nothing live). Since P4 (spec §6.13) it is read through THAT cabinet's own
+ * client and named by the ERP's display_id, never by the name the cabinet sends about
+ * itself ("Ormar 1 · Krk" was the simulator's). Each card leads to the cabinet's
+ * detail. No camera here (D30).
  */
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import type { ControlCabinet } from '../api/controls'
 import {
   getDashboard,
   type DashboardResponse,
@@ -19,7 +22,7 @@ import { num, time } from '../utils/format'
 import StaleDataBanner from './ui/StaleDataBanner'
 import Status, { READING_ALARM, REACH, SESSION } from './ui/Status'
 
-export default function LiveCabinets({ marinaId }: { marinaId: number }) {
+export default function LiveCabinets({ marinaId, cabinet }: { marinaId: number; cabinet: ControlCabinet }) {
   const navigate = useNavigate()
   const [data, setData] = useState<DashboardResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -28,14 +31,14 @@ export default function LiveCabinets({ marinaId }: { marinaId: number }) {
   const load = useCallback(async () => {
     try {
       setLoading(true)
-      setData(await getDashboard(marinaId))
+      setData(await getDashboard(marinaId, cabinet.id))
       setError(null)
     } catch {
       setError('The cabinet server could not be read.')
     } finally {
       setLoading(false)
     }
-  }, [marinaId])
+  }, [marinaId, cabinet.id])
 
   useEffect(() => { load() }, [load])
   useWebSocket({ marinaId, onMessage: () => load() })
@@ -50,7 +53,7 @@ export default function LiveCabinets({ marinaId }: { marinaId: number }) {
   return (
     <section className="card mb-6" data-live-cabinets>
       <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
-        <h2 className="text-lg font-bold tracking-tight">Cabinets — live</h2>
+        <h2 className="text-lg font-bold tracking-tight">{cabinet.display_id} — live</h2>
         <button onClick={load} className="btn-secondary btn-sm" disabled={loading}>
           {loading ? 'Refreshing…' : 'Refresh'}
         </button>
@@ -58,14 +61,15 @@ export default function LiveCabinets({ marinaId }: { marinaId: number }) {
       <StaleDataBanner isStale={data?.is_stale ?? false} onRefresh={load} />
       {error && !data && <div className="notice-danger mb-4" role="alert">{error}</div>}
       {loading && !data && <p className="text-sm text-fg-muted">Reading the cabinet server…</p>}
-      {data && pedestals.length === 0 && <p className="text-sm text-fg-muted">No cabinet reported.</p>}
+      {data && pedestals.length === 0 && <p className="text-sm text-fg-muted">{cabinet.display_id} reported nothing.</p>}
       <div className="grid gap-4 md:grid-cols-2">
         {pedestals.map((p) => (
-          <PedestalCard key={p.id} pedestal={p} health={health[String(p.id)]}
+          <PedestalCard key={p.id} pedestal={p} name={pedestals.length > 1 ? `${cabinet.display_id} · pedestal ${p.id}` : cabinet.display_id}
+            health={health[String(p.id)]}
             temperature={temps[String(p.id)]} readings={readings[String(p.id)]}
             activeSession={active.find((s) => s.pedestal_id === p.id)}
             pendingSession={pending.find((s) => s.pedestal_id === p.id)}
-            onClick={() => navigate(`/marinas/${marinaId}/pedestals/${p.id}`)} />
+            onClick={() => navigate(`/marinas/${marinaId}/pedestals/${p.id}?cabinet=${cabinet.id}`)} />
         ))}
       </div>
     </section>
@@ -73,9 +77,10 @@ export default function LiveCabinets({ marinaId }: { marinaId: number }) {
 }
 
 function PedestalCard({
-  pedestal, health, temperature, readings, activeSession, pendingSession, onClick,
+  pedestal, name, health, temperature, readings, activeSession, pendingSession, onClick,
 }: {
   pedestal: PedestalInfo
+  name: string
   health?: PedestalHealth
   temperature?: TemperatureReading
   readings?: SensorReadings
@@ -93,8 +98,7 @@ function PedestalCard({
       data-pedestal={pedestal.id}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <h3 className="text-base font-bold tracking-tight truncate">{pedestal.name}</h3>
-          {pedestal.location && <p className="text-xs text-fg-muted truncate">{pedestal.location}</p>}
+          <h3 className="text-base font-bold tracking-tight truncate" data-live-name>{name}</h3>
         </div>
         {health?.last_heartbeat && (
           <span className="text-xs text-fg-muted tabular-nums shrink-0">last heard {time(health.last_heartbeat)}</span>

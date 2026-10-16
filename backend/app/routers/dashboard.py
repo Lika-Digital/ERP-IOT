@@ -1,17 +1,19 @@
 """Dashboard router — aggregated marina overview data, and the berth view (spec §3, §6.2)."""
 import logging
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from ..cabinet import berth_view, cabinet_config
 from ..database import get_db
+from ..models.cabinet import Cabinet
 from ..models.marina import Marina
 from ..models.user import User
 from ..models.cache import PedestalCache
 from ..services import overview
 from ..services.pedestal_api_factory import PedestalAPIClientFactory, get_pedestal_factory
-from ._cabinet import marina_client, read
+from ._cabinet import cabinet_entry, cabinet_of, is_demo_marina, marina_client, read
 from .auth import get_current_user, require_marina_access
 
 log = logging.getLogger(__name__)
@@ -21,12 +23,18 @@ router = APIRouter(prefix="/api/marinas", tags=["dashboard"])
 @router.get("/{marina_id}/dashboard")
 async def get_dashboard(
     marina_id: int,
+    cabinet: Optional[int] = Query(default=None, description="the ERP's cabinets.id (P4)"),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     factory: PedestalAPIClientFactory = Depends(get_pedestal_factory),
 ):
-    """Pedestals, health, active and pending sessions. Every read carries its outcome."""
-    marina, client = marina_client(marina_id, user, db, factory)
+    """Pedestals, health, active and pending sessions. Every read carries its outcome.
+
+    With `cabinet` (P4, spec §6.13): THAT cabinet's live data through its own client,
+    and the cabinet as the ERP records it — the screen names it by display_id, never by
+    the name the cabinet sends, and offers commands only when `controllable`."""
+    marina, client = marina_client(marina_id, user, db, factory, cabinet)
+    cab = cabinet_of(db, marina_id, cabinet) if cabinet is not None else None
     pedestals = await client.list_pedestals(db)
     health = await client.health(db)
     active = await client.active_sessions(db)
@@ -49,6 +57,12 @@ async def get_dashboard(
         if row.last_temperature is not None
     }
     readings_map = {row.pedestal_id: row.last_readings for row in cache_rows if row.last_readings}
+    if cab is not None and db.query(Cabinet.id).filter(
+            Cabinet.marina_id == marina_id, Cabinet.pedestal_pk == cab.pedestal_pk,
+            Cabinet.id != cab.id).first() is not None:
+        # webhook readings carry only the pedestal pk; shared by several cabinets of this
+        # marina, they cannot be told apart, so none is shown as this cabinet's
+        temperature_map, readings_map = {}, {}
 
     return {
         "marina_id": marina_id,
@@ -61,6 +75,7 @@ async def get_dashboard(
         "outcomes": {o.endpoint_key: o.public() for o in outcomes},
         "temperature_map": temperature_map,
         "readings_map": readings_map,
+        "cabinet": None if cab is None else cabinet_entry(cab, demo=is_demo_marina(db, marina_id)),
     }
 
 

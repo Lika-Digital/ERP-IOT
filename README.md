@@ -208,9 +208,15 @@ CLOUD_IOT_RELEASE=1 git push origin main
 ### Controls
 | Method | Endpoint | Description |
 |--------|----------|-------------|
+| GET | `/api/marinas/{id}/control/cabinets` | The marina's cabinets as the ERP records them, each with `controllable` and a sentence (spec §6.13) |
 | POST | `/api/marinas/{id}/sessions/{sid}/allow` | Allow session |
 | POST | `/api/marinas/{id}/sessions/{sid}/deny` | Deny session |
 | POST | `/api/marinas/{id}/sessions/{sid}/stop` | Stop session |
+
+Reads and commands take `?cabinet=<ERP cabinet id>`: that cabinet's own client, never the
+marina's first. In a marina with a simulated cabinet (the demo marina) a command to a REAL
+cabinet is refused with 409 `demo_marina_real_cabinet` before any call, and written to
+`command_audit`.
 
 ### Energy
 | Method | Endpoint | Description |

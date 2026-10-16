@@ -12,7 +12,8 @@ from ..models.cache import AlarmLog
 from ..models.user import User
 from ..services.pedestal_api_factory import PedestalAPIClientFactory, get_pedestal_factory
 from ..services.audit_log import record_action
-from ._cabinet import marina_client, read
+from ..models.cabinet import Cabinet
+from ._cabinet import DEMO_REAL_SENTENCE, cabinet_of, is_demo_marina, marina_client, read
 from .auth import get_current_user, require_marina_access
 from ..utils.time import utcnow
 
@@ -80,6 +81,7 @@ async def acknowledge_alarm(
     marina_id: int,
     alarm_id: int,
     pedestal_id: Optional[int] = Query(default=None),
+    cabinet: Optional[int] = Query(default=None, description="the ERP's cabinets.id (P4)"),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     factory: PedestalAPIClientFactory = Depends(get_pedestal_factory),
@@ -89,8 +91,20 @@ async def acknowledge_alarm(
     1. Forward acknowledge to Pedestal SW
     2. Update local alarm_log record
     3. Write audit log entry
+
+    P4 (spec §6.13): in the demo marina nothing goes to a real cabinet — refused before
+    the call. An acknowledgement carries no reason, so the refusal is in audit_log.
     """
-    _, client = marina_client(marina_id, user, db, factory)
+    _, client = marina_client(marina_id, user, db, factory, cabinet)
+    cab = (cabinet_of(db, marina_id, cabinet) if cabinet is not None else
+           db.query(Cabinet).filter(Cabinet.marina_id == marina_id).order_by(Cabinet.id).first())
+    if cab is not None and not cab.is_simulated and is_demo_marina(db, marina_id):
+        record_action(db, user_id=user.id, marina_id=marina_id, action="acknowledge_alarm",
+                      pedestal_id=pedestal_id, target_id=alarm_id,
+                      details={"outcome": "demo_marina_real_cabinet", "cabinet": cab.display_id})
+        raise HTTPException(status_code=409, detail={
+            "code": "demo_marina_real_cabinet", "sentence": DEMO_REAL_SENTENCE,
+            "endpoint": "alarms.acknowledge", "is_stale": False, "data_as_of": None})
     outcome = await client.acknowledge_alarm(alarm_id, db=db)
     if not outcome.ok:
         # Behaviour kept from before phase 2: the local log is still updated, so

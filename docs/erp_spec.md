@@ -28,7 +28,7 @@ Tvoje odluke 2026-10-16 (pregled 6b).
 | **P1 odlučen** (§6.12) | ERP vodi vlastiti zapis „gateway dopušta upload" po ormaru; **R31**: ormar izlaže način gatewaya preko ext, tada ručni zapis otpada |
 | **P2 odlučen** (§6.12) | ERP ne čuva sliku; prije slanja uklanja EXIF i ostale metapodatke; format i veličina iz koda ormara (JPEG, 10 MB) |
 | **O67 odlučen** | podaci vlasnika bivšeg plovila brišu se 90 dana nakon uklanjanja; ime i registracija ostaju |
-| **§6.13 · nalaz** | Pedestal control u demo marini je govorio „Ormar 1 · Krk" za simulirani ormar; pravila koja to zatvaraju, i prijedlog izvedbe **P4** (čeka odobrenje) |
+| **§6.13 · nalaz** | Pedestal control u demo marini je govorio „Ormar 1 · Krk" za simulirani ormar; pravila koja to zatvaraju, i izvedba **P4** (odobreno, izvedeno) |
 | **§8.4 runbook** | uloga `erp_agent` stvara se **prije** `alembic upgrade head` kad vlasnik baze nema CREATEROLE; **P3** (odobreno, izvedeno): bez `create_all` na PostgreSQL-u, start na bazi koja nije na `head` odbija se; `/setup` razlikuje „server unreachable" |
 
 ### Što se promijenilo u verziji 22
@@ -2639,7 +2639,7 @@ otišlo pravom ormaru — ali zaslon je to tvrdio.
 >
 > **Ako griješim** · Pravila (2) i (3) su jedna provjera na serveru prije svake naredbe.
 
-> **PRIJEDLOG P4 — čeka tvoje odobrenje** · Izvedba:
+> **Odlučeno — P4 (tvoje odobrenje 2026-10-16)** · Izvedba:
 > - Pedestal control prikazuje **popis ormara iz ERP-a** (kao kartica Cabinets na dashboardu) i
 >   žive podatke **odabranog** ormara, dohvaćene njegovim vlastitim klijentom
 >   (`for_cabinet`) — ne više „prvi ormar marine". To rješava O65 za žive ploče.
@@ -2655,6 +2655,19 @@ otišlo pravom ormaru — ali zaslon je to tvrdio.
 > ovisi o tome što zaslon prikaže.
 >
 > **Ako griješim** · Pravilo „demo marina" je jedna funkcija; odabir ormara je jedan parametar.
+>
+> **Izvedeno** · Server (`routers/_cabinet.py`): `cabinet_of`, `is_demo_marina`,
+> `cabinet_entry` (display_id, SIM, veza po O51, Smart Mode, `controllable` + jedna rečenica) i
+> `refuse_real_cabinet_in_demo` (upis u `command_audit` s ishodom `demo_marina_real_cabinet`,
+> 409, bez poziva). Nova ruta `GET /api/marinas/{id}/control/cabinets` (rute 57 / 70);
+> `?cabinet=` na `/dashboard`, `/sessions/active|pending`, allow/deny/stop, utičnice,
+> dijagnostika i potvrda alarma. Potvrda alarma nema razlog, pa se njeno odbijanje upisuje u
+> `audit_log`. Svi demo ormari imaju `pedestal_pk` 1, pa naredba s `cabinet` i krivim
+> `pedestal_id` daje 422. Webhook očitanja nose samo `pedestal_id`; kad ga dijeli više ormara
+> marine, ne prikazuju se kao očitanja odabranog ormara.
+> Zaslon: Pedestal control ima odabir ormara (`?cabinet=`), žive ploče i detalj ormara
+> imenuju ormar po `display_id`; Allow / Deny / Stop / Acknowledge postoje u DOM-u samo kad je
+> `controllable`. Testovi: `tests/test_p4_control.py` (5) i stavka P4 u BOOT-01b (17/17).
 
 ## §7 Sigurnost
 

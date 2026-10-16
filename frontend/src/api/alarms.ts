@@ -35,12 +35,13 @@ export const getAlarmLog = (
 export const acknowledgeAlarm = (
   marinaId: number,
   alarmId: number,
-  pedestalId?: number
+  pedestalId?: number,
+  cabinetId?: number
 ) =>
   api
     .post(
       `/marinas/${marinaId}/alarms/${alarmId}/acknowledge`,
       undefined,
-      pedestalId ? { params: { pedestal_id: pedestalId } } : undefined
+      { params: { ...(pedestalId ? { pedestal_id: pedestalId } : {}), ...(cabinetId ? { cabinet: cabinetId } : {}) } }
     )
     .then((r) => r.data)

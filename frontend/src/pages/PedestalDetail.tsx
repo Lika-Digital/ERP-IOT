@@ -5,14 +5,18 @@
  * Tab 2 — Berths:    occupancy per berth (no camera — D30)
  * Tab 3 — Controls:  allow/deny/stop sessions + acknowledge alarms
  *                    (mirrors PedestalControl look and feel, scoped to this pedestal)
+ *
+ * P4 (spec §6.13): `?cabinet=` is the ERP's cabinet id; every read and command goes to
+ * THAT cabinet. The page is named by the ERP's display_id, never by the name the cabinet
+ * sends, and the command buttons exist only when the server says `controllable`.
  */
 import { cabinetSentence } from '../api'
 import { useEffect, useState, useCallback } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
-import { getDashboard, type PedestalInfo, type PedestalHealth, type SessionInfo } from '../api/dashboard'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { getDashboard, type PedestalHealth, type SessionInfo } from '../api/dashboard'
 import { getPendingSessions, getActiveSessions } from '../api/energy'
 import { getActiveAlarms, getAlarmLog, acknowledgeAlarm, type AlarmLogEntry } from '../api/alarms'
-import { allowSession, askReason, denySession, NO_REASON, stopSession } from '../api/controls'
+import { allowSession, askReason, denySession, NO_REASON, stopSession, type ControlCabinet } from '../api/controls'
 import {
   getBerthOccupancy,
   type BerthOccupancy,
@@ -20,7 +24,7 @@ import {
 } from '../api/pedestalExt'
 import StaleDataBanner from '../components/ui/StaleDataBanner'
 import ConfirmDialog from '../components/ui/ConfirmDialog'
-import Status, { ALARM_STATE, OCCUPANCY, REACH, SESSION } from '../components/ui/Status'
+import Status, { ALARM_STATE, CABINET_LINK, OCCUPANCY, REACH, SESSION, SIMULATED } from '../components/ui/Status'
 import { dateTime, time } from '../utils/format'
 
 type Tab = 'realtime' | 'berths' | 'controls'
@@ -51,11 +55,13 @@ export default function PedestalDetail() {
   const navigate = useNavigate()
   const mid = Number(marinaId)
   const pid = Number(pedestalId)
+  const [params] = useSearchParams()
+  const cid = params.get('cabinet') ? Number(params.get('cabinet')) : undefined
 
   const [tab, setTab] = useState<Tab>('realtime')
 
   // Real Time state
-  const [pedestalInfo, setPedestalInfo] = useState<PedestalInfo | null>(null)
+  const [cabinet, setCabinet] = useState<ControlCabinet | null>(null)
   const [health, setHealth] = useState<PedestalHealth | null>(null)
   const [activeSessions, setActiveSessions] = useState<Session[]>([])
   const [pendingSessions, setPendingSessions] = useState<Session[]>([])
@@ -83,16 +89,13 @@ export default function PedestalDetail() {
     try {
       setLoadingRT(true)
       const [dash, pending, active, alarms] = await Promise.all([
-        getDashboard(mid),
-        getPendingSessions(mid),
-        getActiveSessions(mid),
+        getDashboard(mid, cid),
+        getPendingSessions(mid, cid),
+        getActiveSessions(mid, cid),
         getAlarmLog(mid, { pedestal_id: pid, limit: 20 }),
       ])
 
-      const info = Array.isArray(dash.pedestals)
-        ? dash.pedestals.find((p: PedestalInfo) => p.id === pid) ?? null
-        : null
-      setPedestalInfo(info)
+      setCabinet(dash.cabinet ?? null)
       setHealth((dash.health as Record<string, PedestalHealth>)?.[String(pid)] ?? null)
 
       const filterByPedestal = (sessions: unknown[]): Session[] =>
@@ -108,7 +111,7 @@ export default function PedestalDetail() {
     } finally {
       setLoadingRT(false)
     }
-  }, [mid, pid])
+  }, [mid, pid, cid])
 
   const fetchOccupancy = useCallback(async () => {
     setOccupancy({ data: null, loading: true, error: null, featureUnavailable: false })
@@ -141,7 +144,7 @@ export default function PedestalDetail() {
     if (!reason) { setControlError(NO_REASON); return }
     setActionLoading(sessionId)
     try {
-      await allowSession(mid, sessionId, reason, pid)
+      await allowSession(mid, sessionId, reason, pid, cid)
       await fetchRealTime()
     } catch (err) { setControlError(cabinetSentence(err, 'Failed to allow session.')) }
     finally { setActionLoading(null) }
@@ -152,7 +155,7 @@ export default function PedestalDetail() {
     if (denyReason.trim().length < 3) { setControlError(NO_REASON); return }
     setActionLoading(denyDialog.sessionId)
     try {
-      await denySession(mid, denyDialog.sessionId, denyReason.trim(), pid)
+      await denySession(mid, denyDialog.sessionId, denyReason.trim(), pid, cid)
       setDenyDialog(null); setDenyReason('')
       await fetchRealTime()
     } catch (err) { setControlError(cabinetSentence(err, 'Failed to deny session.')) }
@@ -165,7 +168,7 @@ export default function PedestalDetail() {
     if (!reason) { setControlError(NO_REASON); return }
     setActionLoading(stopDialog.sessionId)
     try {
-      await stopSession(mid, stopDialog.sessionId, reason, pid)
+      await stopSession(mid, stopDialog.sessionId, reason, pid, cid)
       setStopDialog(null)
       await fetchRealTime()
     } catch (err) { setControlError(cabinetSentence(err, 'Failed to stop session.')) }
@@ -176,7 +179,7 @@ export default function PedestalDetail() {
     if (!ackDialog) return
     setActionLoading(ackDialog.alarmId)
     try {
-      await acknowledgeAlarm(mid, ackDialog.alarmId, pid)
+      await acknowledgeAlarm(mid, ackDialog.alarmId, pid, cid)
       setAckDialog(null)
       await fetchRealTime()
     } catch (err) { setControlError(cabinetSentence(err, 'Failed to acknowledge alarm.')) }
@@ -193,8 +196,13 @@ export default function PedestalDetail() {
           ← Dashboard
         </button>
         <div className="flex-1 min-w-0">
-          <h1 className="page-title truncate">{pedestalInfo?.name ?? `Pedestal ${pid}`}</h1>
-          {pedestalInfo?.location && <p className="page-lead">{pedestalInfo.location}</p>}
+          <h1 className="page-title truncate" data-live-name>{cabinet ? cabinet.display_id : `Pedestal ${pid}`}</h1>
+          {cabinet && (
+            <span className="flex flex-wrap items-center gap-2 mt-1">
+              <Status tone={CABINET_LINK[cabinet.connection].tone} icon={CABINET_LINK[cabinet.connection].icon} word={CABINET_LINK[cabinet.connection].word} />
+              {cabinet.simulated && <Status tone={SIMULATED.tone} icon={SIMULATED.icon} word={SIMULATED.word} />}
+            </span>
+          )}
         </div>
         {health?.last_heartbeat && (
           <span className="text-xs text-fg-muted tabular-nums self-center">
@@ -233,6 +241,8 @@ export default function PedestalDetail() {
       {tab === 'controls' && (
         <>
           <ControlsTab
+            controllable={cabinet?.controllable ?? false}
+            noControl={cabinet ? cabinet.sentence : 'No cabinet of this marina is connected in the ERP yet. Commands go only to cabinets the ERP has recorded.'}
             pendingSessions={pendingSessions}
             activeSessions={activeSessions}
             alarmLog={alarmLog}
@@ -475,6 +485,8 @@ function BerthDetailRow({ berth }: { berth: BerthOccupancy }) {
 // ── Controls tab ──────────────────────────────────────────────────────────────
 
 function ControlsTab({
+  controllable,
+  noControl,
   pendingSessions,
   activeSessions,
   alarmLog,
@@ -487,6 +499,8 @@ function ControlsTab({
   onStopOpen,
   onAckOpen,
 }: {
+  controllable: boolean
+  noControl: string | null
   pendingSessions: Session[]
   activeSessions: Session[]
   alarmLog: AlarmLogEntry[]
@@ -511,6 +525,7 @@ function ControlsTab({
       </div>
 
       {error && <div className="notice-danger mb-4" role="alert">{error}</div>}
+      {!controllable && noControl && <p className="notice-warn mb-4" data-no-control>{noControl}</p>}
 
       <Section title="Waiting for approval" count={pendingSessions.length}>
         {pendingSessions.length === 0 ? (
@@ -519,14 +534,14 @@ function ControlsTab({
           <ul className="divide-y divide-line">
             {pendingSessions.map((s) => (
               <SessionLine key={s.id} s={s} kind="pending">
-                <div className="flex gap-2 shrink-0">
+                {controllable && <div className="flex gap-2 shrink-0">
                   <button onClick={() => onAllow(s.id)} className="btn-primary btn-sm" disabled={actionLoading === s.id}>
                     Allow
                   </button>
                   <button onClick={() => onDenyOpen(s.id)} className="btn-danger btn-sm" disabled={actionLoading === s.id}>
                     Deny
                   </button>
-                </div>
+                </div>}
               </SessionLine>
             ))}
           </ul>
@@ -540,10 +555,10 @@ function ControlsTab({
           <ul className="divide-y divide-line">
             {activeSessions.map((s) => (
               <SessionLine key={s.id} s={s} kind="active">
-                <button onClick={() => onStopOpen(s.id)} className="btn-danger btn-sm shrink-0 self-start sm:self-center"
+                {controllable && <button onClick={() => onStopOpen(s.id)} className="btn-danger btn-sm shrink-0 self-start sm:self-center"
                   disabled={actionLoading === s.id}>
                   Stop
-                </button>
+                </button>}
               </SessionLine>
             ))}
           </ul>
@@ -557,10 +572,10 @@ function ControlsTab({
           <ul className="divide-y divide-line">
             {unackedAlarms.map((a) => (
               <AlarmLine key={a.id} a={a}>
-                <button onClick={() => onAckOpen(a.id)} className="btn-primary btn-sm shrink-0 self-start sm:self-center"
+                {controllable && <button onClick={() => onAckOpen(a.id)} className="btn-primary btn-sm shrink-0 self-start sm:self-center"
                   disabled={actionLoading === a.id}>
                   Acknowledge
-                </button>
+                </button>}
               </AlarmLine>
             ))}
           </ul>

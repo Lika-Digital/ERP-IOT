@@ -45,22 +45,24 @@ async def get_session_summary(
 @router.get("/{marina_id}/sessions/active")
 async def get_active_sessions(
     marina_id: int,
+    cabinet: Optional[int] = Query(default=None, description="the ERP's cabinets.id (P4)"),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     factory: PedestalAPIClientFactory = Depends(get_pedestal_factory),
 ):
     """Currently active sessions from Pedestal SW."""
-    _, client = marina_client(marina_id, user, db, factory)
+    _, client = marina_client(marina_id, user, db, factory, cabinet)
     return read(await client.active_sessions(db), "sessions", marina_id=marina_id)
 
 
 @router.get("/{marina_id}/sessions/pending")
 async def get_pending_sessions(
     marina_id: int,
+    cabinet: Optional[int] = Query(default=None, description="the ERP's cabinets.id (P4)"),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     factory: PedestalAPIClientFactory = Depends(get_pedestal_factory),
 ):
     """Pending sessions awaiting approval from Pedestal SW."""
-    _, client = marina_client(marina_id, user, db, factory)
+    _, client = marina_client(marina_id, user, db, factory, cabinet)
     return read(await client.pending_sessions(db), "sessions", marina_id=marina_id)

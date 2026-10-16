@@ -1,4 +1,5 @@
 import api from './index'
+import type { ControlCabinet } from './controls'
 
 export interface PedestalInfo {
   id: number
@@ -50,6 +51,8 @@ export interface DashboardResponse {
   pending_sessions: SessionInfo[]
   temperature_map: Record<string, TemperatureReading>
   readings_map: Record<string, SensorReadings>
+  /** with ?cabinet= (P4): the cabinet as the ERP records it */
+  cabinet?: ControlCabinet | null
 }
 
 export interface HealthResponse {
@@ -64,8 +67,9 @@ export interface PedestalListResponse {
   pedestals: unknown
 }
 
-export const getDashboard = (marinaId: number) =>
-  api.get<DashboardResponse>(`/marinas/${marinaId}/dashboard`).then((r) => r.data)
+export const getDashboard = (marinaId: number, cabinetId?: number) =>
+  api.get<DashboardResponse>(`/marinas/${marinaId}/dashboard`,
+    cabinetId ? { params: { cabinet: cabinetId } } : undefined).then((r) => r.data)
 
 export const getMarinaHealth = (marinaId: number) =>
   api.get<HealthResponse>(`/marinas/${marinaId}/health`).then((r) => r.data)

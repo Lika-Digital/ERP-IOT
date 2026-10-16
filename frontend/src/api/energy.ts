@@ -43,8 +43,10 @@ export const getSessionSummary = (marinaId: number) =>
     .get<EnergyResponse<SessionSummary>>(`/marinas/${marinaId}/energy/summary`)
     .then((r) => r.data)
 
-export const getActiveSessions = (marinaId: number) =>
-  api.get<SessionsResponse>(`/marinas/${marinaId}/sessions/active`).then((r) => r.data)
+export const getActiveSessions = (marinaId: number, cabinetId?: number) =>
+  api.get<SessionsResponse>(`/marinas/${marinaId}/sessions/active`,
+    cabinetId ? { params: { cabinet: cabinetId } } : undefined).then((r) => r.data)
 
-export const getPendingSessions = (marinaId: number) =>
-  api.get<SessionsResponse>(`/marinas/${marinaId}/sessions/pending`).then((r) => r.data)
+export const getPendingSessions = (marinaId: number, cabinetId?: number) =>
+  api.get<SessionsResponse>(`/marinas/${marinaId}/sessions/pending`,
+    cabinetId ? { params: { cabinet: cabinetId } } : undefined).then((r) => r.data)
