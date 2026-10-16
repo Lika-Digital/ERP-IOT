@@ -76,7 +76,7 @@ export default function DashboardOverview({ marinaId }: { marinaId: number }) {
         </div>
       ) : null}
 
-      {sel && <BerthPanel berth={sel} onClose={() => setSelected(null)} />}
+      {sel && <BerthPanel berth={sel} marinaId={marinaId} onClose={() => setSelected(null)} />}
 
       <div className="grid gap-4 md:grid-cols-3 mb-4">
         {data.cards.map((c) => <Card key={c.key} card={c} marinaId={marinaId} />)}
@@ -203,7 +203,7 @@ function BerthRow({ berth, onPick }: { berth: MapBerth; onPick: () => void }) {
   )
 }
 
-function BerthPanel({ berth, onClose }: { berth: MapBerth; onClose: () => void }) {
+function BerthPanel({ berth, marinaId, onClose }: { berth: MapBerth; marinaId: number; onClose: () => void }) {
   const look = BERTH_COLOUR[berth.berth_colour] ?? BERTH_COLOUR.grey
   return (
     <div className="card mb-4" data-berth-panel={berth.number}>
@@ -213,7 +213,12 @@ function BerthPanel({ berth, onClose }: { berth: MapBerth; onClose: () => void }
           <Status tone={look.tone} icon={look.icon} word={look.word} size="md" />
           {berth.simulated && <Status tone={SIMULATED.tone} icon={SIMULATED.icon} word={SIMULATED.word} />}
         </div>
-        <button className="btn-secondary btn-sm" onClick={onClose}>Close</button>
+        <div className="flex gap-2">
+          <Link className="btn-primary btn-sm" to={`/marinas/${marinaId}/berth/${berth.berth_id}`} data-berth-link>
+            Berth details
+          </Link>
+          <button className="btn-secondary btn-sm" onClick={onClose}>Close</button>
+        </div>
       </div>
       {berth.status_sentence && <p className="text-sm mt-2">{berth.status_sentence}</p>}
       {berth.alarm.length > 0 && (

@@ -127,3 +127,43 @@ class OutletNfcTag(Base):
     provisioned_at = Column(DateTime, nullable=False, default=utcnow)
     active = Column(Boolean, nullable=False, default=True, server_default=true())
     note = Column(Text, nullable=True)
+
+
+class Vessel(Base):
+    """A berth's vessel (D27, §6.10). The owner is personal data (D15): shown only in the
+    berth's detail, every read audited, never on the map or the dashboard."""
+    __tablename__ = "vessels"
+    __table_args__ = (
+        CheckConstraint("length(trim(name)) > 0", name="ck_vessels_name"),
+        CheckConstraint("length(trim(created_by)) > 0", name="ck_vessels_created_by"),
+        Index("ix_vessels_marina_id", "marina_id"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    marina_id = Column(Integer, ForeignKey("marinas.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String(120), nullable=False)
+    registration = Column(String(60), nullable=True)
+    owner_name = Column(String(200), nullable=True)
+    owner_contact = Column(String(320), nullable=True)
+    created_at = Column(DateTime, nullable=False, default=utcnow)
+    created_by = Column(String(320), nullable=False)
+    updated_at = Column(DateTime, nullable=True)
+    updated_by = Column(String(320), nullable=True)
+
+
+class BerthVessel(Base):
+    """A berth's main vessel over time; at most one current (valid_to NULL) per berth."""
+    __tablename__ = "berth_vessels"
+    __table_args__ = (
+        CheckConstraint("valid_to IS NULL OR valid_to > valid_from", name="ck_berth_vessels_order"),
+        CheckConstraint("length(trim(assigned_by)) > 0", name="ck_berth_vessels_assigned_by"),
+        Index("uq_berth_vessels_current", "berth_id", unique=True,
+              postgresql_where=text("valid_to IS NULL"), sqlite_where=text("valid_to IS NULL")),
+    )
+
+    id = Column(Integer, primary_key=True)
+    berth_id = Column(Integer, ForeignKey("berths.id", ondelete="CASCADE"), nullable=False)
+    vessel_id = Column(Integer, ForeignKey("vessels.id", ondelete="CASCADE"), nullable=False)
+    valid_from = Column(DateTime, nullable=False, default=utcnow)
+    valid_to = Column(DateTime, nullable=True)
+    assigned_by = Column(String(320), nullable=False)

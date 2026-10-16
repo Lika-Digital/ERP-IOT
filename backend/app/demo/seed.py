@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 from simulator import demo_world as w
 from simulator.demo_sim import DEFAULT_PORT, DEFAULT_SEED, SERVICE_EMAIL
 
-from ..models.berth import Berth, BerthReservation
+from ..models.berth import Berth, BerthReservation, BerthVessel, Vessel
 from ..models.billing import Customer
 from ..models.cabinet import Cabinet, Outlet
 from ..models.marina import Marina
@@ -80,11 +80,13 @@ def seed(db: Session, *, port: int = DEFAULT_PORT, seed_value: int = DEFAULT_SEE
             svc.set_berth_outlets(db, berth, list(spec.outlets_for(slot)), assigned_by=AUTHOR)
 
     n_res = _reservations(db, rows, seed_value, now)
+    n_vessels = _vessels(db, marina.id, rows, now)
     n_iv = _history(db, marina.id, seed_value, now, days)
     db.add(Customer(marina_id=marina.id, full_name="Demo guest", external_ref="demo-guest",
                     is_demo=True))
     db.commit()
     return {"marina_id": marina.id, "berths": len(rows), "cabinets": len(specs),
+            "vessels": n_vessels,
             "reservations": n_res, "intervals": n_iv, "history_days": days}
 
 
@@ -166,8 +168,10 @@ def remove(db: Session) -> bool:
             (ConsumptionMonthly, ConsumptionMonthly.outlet_id, outs),
             (OutletNfcTag, OutletNfcTag.outlet_id, outs),
             (BerthOutlet, BerthOutlet.berth_id, berths),
-            (BerthReservation, BerthReservation.berth_id, berths)):
+            (BerthReservation, BerthReservation.berth_id, berths),
+            (BerthVessel, BerthVessel.berth_id, berths)):
         db.query(model).filter(col.in_(ids)).delete(synchronize_session=False)
+    db.query(Vessel).filter(Vessel.marina_id == m.id).delete(synchronize_session=False)
     for model in (ErpSession, CommandAudit, ReconciliationRun, AlarmLog, CabinetCapability,
                   MappingComparison, BerthOutletCabinet, ServiceWindow):
         db.query(model).filter(model.cabinet_id.in_(cabs)).delete(synchronize_session=False)
@@ -181,3 +185,25 @@ def remove(db: Session) -> bool:
     db.delete(m)
     db.commit()
     return True
+
+
+DEMO_VESSEL_NAMES = ("Aurora", "Bura", "Galeb", "Jugo", "Maestral", "Morena", "Tramontana",
+                     "Vala", "Zora", "Lanterna")
+
+
+def _vessels(db: Session, marina_id: int, rows: dict, now: datetime) -> int:
+    """D27 phase 1: a main vessel for every simulated berth. Plainly invented — "Demo"
+    names, a .invalid contact — so nothing here can be mistaken for a real person (D15)."""
+    n = 0
+    for i, (number, berth) in enumerate(sorted(rows.items())):
+        if berth.cabinet_id is None:
+            continue                                  # the real berths: until 5d
+        v = Vessel(marina_id=marina_id, name=f"{DEMO_VESSEL_NAMES[i % len(DEMO_VESSEL_NAMES)]} {i + 1}",
+                   registration=f"DM-{1000 + i}", owner_name=f"Demo owner {i + 1}",
+                   owner_contact=f"owner{i + 1}@demo.invalid", created_at=now, created_by=AUTHOR)
+        db.add(v)
+        db.flush()
+        db.add(BerthVessel(berth_id=berth.id, vessel_id=v.id, valid_from=now, assigned_by=AUTHOR))
+        n += 1
+    db.commit()
+    return n

@@ -416,7 +416,7 @@ def test_webhook_hmac_switch_requires_a_valid_signature(client, cab):
         db.commit()
     finally:
         db.close()
-    body = {"event": "heartbeat", "data": {}, "timestamp": "x"}
+    body = {"event": "hardware_alarm", "data": {}, "timestamp": "x"}
     assert _hook(client, cab, body).status_code == 401              # key alone is not enough
     raw = json.dumps(body).encode()
     sig = "sha256=" + hmac.new(HMAC_SECRET.encode(), raw, hashlib.sha256).hexdigest()
@@ -425,7 +425,7 @@ def test_webhook_hmac_switch_requires_a_valid_signature(client, cab):
 
 
 def test_webhook_body_is_capped(client, cab):
-    r = _hook(client, cab, {"event": "heartbeat", "data": {"x": "a" * 70000}})
+    r = _hook(client, cab, {"event": "hardware_alarm", "data": {"x": "a" * 70000}})
     assert r.status_code == 413
 
 
@@ -436,7 +436,7 @@ def test_webhook_session_is_fast_but_only_the_pull_reconciles(client, sim, cab):
     from app.models.metering import ErpSession
     sid = _erp_session(cab, outlet="Q1", customer_ref="t-wh")
     p = session_payload(session_id=111, socket_id="Q1", customer_id="t-wh", status="ended")
-    r = _hook(client, cab, {"event": "session_completed", "data": p, "timestamp": "x"})
+    r = _hook(client, cab, {"event": "session_ended", "data": p, "timestamp": "x"})
     assert r.status_code == 200 and "updated" in r.json()["stored"]
     s = _get(ErpSession, sid)
     assert (s.cabinet_session_id, s.status, s.reconciled_at) == (111, "ended", None)
@@ -448,6 +448,29 @@ def test_webhook_session_is_fast_but_only_the_pull_reconciles(client, sim, cab):
     sim.state.sim.nfc_sessions[111] = p
     _run(_collector().run_all_once())
     assert _get(ErpSession, sid).reconciled_at is not None
+
+
+@pytest.mark.parametrize("body, why", [
+    ({"event": "session_ended", "session_id": 7, "status": "ended"}, "no data object"),  # today's flat shape
+    ({"event": "session_completed", "data": {"session_id": 7}}, "unknown event"),         # old ERP name
+    ({"event": "heartbeat", "data": {}}, "unknown event"),
+    ({"event": "telemetry", "data": {"energy_kwh": 1.0}}, "session event without session_id in data"),
+    ({"data": {}}, "no event"),
+])
+def test_webhook_of_an_unknown_shape_is_refused_and_recorded(client, cab, body, why):
+    """v21 (§2.6): no tolerant parsing — refused with 422, recorded in sync_log by its
+    shape (event and keys), never by its content. The pull stays the truth (D7)."""
+    from app.models.cache import SyncLog
+    r = _hook(client, cab, body)
+    assert r.status_code == 422 and r.json()["detail"]["reason"] == why
+    db = _db()
+    try:
+        row = (db.query(SyncLog).filter(SyncLog.sync_type == "webhook.cabinet")
+               .order_by(SyncLog.id.desc()).first())
+        assert row.status == "error" and row.error_message.startswith(why)
+        assert "ended\"" not in row.error_message and "1.0" not in row.error_message
+    finally:
+        db.close()
 
 
 def test_webhook_alarm_and_poll_alarm_are_one_row(client, sim, cab):
@@ -531,6 +554,9 @@ def test_every_growing_table_has_a_window_or_is_named_as_kept():
         "consumption_monthly",
         # D21: files an Admin imported on purpose; one row per agent rule
         "admin_imports", "security_rule_settings",
+        # D27 phase 1: one row per vessel, one per change of a berth's vessel. How long a
+        # PAST owner's data is kept is open (spec O67) — not decided here
+        "vessels", "berth_vessels",
     }
     managed = set(retention.windows()) | {"consumption_intervals"}
     tables = set(Base.metadata.tables)

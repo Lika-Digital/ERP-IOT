@@ -333,11 +333,12 @@ def test_tc_erp_auth_01_protected_count_matches_graph():
     Faza 6a (D23): 54 od 67 — GET /api/marinas/{id}/overview (glavni dashboard),
     zasticena i vezana uz pristup marini.
     Faza 6b (D30): 52 od 65 — dvije kamerne rute uklonjene (frame, stream): slika
-    ostaje na ormaru.
+    ostaje na ormaru. Zatim 56 od 69 — četiri rute detalja veza (D27 faza 1): detalj,
+    vlasnik (auditiran), upis i brisanje plovila (samo Admin).
     Broj se mijenja samo svjesno, u istom commitu kao ruta.
     """
     rs = _routes()
-    assert (sum(p for _, _, p in rs), len(rs)) == (52, 65)
+    assert (sum(p for _, _, p in rs), len(rs)) == (56, 69)
 
 
 def test_tc_erp_auth_01_no_credentials_is_strictly_401(client):

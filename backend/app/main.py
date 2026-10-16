@@ -11,7 +11,7 @@ from .database import init_db
 from .middleware.security import SecurityMiddleware
 from .services.collector import CollectorThread, collector
 from .services.websocket_manager import ws_manager
-from .routers import (auth, marinas, dashboard, controls, energy, alarms, webhooks, pedestal_ext,
+from .routers import (auth, berth_detail, marinas, dashboard, controls, energy, alarms, webhooks, pedestal_ext,
                       cabinet_admin, users, security)
 from .routers.auth import _decode_token
 
@@ -70,6 +70,7 @@ app.include_router(alarms.router)
 app.include_router(pedestal_ext.router)
 app.include_router(webhooks.router)
 app.include_router(cabinet_admin.router)
+app.include_router(berth_detail.router)        # D27 phase 1, D30 (§6.10, §6.12)
 app.include_router(users.router)
 app.include_router(security.router)
 app.include_router(security.decoy_router)   # layer 2: answers like a missing route

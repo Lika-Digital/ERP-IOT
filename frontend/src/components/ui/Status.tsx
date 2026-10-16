@@ -161,3 +161,10 @@ export const BERTH_ALARM: Look = { tone: 'red', icon: 'alert', word: 'Alarm' }
 
 /** Simulated data (D28): seen by Admin and Marina Manager alike. */
 export const SIMULATED: Look = { tone: 'grey', icon: 'info', word: 'SIM' }
+
+/** The cabinet's own vessel match for a berth (D27 phase 1: the cabinet compares). */
+export const MATCH: Record<'match' | 'no_match' | 'none', Look> = {
+  match: { tone: 'blue', icon: 'ok', word: 'Match' },
+  no_match: { tone: 'red', icon: 'alert', word: 'No match' },
+  none: { tone: 'grey', icon: 'unknown', word: 'Not analysed' },
+}

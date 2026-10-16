@@ -3721,6 +3721,7 @@ Nađeno usput. Nije u izvedbi gore; tvoje je da odlučiš prioritet.
 | O64 | ~~Zaslon Vezovi zove uživo prvi ormar marine~~ | **zatvoreno v20 (6a) za dashboard i kartu**: svih 150 vezova iz baze, nijedan poziv ormaru. Zaslon Vezovi s kontrolama ostaje živ — O65 |
 | O65 | Zaslon Vezovi i kontrole (Upali/Ugasi) i dalje idu na **prvi** poslužitelj marine (`get_client`). Za Krk (jedan ormar) to je točno; za marinu s više pravih ormara nije | kontrole po ormaru (klijent iz `cabinets` po vezu) — s drugim pravim ormarom u **5d** (O60) |
 | O66 | Dva alarma ormara na susjednim vezovima: na 360 px oznake se preklapaju | **v21: rješava se u 6b** — spajanje oznaka po zoomu (T2, §6.1) |
+| O67 | Koliko se dugo čuvaju podaci **vlasnika bivšeg plovila** veza (`vessels.owner_*` nakon što `berth_vessels.valid_to` prođe) — D15 / GDPR | čeka tvoju odluku; do tada se čuvaju (6b, `vessels` i `berth_vessels` imenovani kao „čuva se" u testu retencije) |
 | O44 | `SecurityMiddleware` bilježi 403 kao „Unauthorised access" — s D20 je 403 i običan Manager na Admin ruti | šum u logu; rješava se s O2 (CrowdSec) |
 | O39 | Koja verzija ormara vrti na Krku — R14 b/c i loopback backend objavljeni su na `main` `eac7aa2`, Krk nepoznat | LIVE-01 (§10.5 b1, b7) |
 | O40 | Faza 4 tjedan stvarnog rada ne mjeri naplatu (ERP-ove sesije nastaju tek u fazi 7) | §10.6, prijedlog 2 |

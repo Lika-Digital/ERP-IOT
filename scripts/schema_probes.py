@@ -240,6 +240,29 @@ def _sim_session(c, i):
         "'ended', 1, 'pending', :t, :t) RETURNING id"), dict(c=cab, o=q1, t=NOW)).scalar_one()
 
 
+def _vessel(c, i, name="Probe"):
+    return c.execute(text("INSERT INTO vessels (marina_id, name, created_at, created_by) "
+                          "VALUES (:m, :n, :t, 'probe') RETURNING id"),
+                     dict(m=i["marina"], n=name, t=NOW)).scalar_one()
+
+
+def _berth_vessel(c, i, vessel, frm=NOW, to=None):
+    c.execute(text("INSERT INTO berth_vessels (berth_id, vessel_id, valid_from, valid_to, "
+                   "assigned_by) VALUES (:b, :v, :f, :t, 'probe')"),
+              dict(b=i["A1"], v=vessel, f=frm, t=to))
+
+
+def _p_two_current_vessels(c, i):
+    _berth_vessel(c, i, _vessel(c, i))
+    _berth_vessel(c, i, _vessel(c, i, "Second"))
+
+
+def _p_vessel_history(c, i):
+    from datetime import timedelta
+    _berth_vessel(c, i, _vessel(c, i), frm=NOW - timedelta(days=30), to=NOW - timedelta(days=1))
+    _berth_vessel(c, i, _vessel(c, i, "Now"))
+
+
 def _map(c, i, name):
     c.execute(text("UPDATE marinas SET map_svg = :n WHERE id = :m"), dict(n=name, m=i["marina"]))
 
@@ -301,6 +324,11 @@ MUST_REFUSE: list[tuple[str, Callable]] = [
      lambda c, i: _map(c, i, "../../etc/x.svg")),
     ("marinas: a map that is not an .svg",
      lambda c, i: _map(c, i, "map.html")),
+    # D27 phase 1
+    ("vessels: a vessel without a name", lambda c, i: _vessel(c, i, name="  ")),
+    ("berth_vessels: two current vessels on one berth", _p_two_current_vessels),
+    ("berth_vessels: a period that ends before it starts",
+     lambda c, i: _berth_vessel(c, i, _vessel(c, i), frm=NOW, to=NOW)),
     ("security_agent_passes: a negative count",
      lambda c, i: c.execute(text("INSERT INTO security_agent_passes (finished_at, rules, opened) "
                                  "VALUES (:t, 7, -1)"), dict(t=NOW))),
@@ -336,6 +364,7 @@ def _p_billed_reconciled(c, i):
 
 MUST_ALLOW: list[tuple[str, Callable]] = [
     ("marinas: a map file name under /maps/ (D23)", lambda c, i: _map(c, i, "demo-marina.svg")),
+    ("berth_vessels: a past vessel and a current one on the same berth (D27)", _p_vessel_history),
     ("berth_outlets: a valve MAY be shared between berths (D1)", _p_valve_shared),
     ("contracts: billing_mode defaults to prepaid in the database (D9)", _p_contract_default_prepaid),
     ("marina_billing_policy: defaults 1.00 / -2.00 / 20 %", _p_policy_defaults),

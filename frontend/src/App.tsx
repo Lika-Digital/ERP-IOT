@@ -13,6 +13,7 @@ import Energy from './pages/Energy'
 import Alarms from './pages/Alarms'
 import Berths from './pages/Berths'
 import PedestalDetail from './pages/PedestalDetail'
+import BerthDetail from './pages/BerthDetail'
 
 export default function App() {
   return (
@@ -44,6 +45,7 @@ export default function App() {
             <Route path="energy" element={<Energy />} />
             <Route path="alarms" element={<Alarms />} />
             <Route path="berths" element={<Berths />} />
+            <Route path="berth/:berthId" element={<BerthDetail />} />
           </Route>
         </Route>
 

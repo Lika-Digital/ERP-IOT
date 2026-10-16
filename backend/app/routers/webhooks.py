@@ -36,6 +36,7 @@ from ..models.cabinet import Cabinet
 from ..models.marina import Marina
 from ..models.cache import AlarmLog, SessionLog, PedestalCache
 from ..services import decoys, session_sync
+from ..services.pedestal_api import _write_sync_log
 from ..services.websocket_manager import ws_manager
 from ..utils.encryption import decrypt_password
 from ..utils.time import utcnow
@@ -307,8 +308,9 @@ def _write_session_log(
 
 # ─── Phase 4: per-cabinet receiver ────────────────────────────────────────────
 
-SESSION_EVENTS = {"session_created", "session_updated", "session_completed", "session_ended",
-                  "session_telemetry"}
+# v21 (§2.6, revision item 4): the names the cabinet's ERP sender uses
+# (Cloud_IOT mqtt_handlers.py:1947, 2073, 2147, 2194)
+SESSION_EVENTS = {"session_activated", "telemetry", "session_ended"}
 ALARM_EVENTS = {"hardware_alarm", "breaker_alarm", "meter_load_auto_stop",
                 "meter_load_critical", "valve_flow_warning", "marina_door"}
 _REFUSED = "Invalid or missing webhook credentials"
@@ -348,6 +350,22 @@ def _cabinet_authenticated(db: Session, cabinet_id: int, api_key: str, signature
     return cab
 
 
+def _refuse_shape(db: Session, cab: Cabinet, why: str, payload) -> None:
+    """v21 (§2.6): a shape the ERP does not know is refused and recorded — never parsed
+    "tolerantly". The pull stays the truth (D7). The record names the shape (event,
+    top-level keys), never the payload: it may carry a customer reference."""
+    event = payload.get("event") if isinstance(payload, dict) else None
+    keys = sorted(str(k)[:40] for k in payload)[:20] if isinstance(payload, dict) else []
+    shape = f"{why}; event={str(event)[:60]!r}; keys={keys}"
+    now = utcnow()
+    _write_sync_log(db, cab.marina_id, "webhook.cabinet", "error", now, now, shape[:500])
+    log.warning("[WEBHOOK] cabinet=%s refused: %s", cab.display_id, shape)
+    raise HTTPException(status_code=422, detail={
+        "code": "unknown_shape",
+        "sentence": "The ERP does not know this webhook shape; it was recorded and refused.",
+        "reason": why})
+
+
 @router.post("/cabinet/{cabinet_id}")
 async def receive_cabinet_webhook(
     cabinet_id: int,
@@ -366,9 +384,15 @@ async def receive_cabinet_webhook(
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
     if not isinstance(payload, dict) or not isinstance(payload.get("event"), str):
-        raise HTTPException(status_code=400, detail="Expected {event, data, timestamp}")
+        _refuse_shape(db, cab, "no event", payload)
     event = payload["event"]
-    data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+    if event not in SESSION_EVENTS | ALARM_EVENTS:
+        _refuse_shape(db, cab, "unknown event", payload)
+    if not isinstance(payload.get("data"), dict):
+        _refuse_shape(db, cab, "no data object", payload)
+    data = payload["data"]
+    if event in SESSION_EVENTS and "session_id" not in data:
+        _refuse_shape(db, cab, "session event without session_id in data", payload)
     now = utcnow()
     stored = "nothing"
 
@@ -376,8 +400,7 @@ async def receive_cabinet_webhook(
         db.add(SessionLog(marina_id=cab.marina_id, pedestal_id=cab.pedestal_pk,
                           session_data=payload, recorded_at=now))
         # speed only: the same function as the pull, but never "reconciled" (D7)
-        result = (session_sync.apply(db, cab, data, final_by_pull=False, now=now)
-                  if "session_id" in data else "not_a_contract_payload")
+        result = session_sync.apply(db, cab, data, final_by_pull=False, now=now)
         db.commit()
         stored = f"session_log; erp session: {result}"
     elif event in ALARM_EVENTS:

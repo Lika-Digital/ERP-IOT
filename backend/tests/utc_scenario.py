@@ -135,7 +135,7 @@ def main() -> dict:
             status="ended", activated_at=iso_z(real_utc() - timedelta(minutes=40)),
             duration_minutes=30.0)
         ok(c.post(f"/api/webhooks/cabinet/{cab['id']}", headers={"X-API-Key": "utc-cabinet-hook"},
-                  json={"event": "session_completed", "data": state.nfc_sessions[501]}),
+                  json={"event": "session_ended", "data": state.nfc_sessions[501]}),
            "webhook session")
 
         from app.services.collector import Collector
