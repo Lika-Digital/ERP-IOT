@@ -58,6 +58,15 @@ for p in git nftables unattended-upgrades postgresql nginx crowdsec age; do
     case "$v" in *ii*) echo "$p: $v" ;; *) echo "$p: nije instaliran" ;; esac
 done
 
+sec "Paketi za korake 5-6 (v25): dostupne verzije, ništa se ne instalira"
+apt-cache policy postgresql-16 python3.12-venv 2>/dev/null | grep -E '^[a-z]|Installed|Candidate'
+python3 -c 'import ensurepip' 2>/dev/null && echo "ensurepip: da" || echo "ensurepip: nema (treba python3.12-venv)"
+
+sec "Ostaci prijašnjih pokušaja (5b)"
+for d in /opt/erp-iot /etc/erp-iot /var/backups/erp; do [ -e "$d" ] && echo "$d: POSTOJI" || echo "$d: nema"; done
+id erp 2>/dev/null || echo "korisnik erp: nema"
+id erp-agent 2>/dev/null || echo "korisnik erp-agent: nema"
+
 sec "Servisi"
 for s in ssh tailscaled unattended-upgrades nftables systemd-resolved; do
     printf '%-22s enabled=%-10s active=%s\n' "$s" \
