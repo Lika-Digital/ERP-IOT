@@ -262,6 +262,19 @@ Brojke su mjerene, ne procijenjene. Metoda je uz svaku brojku. Gdje je inventar 
 
 ## §0 Ispravci ulaznih dokumenata
 
+### §0.0 · TRAJNO PRAVILO — specifikacija je izvor istine (tvoja odluka 2026-10-16)
+
+> **Odlučeno** · Redoslijed je uvijek: **1. pregled → 2. prijedlog izmjene speca (trojka:
+> odlučeno · zašto · ako griješim) → 3. tvoje odobrenje → 4. tek onda kod.** Ako se tijekom
+> kodiranja pojavi nešto što traži promjenu speca — **stani i pitaj**. Ni spec ni ponašanje
+> ne mijenjaju se bez odobrenja, ni „privremeno".
+>
+> **Zašto** · Spec je jedino mjesto na kojem je odluka izrečena tako da se može provjeriti;
+> kod koji ga pretekne stvara odluke koje nitko nije donio.
+>
+> **Ako griješim** · Pravilo mijenjaš samo ti.
+
+
 Pet tvrdnji iz ulaza ne drže se uz kod ili uz mjerenje. Navodim ih, ne primjenjujem tiho.
 §0.5 i §0.6 su u v3 prepisani: od analize koda ormara ostala su **tri pravila**, a commit više
 nije referenca.
