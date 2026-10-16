@@ -30,7 +30,7 @@ Tvoje odluke 2026-10-16 (pregled 6b).
 | **O67 odlučen** | podaci vlasnika bivšeg plovila brišu se 90 dana nakon uklanjanja; ime i registracija ostaju |
 | **§6.13 · nalaz** | Pedestal control u demo marini je govorio „Ormar 1 · Krk" za simulirani ormar; pravila koja to zatvaraju, i izvedba **P4** (odobreno, izvedeno) |
 | **§8.4 runbook** | uloga `erp_agent` stvara se **prije** `alembic upgrade head` kad vlasnik baze nema CREATEROLE; **P3** (odobreno, izvedeno): bez `create_all` na PostgreSQL-u, start na bazi koja nije na `head` odbija se; `/setup` razlikuje „server unreachable" |
-| **§6.12 · P5** *(čeka odobrenje)* | upload reference: D30/P1/P2 proturječe trima starijim pravilima (§2.3 „nikad", §12, §1.3) i `cabinet_capabilities` nema mjesta za zapis P1 — prijedlog kako ih uskladiti |
+| **§6.12 · P5 odlučen** | upload reference samo po ormaru uz zapis P1 (bez uvjeta R4); na pravim ormarima zapis P1 se ne može upisati dok ormar ne isporuči **R26** — do tada upload samo na simulatoru; §2.3, §12 i §1.3 usklađeni; migracija 015 |
 
 ### Što se promijenilo u verziji 22
 
@@ -550,10 +550,13 @@ Načini **PEDESTAL** i **BOTH** iz D27 šalju referentnu fotografiju ormaru kroz
 `berths.push_image_ext`. §12 to zabranjuje dok ormar ne popravi 2.3 (R4): ext write rute danas
 zaobilaze provjeru načina, pa je ruta dosežna i kad je u Gateway UI-u isključena.
 
-**Preporuka** · Gradim sve protiv simulatora. Na pravom ormaru slanje se uključuje **po ormaru**, tek
+~~**Preporuka** · Gradim sve protiv simulatora. Na pravom ormaru slanje se uključuje **po ormaru**, tek
 kad živa provjera (§9.1b) potvrdi R4 na tom ormaru. Do tada se fotografija sprema u ERP, vez kaže
-„Not sent to pedestal — waiting for pedestal fix 2.3", a ormar uspoređuje s onim što već ima.
-**Druga mogućnost** · uključiti odmah i prihvatiti rizik iz §12 — tvoja odluka, jedan redak.
+„Not sent to pedestal — waiting for pedestal fix 2.3", a ormar uspoređuje s onim što već ima.~~
+
+> **Zamijenjeno s P5 (2026-10-16, §6.12)** · Slanje se uključuje po ormaru **zapisom P1**, ne
+> potvrdom R4; ERP sliku ne sprema (P2). Na pravim ormarima zapis P1 čeka **R26**; do tada se
+> upload gradi i testira samo na simulatoru.
 
 ### §1.4 · D27 način ERP i odobrenje iz D22 *(v15 → **odlučeno 2026-10-15: da, s tri uvjeta**)*
 
@@ -691,11 +694,16 @@ write endpoint je površina.
 |---|---|
 | `breakers.socket_reset_ext` | NALAZ 2.3 — mod se **ne provjerava** na direktnim write rutama; „monitor" u UI-u ne čini ništa. Ne prije ormarovog popravka 2.3 (`odluke.md`, Otvoreno) |
 | `load.auto_stop_ack_ext` | isto, i dodatno **nema Smart Mode gate** (NALAZ 2.2) — jedini write koji prolazi i kad je ormar samostalan |
-| `berths.push_image_ext` | isto NALAZ 2.3; ERP ne piše slike |
 | `led_schedule.get` / `.upsert` / `.delete` / `.test` | NALAZ 1.3 — gateway match **ignorira metodu**, pa uključen `.get` blokira `PUT`/`DELETE` s 403 „read-only". ERP ne upravlja LED-om |
 | `mobile.*`, `qr.*` | nije ERP-ov posao (D6: NFC je jedini put) |
 | `controls.reset`, `controls.led`, `sockets.config_patch`, `valves.config_patch` | ERP ne mijenja konfiguraciju ormara |
 | `controls.socket_approve` / `socket_reject` | pokriveni s `allow`/`deny`; dva puta ista akcija |
+
+**Samo po ormaru, uz zapis P1 (§6.12, P5):**
+
+| ključ | uvjet |
+|---|---|
+| `berths.push_image_ext` | ormar ima zapis P1 (`cabinet_capabilities.reference_upload`); bez njega klijent odbija prije slanja. Na pravom ormaru zapis se ne može upisati dok ormar ne isporuči R26 |
 
 > **Odlučeno** · Lista uključenih endpointa je **dio ERP konfiguracije po ormaru**, provjerena
 > pri spajanju ormara, i neslaganje je vidljivo stanje, ne tiha 403.
@@ -2351,8 +2359,9 @@ Manager čita.
 vessels              id, marina_id, name, registration, owner_name, owner_contact,
                      created_at, created_by
 berth_vessels        berth_id, vessel_id, valid_from, valid_to         -- glavno plovilo veza
-vessel_photos        id, vessel_id, sha256, bytes, path, uploaded_by, uploaded_at,
-                     pushed_to_cabinet_at NULL, push_result NULL
+vessel_photos        id, vessel_id, berth_id, cabinet_id, sha256, size_bytes, content_type,
+                     reason, uploaded_by, uploaded_at, cabinet_status NULL, cabinet_detail NULL
+                     -- P2 (§6.12): bez path i bytes, slika se ne sprema
 berth_match_config   marina_id, berth_id NULL (nadjačava), mode CHECK (pedestal | erp | both)
 vessel_match_results berth_id, source (cabinet | erp), verdict (match | mismatch | unclear),
                      score, model, observed_at, frame_sha256 NULL      -- bez slike (§1.4)
@@ -2627,8 +2636,8 @@ pravila ga i dalje zabranjuju, a kod ih provodi:
 I zapis iz P1 nema gdje stati: `cabinet_capabilities` ima samo `available` i `checked_at`, a
 CHECK dopušta sedam sposobnosti, ne „upload".
 
-> **PRIJEDLOG P5 — čeka tvoje odobrenje** · **Upload ide samo po ormaru, uz zapis iz P1; ništa
-> drugo se ne otključava.**
+> **Odlučeno — P5 (tvoje odobrenje 2026-10-16, bez strože varijante: R4 se ne traži)** ·
+> **Upload ide samo po ormaru, uz zapis iz P1; ništa drugo se ne otključava.**
 > - **§2.3:** `berths.push_image_ext` izlazi iz „nikad" u novi redak „samo po ormaru, uz zapis P1
 >   (§6.12)". U kodu: ključ ulazi u ugovor (putanja iz kataloga ormara
 >   `/api/ext/pedestals/{pedestal_id}/berths/{berth_id}/reference-image`, `e80a4c1:…/api_catalog.py:64`),
@@ -2654,6 +2663,11 @@ CHECK dopušta sedam sposobnosti, ne „upload".
 > „kontrole koja izgleda isključena" — zapis P1 i odgovor ormara su upravo ta provjera, po ormaru.
 >
 > **Ako griješim** · Ako želiš i R4: jedan uvjet više u istoj provjeri prije slanja.
+>
+> **Dopuna (tvoja, 2026-10-16) · Pravi ormari čekaju R26.** Na pravim ormarima (Krk,
+> marina-iot) zapis P1 **ne može se upisati** dok ormar ne isporuči R26 (upload poštuje način
+> gatewaya). ERP to provodi na serveru: upis zapisa za ormar koji nije simuliran odbija se s 409
+> `waiting_for_cabinet_r26`. Do tada se upload testira **samo na simulatoru**.
 
 ### §6.13 · Žive ploče ormara — tko je iza njih (nalaz 6b, v23)
 
@@ -3978,9 +3992,10 @@ Nađeno usput. Nije u izvedbi gore; tvoje je da odlučiš prioritet.
 - **Ne radim tvrdu granicu potrošnje bez prekoračenja.** D9: traži logiku na ormaru; ERP ne
   može, i pretvaranje da može znači tihi gubitak.
 - **Ne prepisujem postojećih osam tablica** u fazi 3. Dodaje se; briše se kasnije i odvojeno.
-- **Ne uključujem `breakers.socket_reset_ext`, `load.auto_stop_ack_ext` ni
-  `berths.push_image_ext`** prije ormarovog popravka 2.3 — kontrola koja izgleda isključena a
-  poznati URL je doseže je točno oblik koji je zabranjen. Za `berths.push_image_ext` i D27: §1.3.
+- **Ne uključujem `breakers.socket_reset_ext` ni `load.auto_stop_ack_ext`** prije ormarovog
+  popravka 2.3 — kontrola koja izgleda isključena a poznati URL je doseže je točno oblik koji je
+  zabranjen. **`berths.push_image_ext` samo po ormaru uz zapis P1** (§6.12, P5); na pravim
+  ormarima tek uz R26.
 - **Ne koristim verifikaciju u Gateway UI-u kao dokaz** ničega (NALAZ 3.1, 3.2).
 - ~~**Ne gradim nove grafikone.**~~ *(v15)* D24 vraća energetsku analitiku i agenta (§6.7, §13.3);
   grafikoni idu kroz postojeće tokene (§6.0).
