@@ -3,12 +3,12 @@
 Što se gradi, u kojem redoslijedu, i svaka odluka izrečena tako da ispravak
 košta jedan redak, a ne razgovor.
 
-    Verzija 20 — zamjenjuje v19 od 2026-10-16
+    Verzija 21 — zamjenjuje v20 od 2026-10-16
     Datum 2026-10-16
     Status faze 1–4 ZAVRŠENE i PRIHVAĆENE (§10.1–§10.4); korak 5a (D20), faza 8 (D21) i
            UI · Lika brand PRIHVAĆENI, na `main` (§10.7–§10.9); 5b PAUZIRAN do prihvaćanja
            faze 6 (tvoja odluka 2026-10-15); faza 6 lokalno: **6.0 demo marina ZAVRŠEN**
-           (§10.10) i PRIHVAĆEN; **6a dashboard i karta ZAVRŠEN** (§10.11), čeka tvoj pregled;
+           (§10.10) i PRIHVAĆEN; **6a PRIHVAĆEN** (§10.11); **6b u izvedbi** po novom opsegu (§10.12);
            §1 je prazan
 
 Čita se uz `docs/inputs/odluke.md` **v2.6** (odluke, obvezujuće — v2.1 dodaje **D18**, v2.2 **D19**,
@@ -18,6 +18,21 @@ v2.3 ispravak mreže u **D13**, v2.4 **D20**, v2.5 **D21**, **D22** i redoslijed
 `docs/inputs/ormar_ui_v2_spec.txt` (specifikacija ormara — uzor forme i izvor rječnika stanja).
 
 **Sve u ovom dokumentu je ODLUČENO. §1 je prazan — tri pitanja iz v15 odlučena su 2026-10-15.**
+
+### Što se promijenilo u verziji 21
+
+Tvoje odobrenje 2026-10-16 (pregled revizije ormara i prijedlozi iz njega).
+
+| | |
+|---|---|
+| **D21.1** (§13.1) | agent javlja prolaz: samo INSERT u `security_agent_passes`, samo vrijeme i dva broja; test stupaca |
+| **D30** (§6.12) | faza 1: sve slike i video ostaju na ormaru; ERP → ormar smije (referentna slika); četiri funkcije procjene kroz ERP; ERP ne zove nijedan kamerni endpoint (test). Faza 2 nije odlučena: načini ERP i BOTH (D27) i eskalacija sa slikom (D22) su samo kandidati |
+| **§2.6 · revizija ormara** | devet razlika, A–D i E1–E4 s file:line; ERP preuzima 1, 3, 4, 9 i E1–E3; ormar 5–8 i C (R22–R26); do tada je istina pull (D7), a webhook nepoznatog oblika se **odbija i bilježi** |
+| **§7.2 R22–R30** | zahtjevi prema ormaru; R27–R30 s točnim predloženim ugovorom (ključ, metoda, putanja, tijelo, odgovor, kodovi, način) |
+| **6b novi opseg** (§10.12) | podaci o plovilu + upload slike + zauzeće i match s ormara + uklanjanje kamera + sedam popravaka UI-ja (T1–T4 odobreni) |
+| **faza 7** (§10) | `/scan` s `{cabinet_id, outlet, erp_ref}`, voda nakon `/scan`, bez `by-user` i `nfc_tag_id`, nazivi i omotnica webhooka, HMAC po ormaru, tjedni izvještaj računa ERP |
+| **§3.2, §6.0, §6.1, §6.11** | T1 „Not connected yet", T4 format `en-GB`, T2 karta na mobitelu i O66, T3 uvijek jedan „Power without vessel" u demo svijetu |
+| **čeka tvoju odluku** | dvije trojke u §6.12: kako ERP zna način gatewaya (P1) i čuva li ERP referentnu sliku (P2) |
 
 ### Što se promijenilo u verziji 20
 
@@ -818,6 +833,45 @@ Ormar je popravljen prema svojoj specifikaciji. Ugovor je
 
 ---
 
+### §2.6 · Revizija ormara 2026-10-16 — devet razlika i tko popušta (v21)
+
+Ormar je u reviziji ERP-a (`main` `f5aee7e`) našao devet razlika. Provjereno na ormaru
+`e80a4c1` (`main`) i `5fca754` (`develop`, isti kod za ovo). Odobreno 2026-10-16.
+
+| # | Razlika | Presuda | ERP / ormar | Popušta |
+|---|---|---|---|---|
+| 1 | tijelo `/scan` | potvrđeno | ERP `client.py:288-290` `{nfc_tag_id, user_id}`; ormar `nfc.py:152-161` `{cabinet_id, outlet, erp_ref}` → 422 | **ERP** (faza 7): tag razrješava sam (D6.2) |
+| 2 | `nfc_scan` samo u testu | potvrđeno | `test_cabinet_client.py:212` | — (faza 7) |
+| 3 | voda bez `/scan`; 409 neprepoznat | potvrđeno | ERP `controls.py:169-206`; ormar `controls.py:784-800`; `classify_409` → `conflict` | **ERP** (faza 7): voda tek nakon `/scan`; `classify_409` dobiva `no_reservation` |
+| 4 | nazivi događaja | potvrđeno | ERP `webhooks.py:310-311`; ormar `mqtt_handlers.py:2073, 2147, 1947, 2194` | **ERP**: `session_activated`, `telemetry`, `session_ended` |
+| 5 | omotnica | potvrđeno | ERP `webhooks.py:368-371`; ormar `erp_webhook.py:63-87` (ravan payload) | **ormar** (R22) |
+| 6 | telemetrija i kraj ne izlaze | djelomično | `session_ended` izlazi na izvlačenje i SessionEnded (`mqtt_handlers.py:1946-1949, 2193-2196`), telemetrija kao `telemetry` (`:2146-2149`); **ne izlazi** na zaustavljanje iz ERP-a (`nfc.py:980-1012`) ni od operatera | **ormar** (R23) |
+| 7 | dva pošiljatelja, dva ključa | potvrđeno | ormar `erp_webhook.py:90-104` i `webhook_service.py:76-109`; ERP jedan `webhook_key_enc` (`webhooks.py:328-339`) | **ormar** (R24) |
+| 8 | HMAC | potvrđeno | ERP neobavezan po ormaru (`webhooks.py:341-347`); ormar ne potpisuje | **ormar** potpisuje (R25); ERP ga čini obaveznim po ormaru kad je ormar spreman |
+| 9 | `berth_id` u odgovoru `/scan` | potvrđeno; ERP polje danas ne čita | ormar `nfc.py:789-797` (`berth_id` broj ili null, `cabinet_label`) | **ERP** (faza 7): vez je ERP-ov, broj s ormara samo za usporedbu (D18) |
+| A | Bearer na `/api/ext/*`, `X-API-Key` na `/api/nfc/*` | potvrđeno | `client.py:163, 257-260` | — |
+| B | tjedni izvještaj | ne očekuje se s ormara | — | **ERP** ga računa sam |
+| C | upload referentne slike zaobilazi način gatewaya | potvrđeno; ERP ga danas ne koristi | ormar `ext_pedestal_endpoints.py:212-258` vs `external_api_gateway.py:305-321` | **ormar** (R26); ERP do tada provjerava sam (§6.12) |
+| D | kamere | **opovrgnuto — ERP ih zove** | `contract.py:103-105`, `pedestal_ext.py:47-75`, „Get frame" | **ERP** ih uklanja (D30, 6b) |
+| E1 | povratak na `by-user` kod 404 | mrtav put | `reconciler.py:81-90, 144-160`; ormar `nfc.py:831` zakomentirano | **ERP** uklanja (faza 7) |
+| E2 | `nfc_tag_id` u `socket_cmd` | ormar ga odbacuje | `client.py:408-412`; ormar `controls.py:558-565` | **ERP** uklanja; i `nfc_mapping_mismatch` (faza 7) |
+| E3 | webhook prima nepoznat oblik s 200 | potvrđeno | `webhooks.py:368-405` | **ERP**: odbija i bilježi (ispod) |
+| E4 | `erp_ref` umjesto `customer_id` u sesiji | nije razlika | `session_payload.py:32-34, 117` | — |
+
+> **Odlučeno** · **Do prilagodbe ormara istina je pull (D7).** Webhook nepoznatog oblika — nepoznat
+> `event`, ili nema `data` — **odbija se s 422 i bilježi** u `sync_log` (događaj, oblik, ključevi;
+> bez payloada). Nema „tolerantnog" parsiranja oba oblika. Posljedica, svjesno: dok ormar ne
+> isporuči R22, webhookovi sesija se odbijaju i sesije dolaze pullom (do 15 min).
+>
+> **Zašto** · Tvoja odluka. Tiho prihvaćen pogrešan oblik izgleda kao rad, a ne radi.
+>
+> **Ako griješim** · Jedna provjera u `webhooks.py`.
+
+**Pitanja za ormar:** (A1) stiže li SessionEnded nakon zaustavljanja iz ERP-a ili od operatera;
+(A2) koji pošiljatelj ostaje; (A3) oblik i stalnost `event_id`; (A4) format, veličina, zamjena ili
+dodavanje, popis i brisanje referentnih slika; (A5) je li rezultat usporedbe odvojen od zauzeća ili
+samo `state_code`; (A6) dolaze li alarmi guarda kroz `alarms.active` i pod kojim `alarm_type`.
+
 ## §3 Rječnik stanja
 
 > **Odlučeno** · Status računa **server**, jednom, u jednom modulu. Frontend ga nikad ne
@@ -923,6 +977,16 @@ potrošnja nije izmjerena — ormar je prijavio pošteno, ERP mora to i pokazati
 > usklađeno i jedno naše, drže oboje.
 >
 > **Ako griješim** · Spajanje je jedan serijalizator.
+
+> **Odlučeno (v21, T1)** · **Vez koji nema ormar nije Unknown.** `no_cabinet` šalje
+> `berth_colour: "none"`: bez ispune, isprekidan obrub, ikona pauze, riječ **„Not connected yet"**.
+> Nije sedma boja D2 nego činjenica o konfiguraciji. Kartica Occupancy ga **ne broji** ni u
+> nazivnik ni u „unknown", nego zasebno („4 not connected").
+>
+> **Zašto** · „Unknown" znači „ne vidimo što bismo trebali vidjeti — provjeri". Nespojen vez čeka
+> 5d i ne traži ništa. „Jedna riječ, jedna boja" (TC-UIR-02) brani sivu s drugom riječju.
+>
+> **Ako griješim** · Jedan redak u `berth_status.py`, jedan u tablici izgleda.
 
 ### §3.3 · Stanja priključka i uređaja
 
@@ -1865,6 +1929,15 @@ L1  /marina/:id                   2D karta + popis vezova
      └── L2  /marina/:id/security       Sigurnost
 ```
 
+> **Odlučeno (v21, T4)** · **Brojevi i vremena slijede jezik sučelja, `en-GB`:** `595.1 kWh`,
+> `1,234.5 kWh`, `78%`, `+8%`, vrijeme `06:59` (24 h). Jedan pomoćnik za format u frontendu;
+> nijedno mjesto ne koristi jezik preglednika.
+>
+> **Zašto** · Jedan jezik u cijelom sučelju. 6a je koristio jezik preglednika (`595,1`).
+> `en-GB` zbog 24-satnog vremena.
+>
+> **Ako griješim** · Jedna konstanta.
+
 ### §6.1 · L1 — 2D karta marine
 
 > **v15** · Karta je gornji dio glavnog dashboarda (§6.6, D23); pravila ispod vrijede i dalje.
@@ -1921,6 +1994,17 @@ L1  /marina/:id                   2D karta + popis vezova
 > (`frontend/src/api/pedestalExt.ts:26`).
 >
 > **Ako griješim** · Nema verzije ovoga koju bih izveo drukčije.
+
+> **Odlučeno (v21, T2)** · **Uski zaslon:** ispod **640 px** karta je u okviru s **zoomom i
+> pomicanjem** (dva prsta, povlačenje, gumbi + i −); počinje prilagođena širini, stranica se ne
+> pomiče vodoravno. **Oznake alarma** koje bi se na trenutnom zoomu preklopile spajaju se u jednu
+> („Alarm 2"; tooltip navodi vezove) i razdvajaju se uvećanjem — na svakoj širini (O66).
+> **Oznaka veza:** tooltip na hover i fokus (broj, riječ stanja, alarmi, SIM); broj veza na
+> početku svakog gata je dio crteža (generator karte), ne aplikacije.
+>
+> **Zašto** · Karta je srž D23; popis ispod već postoji. Spajanje rješava O66 svugdje.
+>
+> **Ako griješim** · Prag je jedna konstanta; popis umjesto karte je jedan uvjet.
 
 ### §6.2 · L2 — Vez
 
@@ -2211,6 +2295,11 @@ otvara vrata uz razlog.
 
 ### §6.10 · Vez — konfiguracija i usporedba plovila — D27 (v15)
 
+> **v21 · D30** · U **fazi 1** radi samo način **PEDESTAL**: fotografija ide na ormar, ormar
+> uspoređuje, ERP prikazuje rezultat ormara. Načini **ERP** i **BOTH** te `vessel_match_results` i
+> `berth_match_config` ostaju ovdje kao **kandidati za fazu 2** i ne kodiraju se. Što se gradi sada:
+> §6.12 i §10.12.
+
 Klik na vez (karta ili popis) → detalj veza (§6.2) i **konfiguracija**: Admin uređuje, Marina
 Manager čita.
 
@@ -2418,6 +2507,67 @@ adresi simulatora; scenarij s pravim id-em ne radi ništa; simulator ne otvara i
 
 ---
 
+> **Odlučeno (v21, T3)** · **Svijet demo marine svaki dan ima točno jedan prazan vez s
+> kabelom u utičnici** (Power without vessel), uz postojećih 2 % slučajnih. Vez se bira
+> deterministički iz seeda i dana, među vezovima koji su taj dan prazni i imaju ormar.
+>
+> **Zašto** · Demo mora pokazati svih šest stanja; s 2 % pojava je rjeđa od jednom dnevno.
+>
+> **Ako griješim** · Jedna funkcija u `demo_world.py`.
+
+### §6.12 · Slika i procjena u fazi 1 — D30 (v21)
+
+> **Odlučeno (D30, tvoja odluka 2026-10-16)** · **Faza 1:**
+> - **Sve slike i video ostaju na ormaru.** Prema ERP-u ne ide nijedna slika ni video — samo
+>   stanje i rezultat.
+> - **Smjer ERP → ormar je dopušten:** ERP šalje referentnu sliku plovila na ormar
+>   (`berths.push_image_ext`), ormar sam radi match / no match.
+> - ERP i API omogućuju **sve četiri funkcije procjene ormara**, da se u fazi 1 testiraju kroz ERP:
+>   1. **zauzeće veza** — čitanje rezultata (1/0) i pokretanje;
+>   2. **match** — upload referentne slike, čitanje rezultata;
+>   3. **sektor slike kamere** — čitanje i postavljanje;
+>   4. **guard** — uključivanje/isključivanje, čitanje alarma (snimka ostaje na ormaru).
+>
+>   Sve upravljačko: **samo uz Smart Mode ON, uloga, razlog, audit** — ista pravila kao utičnice.
+>   Što ormar još ne izlaže (R27–R30) ERP prikazuje kao **„Not available on this cabinet"** i ne
+>   gradi ga ni u ERP-u ni u simulatoru dok ormar ne potvrdi oblik ugovora.
+> - **ERP ne zove nijedan kamerni endpoint** (`snapshot`, `frame_ext`, `stream`, `stream_ext`).
+>   Test: ugovor ERP-a nema nijedan ključ `camera.*`, nijedna ruta ERP-a i nijedan dio frontenda
+>   ne vode do kamere.
+>
+> **Faza 2 nije odlučena** — bit će ono što testiranje faze 1 pokaže. Načini ERP i BOTH (D27,
+> §6.10) i eskalacija sa slikom (D22, §13.2) ostaju u specu samo kao kandidati.
+>
+> **Zašto** · Tvoja odluka. Slika s ljudima na ERP-u je pravni teret (D15, R8) prije nego što
+> se zna treba li uopće.
+>
+> **Ako griješim** · Faza 2 se otvara rezultatima testiranja faze 1.
+
+**Upload referentne slike danas** (dopuna 3): ormarova ruta postoji, ali ne poštuje način gatewaya
+(C, R26 otvoren). ERP se zato **ne oslanja na ormar** i sam provjerava, prije poziva: Smart Mode ON
+(svjež `health`), ulogu Admin, razlog (najmanje 3 znaka), zapis u `command_audit` prije poziva — te
+način gatewaya koji dopušta upravljanje (P1, ispod).
+
+> **PRIJEDLOG P1 — čeka tvoje odobrenje** · **Način gatewaya ERP ne može pročitati**: katalog i
+> konfiguracija gatewaya na ormaru dostupni su samo adminu ormara (`external_api_admin.py:119-149`,
+> `require_admin`). Prijedlog: ERP vodi **vlastiti zapis po ormaru** — „gateway dopušta
+> upravljanje za `berths.push_image_ext`" — koji Admin ERP-a upisuje (tko, kada, razlog) nakon što
+> je to postavio na ormaru; bez zapisa ERP upload odbija. Odgovor ormara 403 ili 503 zapis
+> automatski gasi i bilježi. Kad ormar isporuči R26, ostaje kao druga brava.
+>
+> **Zašto** · ERP ne može provjeriti ono što ne može pročitati; zapis je izjava odgovorne osobe,
+> a ormarov odgovor je stvarna provjera.
+>
+> **Ako griješim** · Jedan redak u `cabinet_capabilities` po ormaru.
+
+> **PRIJEDLOG P2 — čeka tvoje odobrenje** · **ERP ne čuva referentnu sliku.** Datoteka prolazi
+> kroz ERP do ormara i ne sprema se; `vessel_photos` čuva samo `sha256`, veličinu, vrstu, tko, kada,
+> razlog i odgovor ormara (bez `path` i `bytes` iz §6.10). Ponovno slanje znači ponovni upload.
+>
+> **Zašto** · D30: slike ostaju na ormaru. Kopija u ERP-u treba tek načinu ERP, a on je faza 2.
+>
+> **Ako griješim** · Stupac `path` i spremište vraćaju se s fazom 2.
+
 ## §7 Sigurnost
 
 ### §7.0 · Mreža — ispravak D13 (2026-10-12)
@@ -2553,7 +2703,42 @@ na dan čitanja i služi prioritizaciji — **ugovorna provjera je TC-ERP-LIVE-0
 | **R19** *(D27, faza 6b)* | **`berths.push_image_ext` prima fotografiju plovila kao referencu** — potvrda formata, veličine i odgovora, i da je referenca **po vezu**; ormar javlja koju referencu koristi (npr. `sha256`), da ERP zna uspoređuje li ormar s trenutnom fotografijom | `e80a4c1:…/services/api_catalog.py:64` (ruta postoji, `allow_bidirectional`) | nepoznato — živa provjera | načini PEDESTAL i BOTH; uključivanje tek uz R4 (§1.3) |
 | **R20** *(D27, faza 6b)* | **Rezultat usporedbe po vezu u ugovoru** — `match_ok_bit`, `state_code`, `match_score` i `last_analyzed` po vezu. `berths.list` ih već vraća (`e80a4c1:…/routers/berths.py:49-52, 140-143`); traži se potvrda na Krku i da ostanu u ugovoru | isto | provjeriti živim odgovorom | „Wrong vessel" s ormara |
 | **R21** *(D25, faza 6d)* | **Guard preko ext API-ja** — čitanje i upis konfiguracije guard značajke (monitor + bidirectional), s auditom na ormaru. U katalogu ext API-ja danas nema nijedne guard rute | `e80a4c1:…/services/api_catalog.py` (nema `guard`) | **ne** | konfiguracija guarda iz ERP-a (§6.8); prikaz guard alarma ide kroz postojeće alarme |
+| **R22** *(revizija 5)* | **Omotnica webhooka** `{event, event_id, cabinet_id, timestamp, data}` — `data` je payload sesije po ugovoru (16 ključeva + `erp_ref`) ili alarma | `e80a4c1:…/services/erp_webhook.py:63-87` | **ne** | ERP odbija sadašnji ravni oblik (§2.6); sesije idu pullom |
+| **R23** *(revizija 6)* | **`session_ended` na svakom putu kraja** — i zaustavljanje iz ERP-a (`nfc.py:980-1012`) i od operatera; telemetrija pod jednim stalnim imenom | `e80a4c1:…/services/mqtt_handlers.py:1946-1949, 2146-2149, 2193-2196` | **ne** | ništa — pull (D7) |
+| **R24** *(revizija 7)* | **Jedan pošiljatelj i jedan ključ prema ERP-u** (danas `erp_webhook.py` s `settings.erp_api_key` i `webhook_service.py` s `ExternalApiConfig.api_key`) | `e80a4c1:…/services/erp_webhook.py:90-104`, `webhook_service.py:76-109` | **ne** | ERP drži jedan ključ po ormaru |
+| **R25** *(revizija 8, proširuje R3)* | **HMAC potpis** `X-Webhook-Signature: sha256=<hex>` nad sirovim tijelom, tajna po ormaru | isto | **ne** | ERP ga uključuje kao obavezan po ormaru kad ormar potpisuje |
+| **R26** *(revizija C, uz R19 i R4)* | **Upload referentne slike poštuje način gatewaya** kao svaka upravljačka radnja; odgovor vraća `sha256` | `e80a4c1:…/routers/ext_pedestal_endpoints.py:212-258` vs `external_api_gateway.py:305-321` | **ne** | ERP provjerava sam (§6.12) |
+| **R27** *(D30, zauzeće)* | **Pokretanje analize zauzeća preko ext** — ugovor ispod | danas samo `POST /api/admin/berths/{id}/analyze` (JWT admina, `berths.py:393`) | **ne** | „Not available on this cabinet" |
+| **R28** *(D30, match)* | **Pokretanje usporedbe, rezultat odvojen od zauzeća, popis i brisanje referenci preko ext** — ugovor ispod | danas samo `POST /api/admin/berths/{id}/match` (`berths.py:575`), reference `berths.py:828-866` | **ne** | upload radi (R19/R26); pokretanje „Not available" |
+| **R29** *(D30, sektor)* | **Čitanje i postavljanje sektora kamere po vezu preko ext** — ugovor ispod | danas samo `PUT /api/admin/berths/{id}/config` (`berths.py:736`) | **ne** | „Not available on this cabinet" |
+| **R30** *(D30, guard; zamjenjuje R21)* | **Guard preko ext: stanje, uključi/isključi, događaji bez slike** — ugovor ispod | danas samo `/api/guard/*` (JWT operatera, `guard/router.py:121-199`) | **ne** | „Not available on this cabinet" |
 | **R6** | *(bespredmetno dok Krk ne dobije zastavicu)* operaterski put bez `nfc_tag_id` | `a709cf8:…/config.py:194`; **`nfc_cross_check_required` ne postoji na Krku** | **ne postoji** | ništa — §1.1 je odlučen kao (a), pa R6 nije potreban |
+
+#### R27–R30 · predloženi ugovor prema ormaru (v21, D30)
+
+Prijedlog ERP-a; **ERP i simulator ne grade ništa od ovoga dok ormar ne potvrdi oblik.**
+Zajedničko: autentifikacija `Bearer` (`api_client`), kao svaki `/api/ext/*`; `{pedestal_id}` je PK
+ili `display_id` kao na postojećim ext rutama; svaki upis traži **Smart Mode ON** i vraća 409 s
+postojećim tekstom („Smart Mode is OFF…") kad nije; svaki upis nosi
+`{"requested_by": "<ERP korisnik>", "reason": "<najmanje 3 znaka>"}` koje ormar upisuje u svoj
+audit; isključena ruta vraća 503 `{"error": "Feature not available", "reason": "Not enabled"}`.
+Nijedan odgovor ne sadrži sliku, video ni URL do njih (D30).
+
+| Ključ kataloga | Metoda i putanja | Tijelo | Odgovor | Greške | Način |
+|---|---|---|---|---|---|
+| `berths.analyze_ext` (R27) | `POST /api/ext/pedestals/{pedestal_id}/berths/{berth_id}/analyze` | `requested_by`, `reason` | **202** `{"berth_id", "request_id", "accepted_at"}`; rezultat stiže u `berths.list` / `berths.occupancy_ext` kad se pomakne `last_analyzed` | 404 ormar/vez · 409 Smart Mode OFF · 409 „Analysis already running" · 429 češće od 1 / 60 s po vezu · 503 not enabled · 503 `{"reason": "camera_unreachable"}` | **bidirectional** |
+| `berths.match_ext` (R28) | `POST /api/ext/pedestals/{pedestal_id}/berths/{berth_id}/match` | `requested_by`, `reason` | **202** `{"berth_id", "request_id", "reference_sha256", "accepted_at"}` | kao gore + 409 „No reference image for this berth" | **bidirectional** |
+| `berths.match_result_ext` (R28) | `GET /api/ext/pedestals/{pedestal_id}/berths/{berth_id}/match` | — | **200** `{"berth_id", "occupied": bool\|null, "match": "match"\|"no_match"\|"unclear"\|null, "score": float\|null, "reference_sha256": str\|null, "analyzed_at": iso\|null}` | 404 | monitor |
+| `berths.reference_images_ext` (R28) | `GET /api/ext/pedestals/{pedestal_id}/berths/{berth_id}/reference-images` | — | **200** `[{"sha256", "size_bytes", "content_type", "uploaded_at", "source": "erp"\|"cabinet", "in_use": bool}]` — samo metapodaci | 404 | monitor |
+| `berths.reference_image_delete_ext` (R28) | `DELETE /api/ext/pedestals/{pedestal_id}/berths/{berth_id}/reference-images/{sha256}` | `requested_by`, `reason` | **204** | 404 · 409 Smart Mode OFF | **bidirectional** |
+| `berths.sector_get_ext` (R29) | `GET /api/ext/pedestals/{pedestal_id}/berths/{berth_id}/sector` | — | **200** `{"berth_id", "camera_id", "sector": {"x", "y", "w", "h"}` (udjeli 0–1 kadra)`, "updated_at", "updated_by"}` | 404 · 503 | monitor |
+| `berths.sector_set_ext` (R29) | `PUT /api/ext/pedestals/{pedestal_id}/berths/{berth_id}/sector` | `{"sector": {"x", "y", "w", "h"}, "requested_by", "reason"}` | **200** isti oblik kao čitanje | 400 izvan 0–1 ili `w`/`h` ≤ 0 · 404 · 409 Smart Mode OFF · 503 | **bidirectional** |
+| `guard.status_ext` (R30) | `GET /api/ext/pedestals/{pedestal_id}/guard` | — | **200** `{"pedestal_id", "state": <najgore>, "cameras": [{"camera_id", "state": "ARMED"\|"OFF"\|"ARMING"\|"ALARM"\|"RECORDING"\|"SUSPENDED_CPU"\|"NO_DISK"\|"UNAVAILABLE", "limited_visibility": bool, "updated_at"}]}` | 404 · 503 | monitor |
+| `guard.enable_ext` / `guard.disable_ext` (R30) | `POST /api/ext/pedestals/{pedestal_id}/guard/{camera_id}/enable` · `…/disable` | `requested_by`, `reason` | **202** `{"camera_id", "desired": "ARMED"\|"OFF"}` | 404 · 409 Smart Mode OFF · 503 | **bidirectional** |
+| `guard.events_ext` (R30) | `GET /api/ext/pedestals/{pedestal_id}/guard/events?since=<iso>&limit=<1..500>` | — | **200** `[{"event_id", "camera_id", "kind", "started_at", "ended_at", "label", "media_on_cabinet": bool}]` — bez slike i URL-a | 400 · 404 | monitor |
+
+Otvoreno u prijedlogu (pitanja za ormar): je li sektor pravokutnik ili poligon; najmanji razmak
+između dva pokretanja analize; dolaze li alarmi guarda i kroz `alarms.active` (A6).
 
 #### R2 · Nalaz koji je u v2 prešao iz „odgovor" u „zahtjev"
 
@@ -2925,8 +3110,8 @@ završava zelenim gateom i ažuriranom ovom specifikacijom (verzija +1, što se 
 | **5c** | **Cloudflare tunel (javni UI)** — tek kad je 5a zelen **i na VPS-u** | ERP javno dostupan iza Cloudflare Accessa (§8.4 koraci 8, 13) |
 | **5d** | **Priprema Krka + spajanje VPS → Krk** — `api_client` račun, 17 endpointova kao monitor, `krk_probe` (i mjerenje D17); LIVE-01 samo čitanje, poller preko noći, kontrolni testovi **samo na tvoj OK** (§10.5) | simulator se slaže sa živim ormarom ili je svaka razlika zapisana i ispravljena (§0.8); stvarni rast izmjeren |
 | **5e** | **Tjedan stvarnog rada**, uz fazu 6 lokalno protiv simulatora | izvještaj: stvarni rast prije/poslije 7 dana (O35), greške u `sync_log`, usporedba sa simulacijom |
-| **6** | **Zauzeće vezova + 2D SVG** — četiri signala iz §3.1, tablica stanja §3.2, statični SVG s `svg_id` po vezu. **Proširena u v15 (D23–D27) i v16 (D28)**, redom: **6.0** demo marina — SVG 150 vezova, simulator 74 ormara, kamere i Safety uređaji, seed i scenariji, oznaka real/simulated (§6.11) · **6a** glavni dashboard, 2D karta i tri kartice (§6.6, O51) · **6b** konfiguracija veza i usporedba plovila (§6.10) · **6c** Electricity & Water, bez agenta (§6.7) · **6d** Safety & Security: registar uređaja, prazna stanja, simulator 1 vrata + 1 senzor (§6.8) · **6e** Occupancy s poviješću i CSV-om (§6.9). Lokalno protiv simulatora smije dok traje 5b — **jedna stvar u isto vrijeme** | **Krk na karti, četiri signala, sivo za tiho**; tri kartice s pravilom svježine; način PEDESTAL na simulatoru od fotografije do „Wrong vessel" |
-| **7** | **Poslovna logika i NFC tok** — §5.1, §5.4, tarifa (§4.5), `billing_records`, izvoz za blagajnu, knjiga kredita u iznosima | **TC-ERP-ACC-01..06 prolaze na pravom ormaru**; potrošnja se slaže na obje strane |
+| **6** | **Zauzeće vezova + 2D SVG** — četiri signala iz §3.1, tablica stanja §3.2, statični SVG s `svg_id` po vezu. **Proširena u v15 (D23–D27) i v16 (D28)**, redom: **6.0** demo marina — SVG 150 vezova, simulator 74 ormara, kamere i Safety uređaji, seed i scenariji, oznaka real/simulated (§6.11) · **6a** glavni dashboard, 2D karta i tri kartice (§6.6, O51) · **6b** (v21, D30) podaci o plovilu, upload referentne slike na ormar, zauzeće i match s ormara, uklanjanje kamera, popravci UI-ja (§10.12) · **6c** Electricity & Water, bez agenta (§6.7) · **6d** Safety & Security: registar uređaja, prazna stanja, simulator 1 vrata + 1 senzor (§6.8) · **6e** Occupancy s poviješću i CSV-om (§6.9). Lokalno protiv simulatora smije dok traje 5b — **jedna stvar u isto vrijeme** | **Krk na karti, četiri signala, sivo za tiho**; tri kartice s pravilom svježine; način PEDESTAL na simulatoru od fotografije do „Wrong vessel" |
+| **7** | **Poslovna logika i NFC tok** — §5.1, §5.4, tarifa (§4.5), `billing_records`, izvoz za blagajnu, knjiga kredita u iznosima. **v21 (§2.6):** `/scan` s `{cabinet_id, outlet, erp_ref}` nakon razrješenja taga u ERP-u (D6.2); voda `/scan` → `water_cmd activate`, `classify_409` prepoznaje „No valid NFC reservation"; `erp_ref` = `customers.external_ref`; `socket_cmd` bez `nfc_tag_id`; bez `by-user` i `nfc_mapping_mismatch`; odgovor `/scan` u novom obliku (`berth_id` broj ili null, `cabinet_label`); webhook s nazivima ormara i, kad ormar isporuči R22, novom omotnicom; HMAC obavezan po ormaru kad ormar potpisuje (R25); tjedni izvještaj računa ERP | **TC-ERP-ACC-01..06 prolaze na pravom ormaru**; potrošnja se slaže na obje strane |
 | **8** | **Sigurnosni agent (D21)** — mamci, domenske detekcije, signali vrata i novog uređaja, servisni prozori, zaslon §6.5; **samo čita, jedini upis je alarm** (§13.1). ~~CVE/KEV s weba~~ otpada (D21) | prvi stvarni nalazi na VPS-u i Krku; testovi ograničenja AGT-01..05 zeleni — **izvedeno v13 (§10.8): AGT-01..06 zeleni; „prvi stvarni nalazi" čekaju VPS** |
 | **9** | ~~Energetski agent~~ → **Provjera slike s ormara (D22)** — §13.2; traži R17, R18 i veći VPS | zahtjev za pregled od događaja ormara do rezultata u 2D, uz Adminovo odobrenje |
 | **10** | **Energetski agent (D24)** — vraćen u v15 (ispravak D22); §13.3. **Tek kad postoji povijest s Krka** (O58) | prvi prijedlozi s dokazom i procjenom na stvarnim podacima Krka |
@@ -3093,6 +3278,30 @@ VPS-a se preklapaju); 5c odmah nakon 5b ako je domena spremna; 5d 2–3 dana; 5e
 (ERP-ove sesije nastaju tek NFC tokom u fazi 7, pa usklađivač vidi samo „tuđe" sesije, D19);
 faza 6 lokalno protiv simulatora za vrijeme tog tjedna; faza 7 poslije njega. Prijedlog v9
 „faza 5 se piše dok teče 4.5 c" je bespredmetan — 4.5 je obrisana, a 5a kreće odmah.
+
+### §10.12 · Korak 6b — opseg (v21, odobreno 2026-10-16)
+
+Redom, jedna stvar u isto vrijeme:
+
+1. **Popravci UI-ja nakon 6a:** (a) „Live from the cabinet server" uklonjen s dashboarda —
+   kartice ormara uživo sele u Pedestal control, odobravanje sesija tamo već jest, a „Get frame"
+   nestaje (D30); (b) „Not connected yet" (T1); (c) tooltip i broj na početku gata (T2);
+   (d) karta na mobitelu sa zoomom i pomicanjem, spajanje oznaka (T2, O66); (e) ime marine u
+   izborniku; (f) jedan „Power without vessel" dnevno u demo svijetu (T3); (g) format `en-GB` (T4).
+2. **Uklanjanje kamera (D30):** `camera.*` iz ugovora, `pedestal_ext.py` kamerne rute, frontend;
+   test da nijedan put ne vodi do kamere.
+3. **D21.1:** test stupaca `security_agent_passes`.
+4. **Podaci o plovilu** (§6.10): ime, registracija, vlasnik — Admin uređuje, Marina Manager čita,
+   vlasnik nikad na karti ni dashboardu, svaki pristup vlasniku u audit.
+5. **Upload referentne slike** na ormar s provjerama ERP-a (§6.12) — **tek nakon tvoje odluke o
+   P1 i P2**.
+6. **Prikaz zauzeća i match rezultata s ormara** (`berths.list`: `occupied_bit`, `match_ok_bit`,
+   `state_code`, `match_score`, `last_analyzed`).
+7. **Pokretanje zauzeća, match, sektor, guard:** „Not available on this cabinet" dok R27–R30 ne
+   postoje.
+8. **Webhook (§2.6, E3):** nepoznat oblik odbija se s 422 i bilježi.
+
+Snimke: `docs/ui/6b/`.
 
 ### §10.11 · Korak 6a · Dashboard i karta (D23) — izvještaj (2026-10-16)
 
@@ -3511,7 +3720,7 @@ Nađeno usput. Nije u izvedbi gore; tvoje je da odlučiš prioritet.
 | O63 | Ciklus kolektora za 74 poslužitelja na SQLite-u: prosjek 2,7 s, najviše 7,5 s (jedan po jedan) | na VPS-u (PostgreSQL) do 8 paralelno; izmjeriti u 5b nakon faze 6 |
 | O64 | ~~Zaslon Vezovi zove uživo prvi ormar marine~~ | **zatvoreno v20 (6a) za dashboard i kartu**: svih 150 vezova iz baze, nijedan poziv ormaru. Zaslon Vezovi s kontrolama ostaje živ — O65 |
 | O65 | Zaslon Vezovi i kontrole (Upali/Ugasi) i dalje idu na **prvi** poslužitelj marine (`get_client`). Za Krk (jedan ormar) to je točno; za marinu s više pravih ormara nije | kontrole po ormaru (klijent iz `cabinets` po vezu) — s drugim pravim ormarom u **5d** (O60) |
-| O66 | Dva alarma ormara na susjednim vezovima: na 360 px oznake se preklapaju | popis „Needs attention" ispod karte ih navodi pojedinačno; razmaknuti oznake ako smeta |
+| O66 | Dva alarma ormara na susjednim vezovima: na 360 px oznake se preklapaju | **v21: rješava se u 6b** — spajanje oznaka po zoomu (T2, §6.1) |
 | O44 | `SecurityMiddleware` bilježi 403 kao „Unauthorised access" — s D20 je 403 i običan Manager na Admin ruti | šum u logu; rješava se s O2 (CrowdSec) |
 | O39 | Koja verzija ormara vrti na Krku — R14 b/c i loopback backend objavljeni su na `main` `eac7aa2`, Krk nepoznat | LIVE-01 (§10.5 b1, b7) |
 | O40 | Faza 4 tjedan stvarnog rada ne mjeri naplatu (ERP-ove sesije nastaju tek u fazi 7) | §10.6, prijedlog 2 |
@@ -3689,7 +3898,24 @@ Sigurnost. Pravila bez izvora u ERP-u nisu napisana kao da rade — O46.
 >
 > **Ako griješim** · Jedan `GRANT` po stupcu više; AGT-01 tada traži i taj redak u `sources.py`.
 
+> **Odlučeno (D21.1, 2026-10-16)** · **Agent javlja da je prošao.** Svaki prolaz upisuje redak u
+> `security_agent_passes` (migracija 013): **samo** `finished_at`, `rules` (broj provjerenih
+> pravila) i `opened` (alarmi otvoreni u tom prolazu) — bez ikakvog slobodnog teksta. Agent smije
+> **samo INSERT** u tu tablicu, nikad UPDATE ni DELETE. Kartica Safety & Security je `stale` kad
+> je zadnji prolaz stariji od 2 × intervala agenta (10 min). Retencija 7 dana (briše backend).
+> **Testovi:** na PostgreSQL-u AGT-02 (`scripts/agent_db_check.py`) pokušava INSERT u svaku
+> tablicu izvan popisa i UPDATE / DELETE / TRUNCATE / ALTER na **svakoj** tablici, uključujući
+> ovu, i traži odbijanje; jedini dopušteni upisi su alarm i ovaj redak. **Test stupaca:** tablica
+> ima točno `id, finished_at, rules, opened` — svaki novi stupac, pa i tekstualni, obara test.
+>
+> **Zašto** · Agent nema stanja (§13.1); nula od agenta koji ne radi nije nula.
+>
+> **Ako griješim** · Jedna tablica i jedna dozvola.
+
 ### §13.2 · D22 — provjera slike s ormara
+
+> **v21 · D30** · Eskalacija sa slikom ostaje **kandidat za fazu 2** i ne kodira se. U fazi 1
+> nijedna slika ne ide s ormara u ERP (§6.12).
 
 Proširenje agenta **na ormaru** (detekcija plovila, guard, zauzeće veza). ERP ne gleda kameru
 stalno — gleda **samo kad ormar kaže da nije siguran, i samo kad Admin odobri**.
@@ -3807,9 +4033,9 @@ i čeka čovjeka; nikad ne otvara ni ne zaključava vrata.
 
 ---
 
-`docs/erp_spec.md` · verzija 20 · 2026-10-16 · zamjenjuje v19 od 2026-10-16
+`docs/erp_spec.md` · verzija 21 · 2026-10-16 · zamjenjuje v20 od 2026-10-16
 
 Faze 1–4, korak 5a, faza 8 (D21) i UI · Lika brand su završeni i prihvaćeni; 5b je pauziran do
-prihvaćanja faze 6; **6.0 demo marina je završen i prihvaćen** (§10.10), **6a dashboard je završen** (§10.11). D23–D28 su upisani (§6.6–§6.11) i izvode se kao proširena faza 6 (6a–6e); energetski
+prihvaćanja faze 6; **6.0 demo marina je završen i prihvaćen** (§10.10), **6a je prihvaćen** (§10.11); **6b** po novom opsegu (§10.12, D30). D23–D28 su upisani (§6.6–§6.11) i izvode se kao proširena faza 6 (6a–6e); energetski
 agent (D24) je faza 10. Demo marina (D28, §6.11) je korak 6.0. **§1 je prazan** — tri pitanja iz v15
 odlučena su 2026-10-15.

@@ -1,7 +1,7 @@
 # ERP-IOT — dnevnik odluka
 
-**Verzija 2.6 · 2026-10-15** — zamjenjuje v2.5.
-v2.6 dodaje **D23–D27** (glavni dashboard; moduli Electricity & Water, Safety & Security i Occupancy; konfiguracija veza i usporedba plovila) i **D28** (demo marina: 2 prava ormara, ostalo simulirano) i proširuje fazu 6; **D24 vraća energetskog agenta** (ispravak D22). v2.5 dodaje **D21** (sigurnosni agent samo čita; mijenja slojeve 3 i 4 u D13 i D14) i **D22** (provjera slike s ormara; zamjenjuje energetskog agenta, koji se briše iz plana), i novi redoslijed faze 5 (5a–5e; faza 4.5 se briše, prvo spajanje na Krk je s VPS-a). v2.4 dodaje **D20** (korisnici, prijava i tajne). v2.3 ispravlja mrežna pravila u **D13** (ormar → ERP samo webhook; bez statične IP). v2.2 dodaje **D19** (ventili i utičnice prema Smart Modeu). v2.1 je dodao **D18** (mapiranje na obje strane); prvi isporučeni zip sadržavao je stariju v2 bez njega.
+**Verzija 2.7 · 2026-10-16** — zamjenjuje v2.6.
+v2.7 dodaje **D21.1** (agent javlja prolaz), **D30** (faza 1: slike ostaju na ormaru; četiri funkcije procjene kroz ERP) i ishod **revizije ormara** (tko popušta). v2.6 dodaje **D23–D27** (glavni dashboard; moduli Electricity & Water, Safety & Security i Occupancy; konfiguracija veza i usporedba plovila) i **D28** (demo marina: 2 prava ormara, ostalo simulirano) i proširuje fazu 6; **D24 vraća energetskog agenta** (ispravak D22). v2.5 dodaje **D21** (sigurnosni agent samo čita; mijenja slojeve 3 i 4 u D13 i D14) i **D22** (provjera slike s ormara; zamjenjuje energetskog agenta, koji se briše iz plana), i novi redoslijed faze 5 (5a–5e; faza 4.5 se briše, prvo spajanje na Krk je s VPS-a). v2.4 dodaje **D20** (korisnici, prijava i tajne). v2.3 ispravlja mrežna pravila u **D13** (ormar → ERP samo webhook; bez statične IP). v2.2 dodaje **D19** (ventili i utičnice prema Smart Modeu). v2.1 je dodao **D18** (mapiranje na obje strane); prvi isporučeni zip sadržavao je stariju v2 bez njega.
 Ormar (Cloud_IOT) je druga strana ugovora; ovdje se bilježe odluke koje se tiču ERP-a i ono što ERP traži od ormara.
 
 Izvori, redom po težini:
@@ -441,6 +441,27 @@ Pravila:
 - Simulator radi lokalno i na VPS-u (zaseban systemd servis), može se ugasiti jednom naredbom i ne dira prave ormare.
 
 **Redoslijed (2026-10-15):** implementacija D23–D28 ide u **fazu 6 (proširenu)**. Smije se raditi lokalno protiv simulatora u vremenu čekanja dok traje 5b — **jedna stvar u isto vrijeme**: D28 demo marina, D23 dashboard + 2D karta, pa D27 konfiguracija veza, zatim detalji D24–D26. Energetski agent (D24) tek kad postoji povijest s Krka.
+
+## D21.1 · Agent javlja prolaz
+Odluka 2026-10-16. Svaki prolaz sigurnosnog agenta upisuje jedan redak: vrijeme i dva broja (provjerena pravila, alarmi otvoreni u tom prolazu), **bez slobodnog teksta**. Agent u tu tablicu smije samo INSERT, nikad UPDATE ni DELETE. Kartica Safety & Security bez svježeg prolaza kaže da agent šuti — nula od agenta koji ne radi nije nula.
+Provjera: test na PostgreSQL-u da agent nema nijedno drugo pravo upisa osim alarma i tog retka; test stupaca (novi stupac, pa i tekstualni, obara test). Specifikacija §13.1.
+
+## D30 · Slika i procjena — faza 1
+Odluka 2026-10-16.
+**Faza 1 (sada):**
+- Sve slike i video ostaju na ormaru. Prema ERP-u ne ide nijedna slika ni video — samo stanje i rezultat.
+- Smjer ERP → ormar je dopušten: ERP šalje referentnu sliku plovila na ormar, ormar sam radi match / no match.
+- ERP i API omogućuju sve funkcije procjene ormara, da se u fazi 1 testiraju preko ERP-a: (1) zauzeće veza — čitanje rezultata (1/0) i pokretanje; (2) match — upload referentne slike, čitanje rezultata; (3) sektor slike kamere — čitanje i postavljanje; (4) guard — uključivanje/isključivanje, čitanje alarma (snimka ostaje na ormaru). Sve upravljačko samo uz Smart Mode ON, ulogu, razlog i audit — ista pravila kao utičnice.
+- ERP ne zove nijedan kamerni endpoint (snapshot, frame_ext, stream, stream_ext). Test koji to provjerava.
+**Faza 2:** nije odlučena — bit će ono što testiranje faze 1 pokaže. Načini ERP i BOTH iz D27 i eskalacija sa slikom iz D22 ostaju samo kandidati i ne kodiraju se.
+Specifikacija §6.12; zahtjevi prema ormaru R27–R30 (§7.2).
+
+## Revizija ormara (2026-10-16) — tko popušta
+Ormar je u reviziji ERP-a našao devet razlika; potvrđene uz file:line u specifikaciji §2.6.
+- **ERP popušta:** (1) `/scan` šalje `{cabinet_id, outlet, erp_ref}` — tag mapira ERP (D6.2); (3) voda tek nakon `/scan`, ERP prepoznaje odbijanje ormara; (4) nazivi događaja ormara; (9) novi oblik odgovora `/scan` — vez u ERP-u ostaje ERP-ov, broj s ormara je podatak za usporedbu (D18). Uz to ERP uklanja mrtav put `by-user`, `nfc_tag_id` na `socket_cmd` i kamerne pozive.
+- **Ormar popušta (§7.2 R22–R26):** (5) omotnica `{event, event_id, cabinet_id, timestamp, data}`; (6) oba događaja kroz webhook na svakom putu; (7) jedan pošiljatelj, jedan ključ; (8) ormar potpisuje HMAC, ERP ga čini obaveznim po ormaru kad je ormar spreman; (C) upload referentne slike poštuje prava gatewaya.
+- Do prilagodbe ormara istina je pull (D7). Nema tolerantnog parsiranja oba oblika — nepoznat oblik se odbija i bilježi.
+- Tjedni izvještaj ERP računa sam iz svojih podataka.
 
 ---
 
