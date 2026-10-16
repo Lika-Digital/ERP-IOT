@@ -3,7 +3,7 @@
 Što se gradi, u kojem redoslijedu, i svaka odluka izrečena tako da ispravak
 košta jedan redak, a ne razgovor.
 
-    Verzija 29 — zamjenjuje v28 od 2026-10-16
+    Verzija 30 — zamjenjuje v29 od 2026-10-16
     Datum 2026-10-16
     Status faze 1–4 ZAVRŠENE i PRIHVAĆENE (§10.1–§10.4); korak 5a (D20), faza 8 (D21) i
            UI · Lika brand PRIHVAĆENI, na `main` (§10.7–§10.9); **faza 6 ZATVORENA na 6b**
@@ -23,6 +23,15 @@ v2.3 ispravak mreže u **D13**, v2.4 **D20**, v2.5 **D21**, **D22** i redoslijed
 **Sve u ovom dokumentu je ODLUČENO, osim §14 i §10.16 (prijedlog v3, v26–v28) i otvorenih pitanja u §1.**
 D32 (live prikaz), njegov put slike (§14.8.2) i prava gledanja (§1.25, §1.29–§1.31) su tvoja odluka.
 Tri pitanja iz v15 odlučena su 2026-10-15.
+
+### Što se promijenilo u verziji 30
+
+Tvoje odluke 2026-10-16 uz odgovor mobilne v2 (`docs/inputs/odgovor_erp_na_mobilnu_v2.md`).
+
+| | |
+|---|---|
+| **§1.25 dopuna (3)** | signal plovila **NEPOZNATO** (nema reference, ormar offline, analiza starija od 30 min) **ne priječi** kupčevo gledanje — pravilo je NIJE KRIVO, a nepoznato nije krivo; §14.8 usklađen |
+| **QR marine** | `https://lika.digital/marina/<public_code>` (ne `/m/`); ruta u UI-ju i u `PUBLIC_APP_BASE_URL` putanjama kad dođu (v3 M0 / MOB-0b) |
 
 ### Što se promijenilo u verziji 29
 
@@ -717,6 +726,8 @@ samo §1.5–§1.9 i §1.24**; ostala se mogu odlučiti prije faze u kojoj su (s
 > **Odlučeno** · Prijedlog niže vrijedi, uz dvije dopune: (1) **Admin gleda samo u admin modeu, s
 > razlogom**; (2) **„plovilo na vezu" = signal plovila NIJE KRIVO** — prazan vez je dopušten, tuđe
 > plovilo na kupčevu vezu nije. Tekst ispod ostaje radi razloga; gdje kaže PRAVO, vrijedi NIJE KRIVO.
+> (3) *(v30)* Signal **NEPOZNATO** (nema reference, ormar offline, `last_analyzed` stariji od
+> 30 min) **ne priječi** gledanje: nepoznato nije krivo. Kupcu se tada ne govori ništa o plovilu.
 
 **Tvoj prijedlog (2026-10-16):**
 - **Osoblje** (Owner, Manager, Glavni mornar, Recepcija) gleda sve vezove svoje marine, do 10 min.
@@ -5525,7 +5536,7 @@ kamera ─▶ ORMAR (:80, /api/ext/*, token api_client) ─── Tailscale ─�
 | **Owner, Manager, Glavni mornar, Recepcija** | svi vezovi svoje marine, **od prvog dana** | do 10 min (granica ormara), zatim ponovni klik |
 | Admin | svi vezovi marine, samo u **admin modeu** s razlogom (§14.1.4) | kao osoblje |
 | ostale uloge | — | — |
-| **Kupac** | **kameru ormara koji služi njegov vez** (slika pokazuje sve vezove tog ormara), uz **važeći ugovor za svoj vez** i **dok na njegovu vezu nije tuđe plovilo** (signal plovila NIJE KRIVO; prazan vez dopušten, §1.25). Aktivna sesija nije uvjet | **3 min**, zatim ponovni klik |
+| **Kupac** | **kameru ormara koji služi njegov vez** (slika pokazuje sve vezove tog ormara), uz **važeći ugovor za svoj vez** i **dok na njegovu vezu nije tuđe plovilo** (signal plovila NIJE KRIVO; prazan vez i NEPOZNATO dopušteni, §1.25). Aktivna sesija nije uvjet | **3 min**, zatim ponovni klik |
 | član organizacije kupca | kao nositelj, **ako ga nositelj ovlasti** (`customer_members.can_access`, §14.3.1) | kao kupac |
 
 **Kupčevo gledanje je ISKLJUČENO** dok ormar ne isporuči masku (R37) i dok marina ne napravi DPIA.

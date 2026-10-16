@@ -197,7 +197,7 @@ ignorira. Trojka T-14, §2.
 **4.1 `lika.digital` i `api.lika.digital`** — ODLUKA VLASNIKA, ugrađuje se.
 - `PUBLIC_APP_BASE_URL=https://lika.digital` je nova postavka u `/etc/erp-iot/erp-iot.env`.
   Postojeći `PUBLIC_BASE_URL` ostaje za ERP web (Tailscale).
-- Putanje su prihvaćene: `/m/<public_code>`, `/invite`, `/reset`, `/verify`, `/setup`.
+- Putanje su prihvaćene: `/marina/<public_code>` *(ispravljeno u v2, H-11)*, `/invite`, `/reset`, `/verify`, `/setup`.
 - **Svaki jednokratni token ide u fragment** (`#token=…`), nikad u query.
 - **Mijenja:** §8.3 (env), §8.4 (5c: `api.lika.digital` → tunel → nginx → samo prefiks).
 
@@ -449,7 +449,7 @@ Redak je izmjena iz tablice §8 ulaza.
 
 Model: `marinas.public_code TEXT UNIQUE NOT NULL`, 6 znakova iz `ABCDEFGHJKMNPQRSTUVWXYZ23456789`
 (bez 0/O, 1/I/L). Generira se slučajno pri stvaranju marine, a Admin ga može zamijeniti (stari
-prestaje vrijediti). Na QR-u u marini je `https://lika.digital/m/<public_code>`.
+prestaje vrijediti). Na QR-u u marini je `https://lika.digital/marina/<public_code>` *(ispravljeno u v2, H-11 — odluka vlasnika)*.
 
 ```
 GET /api/mobile/v1/public/marinas/{public_code}
