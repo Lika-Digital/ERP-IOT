@@ -86,6 +86,7 @@
 .map-drawing > svg .berth.tone-orange { fill: rgb(var(--st-orange-bg)); stroke: rgb(var(--st-orange-line)); }
 .map-drawing > svg .berth.tone-red    { fill: rgb(var(--st-red-bg));    stroke: rgb(var(--st-red-line)); }
 .map-drawing > svg .berth.tone-grey   { fill: rgb(var(--st-grey-bg));   stroke: rgb(var(--st-grey-line)); stroke-dasharray: 4 3; }
+.map-drawing > svg .berth.tone-none   { fill: transparent; stroke: rgb(var(--fg-muted)); stroke-dasharray: 2 4; }
 .map-drawing > svg .berth.is-selected { stroke: rgb(var(--fg)); stroke-dasharray: none; }
 .map-alarm {
   position: absolute;
@@ -103,4 +104,18 @@
   background: rgb(var(--st-red-bg));
   color: rgb(var(--st-red-fg));
   border: 1px solid rgb(var(--st-red-line));
+}
+.map-tip {
+  position: absolute;
+  transform: translate(-50%, calc(-100% - 6px));
+  max-width: 260px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.35;
+  pointer-events: none;
+  background: rgb(var(--fg));
+  color: rgb(var(--surface));
+  z-index: 10;
+  white-space: normal;
 }

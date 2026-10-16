@@ -72,7 +72,7 @@ def _marina(db, seeded) -> Marina:
 
 def _expected_colour(db, mid: int, number: str) -> str:
     if number in REAL:
-        return "grey"
+        return "none"                       # v21, T1: "Not connected yet", not Unknown
     if w.occupied(28, number, LATER):
         return "red" if w.wrong_vessel(28, number, LATER) else "blue"
     b = next(b for b in w.berths() if b.number == number)
@@ -93,7 +93,7 @@ def test_every_berth_of_the_marina_is_on_the_map_with_the_worlds_colour(seeded, 
     got = {b["number"]: b["berth_colour"] for b in state["berths"]}
     want = {b.number: _expected_colour(db, mid, b.number) for b in w.berths()}
     assert got == want
-    assert set(got.values()) >= {"blue", "green", "grey"}
+    assert set(got.values()) >= {"blue", "green", "none"}
     for b in state["berths"]:
         assert b["svg_id"] == f"berth-{b['number']}"
         assert b["simulated"] is (b["number"] not in REAL)
@@ -132,7 +132,8 @@ def test_occupancy_card_counts_vessels_over_known_berths(seeded, db):
     card = next(c for c in out["cards"] if c["key"] == "occupancy")
     berths = out["berths"]
     occupied = sum(w.occupied(28, b.number, LATER) for b in w.berths() if b.number not in REAL)
-    assert card["occupied"] == occupied and card["known"] == 146 and card["unknown"] == 4
+    assert card["occupied"] == occupied and card["known"] == 146
+    assert (card["unknown"], card["not_connected"]) == (0, 4)      # T1: counted apart
     assert card["percent"] == round(occupied * 100 / 146)
     assert card["reserved"] == sum(1 for b in berths if b["signals"]["reservation"] == "YES")
     assert card["state"] == "fresh" and card["simulated"] == "all"
@@ -146,7 +147,8 @@ def test_a_silent_cabinet_makes_the_occupancy_card_partial_and_its_berths_grey(s
     keep = cab.last_heartbeat_at
     try:
         state = marina_state.build(db, mid, later)
-        assert all(b["berth_colour"] == "grey" for b in state["berths"])
+        assert all(b["berth_colour"] == ("none" if b["number"] in REAL else "grey")
+                   for b in state["berths"])
         card = overview.occupancy_card(_marina(db, seeded), state["berths"], None, later)
         assert card["state"] == "stale" and card["percent"] is None
     finally:
@@ -268,4 +270,5 @@ def test_a_cabinet_gone_quiet_turns_its_berths_grey_and_the_card_partial(seeded,
         assert (rows[n]["berth_colour"], rows[n]["status_code"]) == ("grey", "no_contact")
     assert next(c for c in out["cabinets"] if c["display_id"] == "SIM_A_02")["connection"] == "OFFLINE"
     card = next(c for c in out["cards"] if c["key"] == "occupancy")
-    assert card["state"] == "partial" and card["silent"] == 2 and card["unknown"] == 6
+    assert card["state"] == "partial" and card["silent"] == 2 and card["unknown"] == 2
+    assert card["not_connected"] == 4

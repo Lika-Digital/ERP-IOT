@@ -46,37 +46,6 @@ def test_berth_occupancy_503_when_feature_unavailable(client, admin_headers, mar
     assert r.json()["detail"]["code"] == "not_enabled"
 
 
-# ─── TC-PX-04 / 16  camera frame — JPEG bytes, image/jpeg ────────────────────
-
-def test_camera_frame_returns_jpeg_bytes(client, admin_headers, marina_id, sim):
-    r = client.get(f"/api/marinas/{marina_id}/pedestals/1/camera/frame", headers=admin_headers)
-    assert r.status_code == 200
-    assert r.headers["content-type"] == "image/jpeg"
-    assert r.content.startswith(b"\xff\xd8")
-
-
-# ─── TC-PX-05  camera frame — 503 on service failure ─────────────────────────
-
-def test_camera_frame_503_on_service_failure(client, admin_headers, marina_id, sim):
-    sim.state.sim.fail_next = [500] * 10
-    r = client.get(f"/api/marinas/{marina_id}/pedestals/1/camera/frame", headers=admin_headers)
-    assert r.status_code == 503
-    assert r.json()["detail"]["code"] == "no_contact"
-
-
-# ─── TC-PX-06 / 07  camera stream URL ────────────────────────────────────────
-
-def test_camera_stream_url_returns_data(client, admin_headers, marina_id, sim):
-    r = client.get(f"/api/marinas/{marina_id}/pedestals/1/camera/stream", headers=admin_headers)
-    assert r.status_code == 200 and r.json()["data"]["stream_url"].startswith("rtsp://")
-
-
-def test_camera_stream_url_503_when_unavailable(client, admin_headers, marina_id, sim):
-    del sim.state.sim.enabled["camera.stream_ext"]
-    r = client.get(f"/api/marinas/{marina_id}/pedestals/1/camera/stream", headers=admin_headers)
-    assert r.status_code == 503
-
-
 # ─── TC-PX-08  several pedestals, independent calls ──────────────────────────
 
 def test_unknown_pedestal_is_a_503_with_a_code_not_a_crash(client, admin_headers, marina_id, sim):
@@ -100,7 +69,7 @@ def test_marina_manager_can_access_own_marina_berths(client, manager_headers, ma
 
 # ─── TC-PX-11  unauthenticated returns 401 ───────────────────────────────────
 
-@pytest.mark.parametrize("endpoint", ["berths/occupancy", "camera/frame", "camera/stream"])
+@pytest.mark.parametrize("endpoint", ["berths/occupancy"])
 def test_unauthenticated_ext_endpoints_return_401(client, marina_id, endpoint):
     """Strogo 401. Pritegnuto u fazi 1 (spec §0.1)."""
     r = client.get(f"/api/marinas/{marina_id}/pedestals/1/{endpoint}")

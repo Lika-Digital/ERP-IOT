@@ -1,21 +1,21 @@
 """
-Pedestal-specific ext endpoints: berth occupancy, camera frame, camera stream URL.
+Pedestal-specific ext endpoint: berth occupancy.
+
+The camera frame and stream routes are gone (D30, spec §6.12): no picture or video
+comes from a cabinet to the ERP in phase 1.
 
 - PREFIX  /api/marinas/{marina_id}/pedestals/{pedestal_id}/...
 - Auth    get_current_user + require_marina_access
-- Audit   record_action for camera frame (operator request logged)
 - Data    an Outcome from the cabinet client; no data at all -> 503 with the
           outcome's code and sentence (spec §2.5), never a 500
 """
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models.user import User
-from ..services.audit_log import record_action
 from ..services.pedestal_api_factory import PedestalAPIClientFactory, get_pedestal_factory
 from ._cabinet import marina_client
 from .auth import get_current_user
@@ -42,34 +42,3 @@ async def get_berth_occupancy(
     """Fallback occupancy (occupied only). The berth view uses berths.list (§2.2)."""
     _, client = marina_client(marina_id, user, db, factory)
     return _data_or_503(await client.berth_occupancy(pedestal_id, db), marina_id, pedestal_id)
-
-
-@router.get("/{marina_id}/pedestals/{pedestal_id}/camera/frame")
-async def get_camera_frame(
-    marina_id: int,
-    pedestal_id: int,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-    factory: PedestalAPIClientFactory = Depends(get_pedestal_factory),
-):
-    """A live JPEG from the pedestal camera. Never served from cache."""
-    _, client = marina_client(marina_id, user, db, factory)
-    outcome = await client.camera_frame(pedestal_id, db)
-    if not outcome.ok or not isinstance(outcome.data, bytes):
-        raise HTTPException(status_code=503, detail=outcome.public())
-    record_action(db, user_id=user.id, marina_id=marina_id, action="get_camera_frame",
-                  pedestal_id=pedestal_id, details={"bytes": len(outcome.data)})
-    return Response(content=outcome.data, media_type="image/jpeg",
-                    headers={"Cache-Control": "no-store"})
-
-
-@router.get("/{marina_id}/pedestals/{pedestal_id}/camera/stream")
-async def get_camera_stream_url(
-    marina_id: int,
-    pedestal_id: int,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-    factory: PedestalAPIClientFactory = Depends(get_pedestal_factory),
-):
-    _, client = marina_client(marina_id, user, db, factory)
-    return _data_or_503(await client.camera_stream(pedestal_id, db), marina_id, pedestal_id)

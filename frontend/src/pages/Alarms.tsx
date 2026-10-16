@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import { getAlarmLog, acknowledgeAlarm, type AlarmLogEntry } from '../api/alarms'
 import ConfirmDialog from '../components/ui/ConfirmDialog'
 import Status, { ALARM_STATE } from '../components/ui/Status'
+import { dateTime } from '../utils/format'
 
 export default function Alarms() {
   const { marinaId } = useParams<{ marinaId: string }>()
@@ -97,10 +98,10 @@ export default function Alarms() {
                     <span className="font-semibold">{alarmType(alarm)}</span>
                     <span className="text-xs text-fg-muted">Pedestal {alarm.pedestal_id}</span>
                   </div>
-                  <p className="text-xs text-fg-muted">Received {new Date(alarm.received_at).toLocaleString()}</p>
+                  <p className="text-xs text-fg-muted">Received {dateTime(alarm.received_at)}</p>
                   {alarm.acknowledged_at && (
                     <p className="text-xs text-fg-muted">
-                      Acknowledged {new Date(alarm.acknowledged_at).toLocaleString()}
+                      Acknowledged {dateTime(alarm.acknowledged_at)}
                     </p>
                   )}
                   {alarm.alarm_data.value != null && (

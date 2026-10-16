@@ -614,8 +614,8 @@ Dvije obitelji, dva pravila (`ormar_gateway_izvjestaj.md` NALAZ 1.1):
 | `breakers.socket_get_ext` | GET | `/api/ext/pedestals/{pedestal_id}/sockets/{socket_id}/breaker` | **PK** | — | isto, po utičnici |
 | `breakers.pedestal_history_ext` | GET | `/api/ext/pedestals/{pedestal_id}/breaker/history` | **PK** | — | dijagnostika |
 | `breakers.marina_alarms_ext` | GET | `/api/ext/marinas/{marina_id}/breaker/alarms` | **PK** | — | isto, po marini |
-| `camera.frame_ext` | GET | `/api/ext/pedestals/{id}/camera/frame` | PK\|display | — | slika veza na zahtjev |
-| `camera.stream_ext` | GET | `/api/ext/pedestals/{id}/camera/stream` | PK\|display | — | RTSP URL |
+| ~~`camera.frame_ext`~~ | — | **uklonjeno v21 (D30)** — ERP ne zove kameru; slika ostaje na ormaru | | | |
+| ~~`camera.stream_ext`~~ | — | **uklonjeno v21 (D30)** | | | |
 | `usage.history` | GET | `/api/ext/pedestals/{pedestal_id}/usage/history` | PK | — | usklađivanje |
 | `controls.socket_cmd` | POST | `/api/ext/controls/pedestal/{pedestal_id}/socket/{socket_name}/cmd` | PK | **da** | **operaterski put** (D3) |
 | `controls.water_cmd` | POST | `/api/ext/controls/pedestal/{pedestal_id}/water/{valve_name}/cmd` | PK | **da** | operaterski put, voda |
@@ -657,8 +657,8 @@ write endpoint je površina.
 `load.pedestal_get_ext`, `load.socket_get_ext`, `load.socket_history_ext`,
 `load.pedestal_alarms_ext`, `load.marina_alarms_ext`,
 `breakers.pedestal_list_ext`, `breakers.socket_get_ext`, `breakers.pedestal_history_ext`,
-`breakers.marina_alarms_ext`,
-`camera.frame_ext`, `camera.stream_ext`, `usage.history`
+`breakers.marina_alarms_ext`, `usage.history`
+*(v21, D30: `camera.frame_ext` i `camera.stream_ext` se za ERP **ne uključuju**.)*
 
 **Bidirectional (write):**
 `controls.socket_cmd`, `controls.water_cmd`, `controls.allow`, `controls.deny`,

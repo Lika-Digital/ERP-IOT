@@ -16,6 +16,7 @@ import {
   type SecurityCard,
 } from '../api/dashboard'
 import { useAuthStore } from '../store/authStore'
+import { delta, num, pct, time } from '../utils/format'
 import MarinaMap from './MarinaMap'
 import Status, {
   BERTH_ALARM, BERTH_COLOUR, CABINET_LINK, CARD_STATE, SEVERITY, SIMULATED, type Tone,
@@ -23,16 +24,8 @@ import Status, {
 
 const REFRESH_MS = 60_000
 // "needs attention" first, then unknown, then by number (§6.1)
-const ORDER: Record<string, number> = { red: 0, orange: 1, yellow: 2, grey: 3, blue: 4, green: 5 }
+const ORDER: Record<string, number> = { red: 0, orange: 1, yellow: 2, grey: 3, blue: 4, green: 5, none: 6 }
 
-function hhmm(iso: string | null): string {
-  return iso ? new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'
-}
-
-function pct(v: number | null): string {
-  if (v === null) return '—'
-  return `${v > 0 ? '+' : v < 0 ? '−' : '±'}${Math.abs(v).toFixed(0)} %`
-}
 
 export default function DashboardOverview({ marinaId }: { marinaId: number }) {
   const [data, setData] = useState<OverviewResponse | null>(null)
@@ -119,7 +112,7 @@ export default function DashboardOverview({ marinaId }: { marinaId: number }) {
 function Legend() {
   return (
     <ul className="flex flex-wrap gap-2 mt-2 px-1" aria-label="Map legend">
-      {(['green', 'blue', 'yellow', 'orange', 'red', 'grey'] as Tone[]).map((t) => (
+      {(['green', 'blue', 'yellow', 'orange', 'red', 'grey', 'none'] as Tone[]).map((t) => (
         <li key={t}><Status tone={BERTH_COLOUR[t].tone} icon={BERTH_COLOUR[t].icon} word={BERTH_COLOUR[t].word} /></li>
       ))}
       <li><Status tone={BERTH_ALARM.tone} icon={BERTH_ALARM.icon} word={`${BERTH_ALARM.word} (marker)`} /></li>
@@ -150,7 +143,7 @@ function Card({ card, marinaId }: { card: OverviewCard; marinaId: number }) {
       </div>
       <p className="text-sm text-fg-muted mt-2">{card.sentence}</p>
       <p className="text-xs text-fg-muted mt-3 flex justify-between">
-        <span>as of {hhmm(card.as_of)}</span><span aria-hidden="true">›</span>
+        <span>as of {time(card.as_of)}</span><span aria-hidden="true">›</span>
       </p>
     </Link>
   )
@@ -160,10 +153,10 @@ function EnergyBody({ c }: { c: EnergyCard }) {
   return (
     <>
       <p className="text-2xl font-bold tracking-tight">
-        {c.electricity_kwh.toLocaleString(undefined, { maximumFractionDigits: 1 })} kWh
-        <span className="text-fg-muted font-semibold"> · {c.water_m3 === null ? '— m³' : `${c.water_m3} m³`}</span>
+        {num(c.electricity_kwh, 1, 'kWh')}
+        <span className="text-fg-muted font-semibold"> · {c.water_m3 === null ? '— m³' : num(c.water_m3, 1, 'm³')}</span>
       </p>
-      <p className="text-sm mt-1">{pct(c.delta_yesterday_pct)} vs yesterday · {pct(c.delta_last_week_pct)} vs last week</p>
+      <p className="text-sm mt-1">{delta(c.delta_yesterday_pct)} vs yesterday · {delta(c.delta_last_week_pct)} vs last week</p>
     </>
   )
 }
@@ -184,9 +177,10 @@ function SecurityBody({ c }: { c: SecurityCard }) {
 function OccupancyBody({ c }: { c: OccupancyCard }) {
   return (
     <>
-      <p className="text-2xl font-bold tracking-tight">{c.percent === null ? '—' : `${c.percent} %`}</p>
+      <p className="text-2xl font-bold tracking-tight">{pct(c.percent)}</p>
       <p className="text-sm mt-1">
         {c.occupied} / {c.known} · {c.unknown} unknown · {c.reserved} reserved
+        {c.not_connected > 0 && <> · {c.not_connected} not connected</>}
       </p>
     </>
   )
@@ -259,7 +253,7 @@ function CabinetSummary({ cabinets }: { cabinets: OverviewResponse['cabinets'] }
             <span className="font-semibold break-all">{c.display_id}</span>
             <span className="flex items-center gap-1">
               <Status tone={CABINET_LINK[c.connection].tone} icon={CABINET_LINK[c.connection].icon} word={CABINET_LINK[c.connection].word} />
-              <span className="text-xs text-fg-muted">{hhmm(c.last_heartbeat_at)}</span>
+              <span className="text-xs text-fg-muted">{time(c.last_heartbeat_at)}</span>
             </span>
           </li>
         ))}

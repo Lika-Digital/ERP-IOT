@@ -17,6 +17,7 @@ import { detailOf } from '../api/auth'
 import { askReason } from '../components/ui/ReasonDialog'
 import { useAuthStore } from '../store/authStore'
 import Status, { ACCOUNT } from '../components/ui/Status'
+import { dateTime } from '../utils/format'
 
 const ROLE_LABEL: Record<Role, string> = { admin: 'Admin', marina_manager: 'Marina Manager' }
 
@@ -82,7 +83,7 @@ export default function Users() {
         <div className="card border-accent" data-setup-link>
           <p className="text-sm">
             One-time link for <strong>{link.email}</strong> — shown only now, valid until{' '}
-            {new Date(link.setup.expires_at + 'Z').toLocaleString()}. Send it over a channel you trust.
+            {dateTime(link.setup.expires_at + 'Z')}. Send it over a channel you trust.
           </p>
           <code className="block mt-2 p-3 bg-surface-2 border border-line rounded-control text-xs break-all font-mono" data-link>
             {link.setup.link}
@@ -196,7 +197,7 @@ export default function Users() {
         <ul className="divide-y divide-line text-xs">
           {audit.map((a) => (
             <li key={a.id} className="py-2 flex flex-wrap gap-x-3 gap-y-0.5">
-              <span className="tabular-nums text-fg-muted">{new Date(a.created_at + 'Z').toLocaleString()}</span>
+              <span className="tabular-nums text-fg-muted">{dateTime(a.created_at + 'Z')}</span>
               <span className="font-semibold">{a.event}</span>
               <span className="break-all">{a.email_tried}</span>
               {a.detail && <span className="text-fg-muted break-all">{a.detail}</span>}

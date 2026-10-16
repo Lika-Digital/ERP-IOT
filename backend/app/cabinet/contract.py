@@ -100,10 +100,8 @@ _TABLE = [
              "/api/ext/pedestals/{pedestal_id}/breaker/history", _PK, _M, "diagnostics"),
     Endpoint("breakers.marina_alarms_ext", "GET", "/api/ext/marinas/{marina_id}/breaker/alarms",
              _N, _M, "breaker alarms per marina"),
-    Endpoint("camera.frame_ext", "GET", "/api/ext/pedestals/{pedestal_id}/camera/frame", _PD, _M,
-             "berth image on request"),
-    Endpoint("camera.stream_ext", "GET", "/api/ext/pedestals/{pedestal_id}/camera/stream", _PD,
-             _M, "RTSP URL"),
+    # D30 (spec §6.12): no camera endpoint — snapshot, frame_ext, stream, stream_ext — is in
+    # the ERP's contract. Pictures stay on the cabinet; only state and results come here.
     Endpoint("usage.history", "GET", "/api/pedestals/{pedestal_id}/usage/history", _PK, _M,
              "reconciliation"),
     Endpoint("controls.socket_cmd", "POST",

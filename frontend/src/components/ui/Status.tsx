@@ -4,7 +4,8 @@
  * The status itself comes from the server (spec §3): the caller passes the
  * server's key through a lookup table below, never a value it worked out.
  */
-export type Tone = 'green' | 'yellow' | 'orange' | 'red' | 'blue' | 'grey'
+// 'none' is not a D2 colour: a berth no cabinet serves yet (v21, T1) — outline only
+export type Tone = 'green' | 'yellow' | 'orange' | 'red' | 'blue' | 'grey' | 'none'
 export type StatusIcon = 'ok' | 'attention' | 'alert' | 'unknown' | 'info' | 'paused'
 
 interface StatusProps {
@@ -21,6 +22,7 @@ const TONE: Record<Tone, string> = {
   red: 'bg-st-red-bg text-st-red-fg border-st-red-line',
   blue: 'bg-st-blue-bg text-st-blue-fg border-st-blue-line',
   grey: 'bg-st-grey-bg text-st-grey-fg border-st-grey-line',
+  none: 'bg-transparent text-fg-muted border-line border-dashed',
 }
 
 // 24px stroke icons; shape differs per meaning, so the status reads without colour
@@ -68,6 +70,7 @@ export const BERTH_COLOUR: Record<Tone, Look> = {
   orange: { tone: 'orange', icon: 'attention', word: 'Power without vessel' },
   red: { tone: 'red', icon: 'alert', word: 'Wrong vessel' },
   grey: { tone: 'grey', icon: 'unknown', word: 'Unknown' },
+  none: { tone: 'none', icon: 'paused', word: 'Not connected yet' },
 }
 
 /** Outlet / valve: the server's `switch` (on | off | unknown). */

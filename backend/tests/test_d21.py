@@ -645,3 +645,21 @@ def test_admin_imports_a_file_once(client, admin_headers, clean):
     assert [i["filename"] for i in client.get("/api/security/imports",
                                               headers=admin_headers).json()] == [
         "known_exploited.json"]
+
+
+def test_d21_1_agent_pass_row_is_only_a_time_and_two_counts():
+    """D21.1: no free text in the agent's "I ran" row — any new column, text or not, fails."""
+    from app.database import Base
+    import app.models  # noqa: F401
+    cols = Base.metadata.tables["security_agent_passes"].columns
+    assert [c.name for c in cols] == ["id", "finished_at", "rules", "opened"]
+    assert {c.name: type(c.type).__name__ for c in cols if c.name != "id"} == {
+        "finished_at": "DateTime", "rules": "Integer", "opened": "Integer"}
+
+
+def test_d21_1_the_migration_creates_exactly_those_columns():
+    src = (BACKEND / "alembic" / "versions" / "013_d23_dashboard.py").read_text(encoding="utf-8")
+    start = src.index('op.create_table(\n        "security_agent_passes",')
+    block = src[start:src.index("sa.PrimaryKeyConstraint", start)]
+    import re
+    assert re.findall(r'sa\.Column\("(\w+)"', block) == ["id", "finished_at", "rules", "opened"]

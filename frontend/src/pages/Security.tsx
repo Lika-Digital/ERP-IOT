@@ -17,8 +17,9 @@ import { listMarinas } from '../api/marinas'
 import { detailOf } from '../api/auth'
 import { askReason } from '../components/ui/ReasonDialog'
 import Status, { SEVERITY, ALARM_STATE, RULE_MODE } from '../components/ui/Status'
+import { dateTime } from '../utils/format'
 
-const utc = (s: string | null) => (s ? new Date(s + 'Z').toLocaleString() : '—')
+const utc = (s: string | null) => (s ? dateTime(s + 'Z') : '—')
 
 /** Evidence is shown as data: every value is text in a <code>, never markup (D21: a log line is data). */
 function EvidenceList({ alarm }: { alarm: SecurityAlarm }) {

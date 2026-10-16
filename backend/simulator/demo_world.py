@@ -131,13 +131,23 @@ def wrong_vessel(seed: int, number: str, t: datetime) -> bool:
     return occupied(seed, number, t) and u(seed, "wrong", number, day_of(t)) < 0.03
 
 
+@lru_cache(maxsize=4096)
+def power_without_vessel_of_day(seed: int, day: int) -> str:
+    """v21 (T3): every day exactly ONE empty, simulated berth has a cable plugged in with
+    no boat, so the demo always shows all six states; picked from the seed and the day."""
+    real = {b.number for c in cabinets(include_real=True) if not c.simulated for b in c.berths}
+    empty = sorted(b.number for b in berths()
+                   if b.number not in occupied_set(seed, day) and b.number not in real)
+    return empty[int(u(seed, "pwv-day", day) * len(empty))]
+
+
 def plugged(seed: int, number: str, t: datetime) -> bool:
-    """Power flows: a boat on the berth that plugged in, or — rarely — a cable with no boat
-    (Power without vessel, D2)."""
+    """Power flows: a boat on the berth that plugged in, or a cable with no boat (Power
+    without vessel, D2) — one berth a day for certain (T3), and now and then another."""
     d = day_of(t)
     if occupied(seed, number, t):
         return u(seed, "plug", number, d // STAY_DAYS) < 0.8
-    return u(seed, "pwv", number, d) < 0.02
+    return number == power_without_vessel_of_day(seed, d) or u(seed, "pwv", number, d) < 0.02
 
 
 def reserved(seed: int, number: str, day: int) -> bool:

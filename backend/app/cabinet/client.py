@@ -381,14 +381,6 @@ class CabinetClient:
         return await self.call("berths.occupancy_ext", path_params={"pedestal_id": pedestal_ref},
                                db=db)
 
-    async def camera_frame(self, pedestal_ref, db=None):
-        return await self.call("camera.frame_ext", path_params={"pedestal_id": pedestal_ref},
-                               db=db)
-
-    async def camera_stream(self, pedestal_ref, db=None):
-        return await self.call("camera.stream_ext", path_params={"pedestal_id": pedestal_ref},
-                               db=db)
-
     async def allow_session(self, session_id: int, db=None):
         return await self.call("controls.allow", path_params={"session_id": session_id}, db=db)
 

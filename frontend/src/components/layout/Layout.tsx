@@ -3,6 +3,7 @@ import { Outlet, NavLink, useParams, useNavigate, useLocation } from 'react-rout
 import { useAuthStore } from '../../store/authStore'
 import { useThemeStore } from '../../store/themeStore'
 import logo from '../../assets/lika-logo.png'
+import { useMarinaName } from '../../hooks/useMarinaName'
 
 // 24px stroke icons, one path each
 const ICONS = {
@@ -38,6 +39,7 @@ const navLinkClass = ({ isActive }: { isActive: boolean }) =>
 
 export default function Layout() {
   const { marinaId } = useParams<{ marinaId?: string }>()
+  const marinaName = useMarinaName(marinaId ? Number(marinaId) : null)
   const { role, email, fullName, logout } = useAuthStore()
   const { theme, toggle } = useThemeStore()
   const navigate = useNavigate()
@@ -97,7 +99,7 @@ export default function Layout() {
           {marinaId && (
             <>
               <div className="pt-4 pb-1 px-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-sidebar-muted">
-                Marina #{marinaId}
+                {marinaName ?? 'Marina'}
               </div>
               <NavLink to={`/marinas/${marinaId}/dashboard`} className={navLinkClass}>
                 <Icon d={ICONS.dashboard} /> Dashboard

@@ -33,8 +33,9 @@ DEFAULT_HEARTBEAT_INTERVAL = timedelta(seconds=60)
 
 # rank, status_code, status, berth_colour, sentence — OCCUPANCY, one colour per berth
 _TABLE: list[tuple[float, str, str, str, str]] = [
-    # D23/D28: an ERP berth no cabinet serves yet (the real demo berths until 5d)
-    (0,   "no_cabinet",           "unknown",   "grey",   "No cabinet is connected to this berth"),
+    # D23/D28: an ERP berth no cabinet serves yet (the real demo berths until 5d). Not
+    # Unknown and not a D2 colour (v21, T1): "none" = "Not connected yet", nothing to check
+    (0,   "no_cabinet",           "unknown",   "none",   "No cabinet is connected to this berth yet"),
     (1,   "no_contact",           "unknown",   "grey",   "No connection to this cabinet"),
     (2,   "standalone",           "unknown",   "grey",   "The cabinet is running on its own"),
     (2.5, "outlet_silent",        "unknown",   "grey",   "This outlet has not reported"),

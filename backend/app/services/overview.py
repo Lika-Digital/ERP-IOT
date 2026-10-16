@@ -171,9 +171,11 @@ def security_card(db: Session, marina: Marina, berths: list, now: datetime) -> d
 def occupancy_card(marina: Marina, berths: list, cabinets_polled: Optional[datetime],
                    now: datetime) -> dict:
     tz = _zone(marina.timezone)
-    known = [b for b in berths if b["berth_colour"] != "grey"]
+    # v21, T1: a berth with no cabinet yet is neither known nor unknown — counted apart
+    known = [b for b in berths if b["berth_colour"] not in ("grey", "none")]
     occupied = sum(1 for b in known if b["status_code"] in OCCUPIED)
-    unknown = len(berths) - len(known)
+    unknown = sum(1 for b in berths if b["berth_colour"] == "grey")
+    not_connected = sum(1 for b in berths if b["berth_colour"] == "none")
     silent = sum(1 for b in berths if b["status_code"] == "no_contact")
     reserved = sum(1 for b in berths if b["signals"]["reservation"] == "YES")
     n_sim = sum(1 for b in known if b["simulated"])
@@ -184,6 +186,7 @@ def occupancy_card(marina: Marina, berths: list, cabinets_polled: Optional[datet
         "occupied": occupied,
         "known": len(known),
         "unknown": unknown,
+        "not_connected": not_connected,
         "reserved": reserved,
         "silent": silent,
         "as_of": _iso(cabinets_polled),

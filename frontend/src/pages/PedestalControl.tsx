@@ -3,9 +3,11 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
 import { getPendingSessions, getActiveSessions } from '../api/energy'
 import { allowSession, askReason, denySession, NO_REASON, stopSession } from '../api/controls'
+import LiveCabinets from '../components/LiveCabinets'
 import StaleDataBanner from '../components/ui/StaleDataBanner'
 import ConfirmDialog from '../components/ui/ConfirmDialog'
 import Status, { SESSION } from '../components/ui/Status'
+import { dateTime } from '../utils/format'
 
 interface Session {
   id: number
@@ -172,7 +174,7 @@ export default function PedestalControl() {
                   </div>
                   <p className="text-xs text-fg-muted">
                     Pedestal {s.pedestal_id}{s.socket_id != null && ` · socket ${s.socket_id}`}
-                    {s.started_at && ` · started ${new Date(s.started_at).toLocaleString()}`}
+                    {s.started_at && ` · started ${dateTime(s.started_at)}`}
                   </p>
                 </div>
                 <button onClick={() => setStopDialog({ sessionId: s.id, pedestalId: s.pedestal_id })}
@@ -184,6 +186,9 @@ export default function PedestalControl() {
           </ul>
         )}
       </section>
+
+      {/* moved from the dashboard in 6b (D23): the cabinets, live */}
+      <LiveCabinets marinaId={id} />
 
       <ConfirmDialog
         isOpen={!!denyDialog}

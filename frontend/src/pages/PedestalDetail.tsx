@@ -2,7 +2,7 @@
  * PedestalDetail — three-tab view for a single pedestal.
  *
  * Tab 1 — Real Time: health indicators + sessions + alarms for this pedestal
- * Tab 2 — Berths:    occupancy per berth, camera frame grab, RTSP stream URL
+ * Tab 2 — Berths:    occupancy per berth (no camera — D30)
  * Tab 3 — Controls:  allow/deny/stop sessions + acknowledge alarms
  *                    (mirrors PedestalControl look and feel, scoped to this pedestal)
  */
@@ -15,32 +15,17 @@ import { getActiveAlarms, getAlarmLog, acknowledgeAlarm, type AlarmLogEntry } fr
 import { allowSession, askReason, denySession, NO_REASON, stopSession } from '../api/controls'
 import {
   getBerthOccupancy,
-  getCameraFrame,
-  getCameraStreamUrl,
   type BerthOccupancy,
   type BerthOccupancyPayload,
-  type CameraStreamPayload,
 } from '../api/pedestalExt'
 import StaleDataBanner from '../components/ui/StaleDataBanner'
 import ConfirmDialog from '../components/ui/ConfirmDialog'
 import Status, { ALARM_STATE, OCCUPANCY, REACH, SESSION } from '../components/ui/Status'
+import { dateTime, time } from '../utils/format'
 
 type Tab = 'realtime' | 'berths' | 'controls'
 
 // ── Sub-state types ───────────────────────────────────────────────────────────
-
-interface FrameState {
-  objectUrl: string | null
-  capturedAt: string | null
-  loading: boolean
-  error: string | null
-}
-
-interface StreamState {
-  data: CameraStreamPayload | null
-  loading: boolean
-  error: string | null
-}
 
 interface OccupancyState {
   data: BerthOccupancyPayload | null
@@ -83,8 +68,6 @@ export default function PedestalDetail() {
   const [occupancy, setOccupancy] = useState<OccupancyState>({
     data: null, loading: false, error: null, featureUnavailable: false,
   })
-  const [frames, setFrames] = useState<Record<number, FrameState>>({})
-  const [stream, setStream] = useState<StreamState>({ data: null, loading: false, error: null })
 
   // Controls dialog state
   const [denyDialog, setDenyDialog] = useState<{ sessionId: number } | null>(null)
@@ -140,37 +123,6 @@ export default function PedestalDetail() {
         error: status === 503 ? null : 'Failed to load berth occupancy.',
         featureUnavailable: status === 503,
       })
-    }
-  }, [mid, pid])
-
-  const fetchFrame = useCallback(async (berthId: number) => {
-    setFrames((prev) => {
-      if (prev[berthId]?.objectUrl) URL.revokeObjectURL(prev[berthId].objectUrl!)
-      return { ...prev, [berthId]: { objectUrl: null, capturedAt: null, loading: true, error: null } }
-    })
-    try {
-      const url = await getCameraFrame(mid, pid)
-      setFrames((prev) => ({
-        ...prev,
-        [berthId]: { objectUrl: url, capturedAt: new Date().toISOString(), loading: false, error: null },
-      }))
-    } catch {
-      setFrames((prev) => ({
-        ...prev,
-        [berthId]: { objectUrl: null, capturedAt: null, loading: false, error: 'Frame unavailable.' },
-      }))
-    }
-  }, [mid, pid])
-
-  const fetchStream = useCallback(async () => {
-    setStream({ data: null, loading: true, error: null })
-    try {
-      const resp = await getCameraStreamUrl(mid, pid)
-      setStream({ data: resp.data, loading: false, error: null })
-    } catch (err: unknown) {
-      const status = (err as { response?: { status?: number } })?.response?.status
-      const msg = status === 503 ? 'Camera feature not available on this pedestal.' : 'Failed to get stream URL.'
-      setStream({ data: null, loading: false, error: msg })
     }
   }, [mid, pid])
 
@@ -246,7 +198,7 @@ export default function PedestalDetail() {
         </div>
         {health?.last_heartbeat && (
           <span className="text-xs text-fg-muted tabular-nums self-center">
-            last heard {new Date(health.last_heartbeat).toLocaleTimeString()}
+            last heard {time(health.last_heartbeat)}
           </span>
         )}
       </div>
@@ -273,13 +225,8 @@ export default function PedestalDetail() {
 
       {tab === 'berths' && (
         <BerthsTab
-          pedestalId={pid}
           occupancy={occupancy}
-          frames={frames}
-          stream={stream}
           onRefreshOccupancy={fetchOccupancy}
-          onGetFrame={fetchFrame}
-          onGetStream={fetchStream}
         />
       )}
 
@@ -351,7 +298,7 @@ function SessionLine({ s, kind, children }: { s: Session; kind: 'pending' | 'act
         <p className="text-xs text-fg-muted">
           {s.socket_id != null ? `socket ${s.socket_id}` : 'no socket'} · {s.type ?? 'unknown type'}
           {s.customer_name && ` · ${s.customer_name}`}
-          {s.started_at && ` · started ${new Date(s.started_at).toLocaleString()}`}
+          {s.started_at && ` · started ${dateTime(s.started_at)}`}
         </p>
       </div>
       {children}
@@ -371,7 +318,7 @@ function AlarmLine({ a, children }: { a: AlarmLogEntry; children?: React.ReactNo
           <Status tone={look.tone} icon={look.icon} word={look.word} />
           <span className="font-semibold">Alarm #{a.id}</span>
         </div>
-        <p className="text-xs text-fg-muted">{new Date(a.received_at).toLocaleString()}{fields && ` · ${fields}`}</p>
+        <p className="text-xs text-fg-muted">{dateTime(a.received_at)}{fields && ` · ${fields}`}</p>
       </div>
       {children}
     </li>
@@ -433,7 +380,7 @@ function RealTimeTab({
             <HealthRow label="Temperature sensor" ok={health.temp_sensor_reachable} />
           </div>
           {health.last_heartbeat && (
-            <p className="mt-2 text-xs text-fg-muted">Last heartbeat {new Date(health.last_heartbeat).toLocaleString()}</p>
+            <p className="mt-2 text-xs text-fg-muted">Last heartbeat {dateTime(health.last_heartbeat)}</p>
           )}
         </Section>
       )}
@@ -466,25 +413,15 @@ function RealTimeTab({
 }
 
 // ── Berths tab ────────────────────────────────────────────────────────────────
+// No camera frame, no stream URL (D30, spec §6.12): pictures stay on the cabinet.
 
 function BerthsTab({
-  pedestalId,
   occupancy,
-  frames,
-  stream,
   onRefreshOccupancy,
-  onGetFrame,
-  onGetStream,
 }: {
-  pedestalId: number
   occupancy: OccupancyState
-  frames: Record<number, FrameState>
-  stream: StreamState
   onRefreshOccupancy: () => void
-  onGetFrame: (berthId: number) => void
-  onGetStream: () => void
 }) {
-  const reach = stream.data ? REACH[stream.data.reachable ? 'yes' : 'no'] : null
   return (
     <div>
       <section className="card mb-6">
@@ -507,107 +444,30 @@ function BerthsTab({
               <p className="text-sm text-fg-muted">No berths are configured for this pedestal.</p>
             ) : (
               <div className="space-y-3">
-                {occupancy.data.berths.map((b) => (
-                  <BerthDetailRow
-                    key={b.berth_id}
-                    berth={b}
-                    pedestalId={pedestalId}
-                    frame={frames[b.berth_id]}
-                    onGetFrame={() => onGetFrame(b.berth_id)}
-                  />
-                ))}
+                {occupancy.data.berths.map((b) => <BerthDetailRow key={b.berth_id} berth={b} />)}
               </div>
             )}
             {occupancy.data.message && <p className="text-xs text-fg-muted mt-2">{occupancy.data.message}</p>}
           </>
         )}
       </section>
-
-      <section className="card">
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-          <h2 className="text-lg font-bold tracking-tight">Live stream</h2>
-          <button className="btn-secondary btn-sm" onClick={onGetStream} disabled={stream.loading}>
-            {stream.loading ? 'Loading…' : 'Get stream URL'}
-          </button>
-        </div>
-
-        {stream.error && <p className="notice-warn">{stream.error}</p>}
-
-        {stream.data && reach && (
-          <div>
-            <div className="flex flex-wrap items-center gap-2 mb-2">
-              <Status tone={reach.tone} icon={reach.icon} word={reach.word} />
-              {stream.data.last_checked && (
-                <span className="text-xs text-fg-muted">checked {new Date(stream.data.last_checked).toLocaleString()}</span>
-              )}
-            </div>
-            <input
-              type="text"
-              readOnly
-              aria-label="stream URL"
-              value={stream.data.stream_url}
-              className="input font-mono text-xs bg-surface-2"
-              onClick={(e) => (e.target as HTMLInputElement).select()}
-            />
-            <p className="text-xs text-fg-muted mt-2">Copy this URL and open it in VLC or any RTSP player.</p>
-          </div>
-        )}
-
-        {!stream.data && !stream.loading && !stream.error && (
-          <p className="text-sm text-fg-muted">Press Get stream URL to fetch the RTSP address.</p>
-        )}
-      </section>
     </div>
   )
 }
 
-function BerthDetailRow({
-  berth,
-  pedestalId,
-  frame,
-  onGetFrame,
-}: {
-  berth: BerthOccupancy
-  pedestalId: number
-  frame?: FrameState
-  onGetFrame: () => void
-}) {
+function BerthDetailRow({ berth }: { berth: BerthOccupancy }) {
   return (
     <div className="border border-line rounded-control p-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <OccupancyBadge occupied={berth.occupied} />
-          <div>
-            <p className="text-sm font-semibold">{berth.berth_name ?? `Berth ${berth.berth_id}`}</p>
-            {berth.last_analyzed && (
-              <p className="text-xs text-fg-muted">Analysed {new Date(berth.last_analyzed).toLocaleString()}</p>
-            )}
-            {berth.note && <p className="text-xs text-fg-muted">{berth.note}</p>}
-          </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <OccupancyBadge occupied={berth.occupied} />
+        <div>
+          <p className="text-sm font-semibold">{berth.berth_name ?? `Berth ${berth.berth_id}`}</p>
+          {berth.last_analyzed && (
+            <p className="text-xs text-fg-muted">Analysed {dateTime(berth.last_analyzed)}</p>
+          )}
+          {berth.note && <p className="text-xs text-fg-muted">{berth.note}</p>}
         </div>
-        <button className="btn-secondary btn-sm shrink-0" onClick={onGetFrame} disabled={frame?.loading}>
-          {frame?.loading ? 'Loading…' : 'Get frame'}
-        </button>
       </div>
-
-      {frame && !frame.loading && (
-        <div className="mt-3">
-          {frame.error ? (
-            <p className="notice-warn">The camera is not available on this pedestal.</p>
-          ) : frame.objectUrl ? (
-            <div>
-              <img
-                src={frame.objectUrl}
-                alt={`Camera frame — pedestal ${pedestalId}`}
-                className="w-full max-w-lg rounded-control border border-line"
-              />
-              {frame.capturedAt && (
-                <p className="text-xs text-fg-muted mt-1">Captured {new Date(frame.capturedAt).toLocaleString()}</p>
-              )}
-            </div>
-          ) : null}
-        </div>
-      )}
     </div>
   )
 }

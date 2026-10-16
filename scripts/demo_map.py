@@ -32,29 +32,45 @@ BERTH_H = 26                                # across the boat
 
 def _rect(bid, x, y, w_, h_):
     return (f'  <rect id="berth-{bid}" class="berth" data-berth="{bid}" x="{x:.0f}" y="{y:.0f}" '
-            f'width="{w_:.0f}" height="{h_:.0f}" rx="4"><title>{bid}</title></rect>')
+            f'width="{w_:.0f}" height="{h_:.0f}" rx="4"/>')
 
 
-def berth_shapes() -> list[str]:
+# v21 (T2): the number of the first berth of each pier, inside it — part of the drawing,
+# so the app still only sets classes. No <title>: the app's tooltip says more.
+def _num(bid, x, y, w_, h_):
+    cx, cy = x + w_ / 2, y + h_ / 2
+    rot = f' transform="rotate(-90 {cx:.0f} {cy:.0f})"' if h_ > w_ else ""
+    return (f'  <text class="num" x="{cx:.0f}" y="{cy:.0f}" text-anchor="middle" '
+            f'dominant-baseline="central"{rot}>{bid}</text>')
+
+
+def berth_shapes(numbers: list | None = None) -> list[str]:
     out = []
+    first = {w.berth_id(z, i) for z in PONTOONS for i in (1, 2)} | {
+        w.berth_id(q, 1) for q in ("QN", "QE", "QS")}
+
+    def rect(bid, x, y, w_, h_):
+        out.append(_rect(bid, x, y, w_, h_))
+        if numbers is not None and bid in first:
+            numbers.append(_num(bid, x, y, w_, h_))
     for z, (cx, length) in PONTOONS.items():
         for i in range(1, 21):
             row, west = (i - 1) // 2, i % 2 == 1
             y = ROW0 + row * ROW_STEP - BERTH_H / 2
             x = cx - WALK / 2 - 4 - length if west else cx + WALK / 2 + 4
-            out.append(_rect(w.berth_id(z, i), x, y, length, BERTH_H))
+            rect(w.berth_id(z, i), x, y, length, BERTH_H)
     # north quay: 25 berths, bows to the quay, west to east
     for i in range(1, 26):
         x = 289 + (i - 1) * (1032 - 289) / 24
-        out.append(_rect(w.berth_id("QN", i), x - 12, 140, 24, 58))
+        rect(w.berth_id("QN", i), x - 12, 140, 24, 58)
     # east quay: 15 berths, along the pier, north to south
     for i in range(1, 16):
         y = 255 + (i - 1) * (655 - 255) / 14
-        out.append(_rect(w.berth_id("QE", i), 1136, y - 10, 46, 20))
+        rect(w.berth_id("QE", i), 1136, y - 10, 46, 20)
     # south quay: 10 berths, bows to the quay, west to east
     for i in range(1, 11):
         x = 375 + (i - 1) * (735 - 375) / 9
-        out.append(_rect(w.berth_id("QS", i), x - 12, 780, 24, 50))
+        rect(w.berth_id("QS", i), x - 12, 780, 24, 50)
     return out
 
 
@@ -91,9 +107,14 @@ def svg(background: str | None = None) -> str:
     style = ("  <style>.water{fill:var(--map-water,#d7e6ee)}.land{fill:var(--map-land,#eceae4)}"
              ".walk{fill:var(--map-walk,#c9b79a)}.label{font:600 22px system-ui,sans-serif;"
              "fill:var(--map-label,#2b2a29)}.berth{fill:var(--map-berth,#ffffff);"
-             "stroke:var(--map-berth-line,#8a8f94);stroke-width:1.5}</style>")
+             "stroke:var(--map-berth-line,#8a8f94);stroke-width:1.5}"
+             ".num{font:700 12px system-ui,sans-serif;fill:var(--map-label,#2b2a29);"
+             "pointer-events:none}</style>")
+    numbers: list = []
+    shapes = berth_shapes(numbers)
     body = ([style, bg] + ([] if background else structures()) +
-            ['  <g class="berths">'] + berth_shapes() + ['  </g>'])
+            ['  <g class="berths">'] + shapes + ['  </g>', '  <g class="nums" aria-hidden="true">'] +
+            numbers + ['  </g>'])
     return "\n".join([note, head, *body, "</svg>", ""])
 
 

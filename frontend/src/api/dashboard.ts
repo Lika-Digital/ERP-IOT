@@ -112,6 +112,7 @@ export interface OccupancyCard extends CardBase {
   occupied: number
   known: number
   unknown: number
+  not_connected: number
   reserved: number
   silent: number
 }
@@ -127,7 +128,7 @@ export interface MapBerth {
   simulated: boolean
   status_code: string
   status: string
-  berth_colour: 'green' | 'blue' | 'yellow' | 'orange' | 'red' | 'grey'
+  berth_colour: 'green' | 'blue' | 'yellow' | 'orange' | 'red' | 'grey' | 'none'
   status_sentence: string
   signals: { connection: string; vessel: string; power: string; reservation: string }
   alarm: { code: string; sentence: string }[]

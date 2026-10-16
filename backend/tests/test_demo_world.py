@@ -106,3 +106,14 @@ def test_some_cabinet_raises_an_alarm_now_and_then():
     hits = sum(w.cabinet_alarm(SEED, c, w.EPOCH + timedelta(days=d, hours=h)) is not None
                for c in w.cabinets() for d in range(30, 60) for h in range(24))
     assert 0 < hits < 74 * 30 * 24 * 0.01
+
+
+def test_every_day_at_least_one_simulated_berth_has_power_without_a_vessel():
+    """v21 (T3): the demo always shows all six states."""
+    real = {b.number for c in w.cabinets(include_real=True) if not c.simulated for b in c.berths}
+    for day in range(60):
+        t = w.EPOCH + w.DAY_TURN + timedelta(days=day, hours=3)
+        pwv = [b.number for b in w.berths()
+               if w.plugged(28, b.number, t) and not w.occupied(28, b.number, t)]
+        assert pwv and not set(pwv) & real, day
+        assert w.power_without_vessel_of_day(28, w.day_of(t)) in pwv
