@@ -31,6 +31,7 @@ Tvoje odluke 2026-10-16 uz odgovor mobilne v2 (`docs/inputs/odgovor_erp_na_mobil
 | | |
 |---|---|
 | **§1.25 dopuna (3)** | signal plovila **NEPOZNATO** (nema reference, ormar offline, analiza starija od 30 min) **ne priječi** kupčevo gledanje — pravilo je NIJE KRIVO, a nepoznato nije krivo; §14.8 usklađen |
+| **§2.3 · ispravljeno (nalaz ormara)** | Monitor = **točno 17 ključeva prvog testa** (§10.15); `berths.occupancy_ext`, `load.socket_history_ext`, `load.marina_alarms_ext`, `breakers.pedestal_history_ext`, `breakers.marina_alarms_ext` → tablica „kasnije, uz obrazloženje"; **`usage.history` uklonjen iz §2.3** (ormar ga je zatvorio: nosi identifikatore kupaca, D6.2); u §2.2 označen „ne uključuje se" dok se ne ukloni iz `contract.py` |
 | **QR marine** | `https://lika.digital/marina/<public_code>` (ne `/m/`); ruta u UI-ju i u `PUBLIC_APP_BASE_URL` putanjama kad dođu (v3 M0 / MOB-0b) |
 
 ### Što se promijenilo u verziji 29
@@ -843,7 +844,7 @@ Dvije obitelji, dva pravila (`ormar_gateway_izvjestaj.md` NALAZ 1.1):
 | `breakers.marina_alarms_ext` | GET | `/api/ext/marinas/{marina_id}/breaker/alarms` | **PK** | — | isto, po marini |
 | ~~`camera.frame_ext`~~ | — | **uklonjeno v21 (D30)** — ERP ne zove kameru; slika ostaje na ormaru | | | |
 | ~~`camera.stream_ext`~~ | — | **uklonjeno v21 (D30)**; *v28: ostaje uklonjeno; D32 koristi `camera.live_*` (R35, §14.8)* | | | |
-| `usage.history` | GET | `/api/ext/pedestals/{pedestal_id}/usage/history` | PK | — | usklađivanje |
+| `usage.history` | GET | `/api/ext/pedestals/{pedestal_id}/usage/history` | PK | — | **v30: ne uključuje se** — ormar je zatvorio `usage.*` (identifikatori kupaca, D6.2); usklađivanje po `erp_ref` i vremenu završetka (R14). Iz ugovora u kodu (`contract.py`) uklanja se zasebno, uz tvoj OK |
 | `controls.socket_cmd` | POST | `/api/ext/controls/pedestal/{pedestal_id}/socket/{socket_name}/cmd` | PK | **da** | **operaterski put** (D3) |
 | `controls.water_cmd` | POST | `/api/ext/controls/pedestal/{pedestal_id}/water/{valve_name}/cmd` | PK | **da** | operaterski put, voda |
 | `controls.allow` | POST | `/api/ext/controls/{session_id}/allow` | PK | **da** | odobri sesiju |
@@ -877,16 +878,25 @@ tvrdi suprotno (NALAZ 2.1). `controls.deny` prima `{reason?}` ≤500.
 Operater ormara mora uključiti točno ovo, s točno ovim modom. **Ništa više** — svaki uključeni
 write endpoint je površina.
 
-**Monitor (read):**
-`pedestals.health`, `pedestals.list`, `pedestals.status_ext`, `water.status_ext`,
-`berths.list`, `berths.occupancy_ext`, `sessions.active`, `sessions.pending`,
-`alarms.active`, `analytics.daily`, `analytics.summary`,
-`sockets.config_list`, `valves.config_list`,
-`load.pedestal_get_ext`, `load.socket_get_ext`, `load.socket_history_ext`,
-`load.pedestal_alarms_ext`, `load.marina_alarms_ext`,
-`breakers.pedestal_list_ext`, `breakers.socket_get_ext`, `breakers.pedestal_history_ext`,
-`breakers.marina_alarms_ext`, `usage.history`
+**Monitor (read) — točno 17, isti popis kao prvi test čitanja (§10.15 točka 5)** *(v30)*:
+`pedestals.health`, `pedestals.list`, `pedestals.status_ext`, `berths.list`,
+`sessions.active`, `sessions.pending`, `alarms.active`,
+`load.pedestal_get_ext`, `load.socket_get_ext`, `load.pedestal_alarms_ext`,
+`breakers.pedestal_list_ext`, `breakers.socket_get_ext`, `water.status_ext`,
+`sockets.config_list`, `valves.config_list`, `analytics.daily`, `analytics.summary`
 *(v21, D30: `camera.frame_ext` i `camera.stream_ext` se za ERP **ne uključuju**.)*
+
+**Kasnije, uz obrazloženje** *(v30; u prvom testu **isključeno** — ERP na 403 prikaže
+`not_enabled` i prestane zvati, TC-ERP-SIM-08)*:
+
+| ključ | treba li ERP-u | zašto | kada |
+|---|---|---|---|
+| `berths.occupancy_ext` | **možda** | `berths.list` već nosi stanje veza i `last_analyzed` (signal plovila, §3); `occupancy_ext` je rezerva (samo `occupied`). Zatrebat će samo ako živi odgovor `berths.list` ne nosi sve što analiza daje | najranije **6c / R27** (analiza na zahtjev); uključuje se tek ako 5d pokaže da `berths.list` ne dostaje |
+| `breakers.pedestal_history_ext` | **da** | snimke `breakers.*` i `alarms.active` ne vide okidanje koje se dogodilo i nestalo dok ERP nije čitao; povijest je **nadoknada nakon prekida (D7)** | nakon 5d, **prije prvog upravljačkog testa** (§10.15 točka 7) |
+| `breakers.marina_alarms_ext` | **ne za sada** | isti alarmi kao po ormaru, jednim pozivom za cijelu marinu ormara; ERP čita po ormaru | kad broj poziva po ormaru postane problem (mjerenje), ne prije |
+| `load.marina_alarms_ext` | **ne za sada** | isto, za alarme opterećenja; `load.pedestal_alarms_ext` je u 17 | kao gore |
+| `load.socket_history_ext` | **ne** | naplata ide iz sesija (registar na početku i kraju), ne iz krivulje opterećenja; energetski agent obrisan (v10) | tek s energetskim agentom (faza 10), ako ikad |
+| ~~`usage.history`~~ | **ne** | **uklonjeno** — ormar ga je zatvorio (identifikatori kupaca, D6.2) | — |
 
 **Bidirectional (write):**
 `controls.socket_cmd`, `controls.water_cmd`, `controls.allow`, `controls.deny`,
