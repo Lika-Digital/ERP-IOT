@@ -30,7 +30,8 @@ def _spec_rows():
 
 
 def test_spec_table_parses():
-    assert len(_spec_rows()) == 31          # v21: camera rows gone (D30); P5: push_image_ext
+    assert len(_spec_rows()) == 30          # v21: camera rows gone (D30); P5: push_image_ext;
+                                            # usage.history gone (cabinet closed usage.*, D6.2)
 
 
 def test_code_table_is_exactly_the_spec_table():
@@ -54,6 +55,19 @@ def test_row_matches_spec(key):
     else:
         assert ep.id_type is c.IdType.NONE
     assert ep.mode is (c.Mode.BIDIRECTIONAL if bidir == "da" else c.Mode.MONITOR)
+
+
+def test_usage_routes_never_come_back():
+    # The cabinet closed usage.* (it carries customer identifiers, D6.2). Not in the
+    # spec table, not in the code table, not callable, not in the simulator.
+    from simulator import cabinet_sim
+    assert not [k for k in _spec_rows() if k.startswith("usage.")]
+    assert not [k for k, e in c.ENDPOINTS.items()
+                if k.startswith("usage.") or "/usage/" in e.path]
+    assert not [k for k, (_, p) in cabinet_sim.FAMILY_A.items()
+                if k.startswith("usage.") or "/usage/" in p]
+    with pytest.raises((c.ContractError, KeyError)):
+        c.build_path("usage.history", pedestal_id=1)
 
 
 def test_path_rule_family_a_replaces_api_with_api_ext():

@@ -3,7 +3,7 @@
 Što se gradi, u kojem redoslijedu, i svaka odluka izrečena tako da ispravak
 košta jedan redak, a ne razgovor.
 
-    Verzija 25.1 — dopuna v25 od 2026-10-16
+    Verzija 25.2 — dopuna v25.1 od 2026-10-17
     Datum 2026-10-16
     Status faze 1–4 ZAVRŠENE i PRIHVAĆENE (§10.1–§10.4); korak 5a (D20), faza 8 (D21) i
            UI · Lika brand PRIHVAĆENI, na `main` (§10.7–§10.9); **faza 6 ZATVORENA na 6b**
@@ -18,6 +18,15 @@ v2.3 ispravak mreže u **D13**, v2.4 **D20**, v2.5 **D21**, **D22** i redoslijed
 `docs/inputs/ormar_ui_v2_spec.txt` (specifikacija ormara — uzor forme i izvor rječnika stanja).
 
 **Sve u ovom dokumentu je ODLUČENO. §1 je prazan — tri pitanja iz v15 odlučena su 2026-10-15.**
+
+### Što se promijenilo u verziji 25.2
+
+Tvoje odluke 2026-10-17 (nakon koraka 6 u 5b).
+
+| | |
+|---|---|
+| **§2.2 / §2.3 · `usage.history` uklonjen** | ormar je zatvorio `usage.*` (nosi identifikatore kupaca, D6.2); maknut iz ugovora u kodu (`contract.py`), simulatora i tablice; test pada ako se `usage.*` vrati. Usklađivanje po `erp_ref` i vremenu završetka (R14) |
+| **§10.15 · produkcijski lock** | alati za razvoj (pytest, ruff, bandit) zasad ostaju u `requirements.lock` i na VPS-u; **odvojeni produkcijski lock je mala stavka PRIJE 5c** |
 
 ### Što se promijenilo u verziji 25.1
 
@@ -675,7 +684,7 @@ Dvije obitelji, dva pravila (`ormar_gateway_izvjestaj.md` NALAZ 1.1):
 | `breakers.marina_alarms_ext` | GET | `/api/ext/marinas/{marina_id}/breaker/alarms` | **PK** | — | isto, po marini |
 | ~~`camera.frame_ext`~~ | — | **uklonjeno v21 (D30)** — ERP ne zove kameru; slika ostaje na ormaru | | | |
 | ~~`camera.stream_ext`~~ | — | **uklonjeno v21 (D30)** | | | |
-| `usage.history` | GET | `/api/ext/pedestals/{pedestal_id}/usage/history` | PK | — | usklađivanje |
+| ~~`usage.history`~~ | — | **uklonjeno v25.2** — ormar je zatvorio `usage.*` (identifikatori kupaca, D6.2); usklađivanje po `erp_ref` i vremenu završetka (R14) | | | |
 | `controls.socket_cmd` | POST | `/api/ext/controls/pedestal/{pedestal_id}/socket/{socket_name}/cmd` | PK | **da** | **operaterski put** (D3) |
 | `controls.water_cmd` | POST | `/api/ext/controls/pedestal/{pedestal_id}/water/{valve_name}/cmd` | PK | **da** | operaterski put, voda |
 | `controls.allow` | POST | `/api/ext/controls/{session_id}/allow` | PK | **da** | odobri sesiju |
@@ -717,7 +726,7 @@ write endpoint je površina.
 `load.pedestal_get_ext`, `load.socket_get_ext`, `load.socket_history_ext`,
 `load.pedestal_alarms_ext`, `load.marina_alarms_ext`,
 `breakers.pedestal_list_ext`, `breakers.socket_get_ext`, `breakers.pedestal_history_ext`,
-`breakers.marina_alarms_ext`, `usage.history`
+`breakers.marina_alarms_ext` *(v25.2: `usage.history` uklonjen, ormar ga je zatvorio)*
 *(v21, D30: `camera.frame_ext` i `camera.stream_ext` se za ERP **ne uključuju**.)*
 
 **Bidirectional (write):**
@@ -3566,6 +3575,9 @@ Do koraka 4 vrijedi postojeća politika tailneta: 6.3 zato prvo provjeri da VPS 
 **Nakon svakog koraka** ispis sadrži `ss -ltn` (`deploy/slusaci.sh`): na `0.0.0.0`/`[::]` smije
 slušati **samo SSH `:22`**; Postgres **samo socket** (nijedan `:5432`), uvicorn samo `127.0.0.1`,
 nginx samo na Tailscale IP. Sve drugo je greška koraka.
+
+**Prije 5c (v25.2):** odvojeni **produkcijski lock** (bez pytest, ruff, bandit i ostalih alata
+za razvoj); venv na VPS-u gradi se iz njega, CI i dalje iz punog locka. Mala stavka, uz korake 3 i 4.
 
 `ERP_ENCRYPTION_KEY` se ne backupira (§8.3): nakon obnove na novi stroj lozinke ormara se
 **ponovno upisuju**. `erp-sim` se ne instalira (P-4).
