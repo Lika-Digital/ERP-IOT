@@ -3,13 +3,12 @@
 Što se gradi, u kojem redoslijedu, i svaka odluka izrečena tako da ispravak
 košta jedan redak, a ne razgovor.
 
-    Verzija 24 — zamjenjuje v23 od 2026-10-16
+    Verzija 25 — zamjenjuje v24 od 2026-10-16
     Datum 2026-10-16
     Status faze 1–4 ZAVRŠENE i PRIHVAĆENE (§10.1–§10.4); korak 5a (D20), faza 8 (D21) i
-           UI · Lika brand PRIHVAĆENI, na `main` (§10.7–§10.9); 5b PAUZIRAN do prihvaćanja
-           faze 6 (tvoja odluka 2026-10-15); faza 6 lokalno: **6.0 demo marina ZAVRŠEN**
-           (§10.10) i PRIHVAĆEN; **6a PRIHVAĆEN** (§10.11); **6b ZAVRŠEN** (§10.13, §10.14:
-           P3, P4, upload reference P5) — čeka tvoj pregled;
+           UI · Lika brand PRIHVAĆENI, na `main` (§10.7–§10.9); **faza 6 ZATVORENA na 6b**
+           (6.0, 6a, 6b PRIHVAĆENI, §10.10–§10.14; 6c–6e odgođeni); **sljedeće: put do
+           prvog čitanja s pravog ormara (§10.15)** — 5b VPS, pa 5d samo čitanje;
            §1 je prazan
 
 Čita se uz `docs/inputs/odluke.md` **v2.6** (odluke, obvezujuće — v2.1 dodaje **D18**, v2.2 **D19**,
@@ -19,6 +18,22 @@ v2.3 ispravak mreže u **D13**, v2.4 **D20**, v2.5 **D21**, **D22** i redoslijed
 `docs/inputs/ormar_ui_v2_spec.txt` (specifikacija ormara — uzor forme i izvor rječnika stanja).
 
 **Sve u ovom dokumentu je ODLUČENO. §1 je prazan — tri pitanja iz v15 odlučena su 2026-10-15.**
+
+### Što se promijenilo u verziji 25
+
+Tvoje odluke 2026-10-16 (pregled 6b i plan prema pravom ormaru).
+
+| | |
+|---|---|
+| **6b prihvaćen** | snimke 06–12 pregledane; **faza 6 se zatvara na 6b** |
+| **Promjena smjera** | prema testu s **pravim ormarom**: 6c, 6d, 6e, R27–R30 i sve što nije potrebno za vezu **odgađa se** do provjere povezivosti (§10.15) |
+| **§10.15 · plan** | od današnjeg stanja do prvog čitanja s pravog ormara u ERP-u na VPS-u — **odobren**; prvi test je **jedan ormar**, drugi tjedan poslije istim postupkom |
+| **Ormari na `main`u** | svi ormari vrte najnoviji softver ormara (`main`); ERP cilja ugovor `main`a |
+| **P-1** | CI na **Python 3.12** (kao VPS) |
+| **P-2 · §8.3** | baza se zove **`erp_iot`** (bila je `erp` u §8.3, a `erp_iot` u unitu agenta i lokalno) |
+| **P-4** | prvi test **bez demo marine**; kasnije demo marina zasebno, pravi ormari u svojoj (trojka za D28 kad dođemo do toga) |
+| **P-5 · O67** | **ERP tvrdo odbija upis vlasnika plovila u pravoj marini dok O67 nije izveden**; test |
+| **P-7** | CrowdSec u **5c**, ne u 5b |
 
 ### Što se promijenilo u verziji 24
 
@@ -3104,7 +3119,7 @@ Jedinstvene **po ormaru**: servisni račun, `X-API-Key`, webhook secret.
 > | Tajna | Nastaje | Gdje živi | Vidi se natrag? |
 > |---|---|---|---|
 > | `JWT_SECRET`, `ERP_ENCRYPTION_KEY` | generira instalacija (`secrets.token_hex`, Fernet) | `systemd` credentials, izvan diska aplikacije | **nikad** |
-> | lozinka baze | **ne postoji** — Postgres samo na Unix socketu, peer auth za sistemskog korisnika `erp` (`DATABASE_URL=postgresql:///erp?host=/run/postgresql`) | — | — |
+> | lozinka baze | **ne postoji** — Postgres samo na Unix socketu, peer auth za sistemskog korisnika `erp` (`DATABASE_URL=postgresql:///erp_iot?host=/run/postgresql`; baza `erp_iot`, v25) | — | — |
 > | servisni račun ormara, `X-API-Key`, webhook ključ/tajna | Admin unosi kroz UI | Fernet u bazi | **nikad** — UI pokazuje samo „postavljeno" (već tako, `cabinet_admin._cabinet_out`) |
 > | `DEFAULT_ADMIN_PASSWORD` | **ukida se** (D20.3) | — | — |
 >
@@ -3489,6 +3504,80 @@ VPS-a se preklapaju); 5c odmah nakon 5b ako je domena spremna; 5d 2–3 dana; 5e
 (ERP-ove sesije nastaju tek NFC tokom u fazi 7, pa usklađivač vidi samo „tuđe" sesije, D19);
 faza 6 lokalno protiv simulatora za vrijeme tog tjedna; faza 7 poslije njega. Prijedlog v9
 „faza 5 se piše dok teče 4.5 c" je bespredmetan — 4.5 je obrisana, a 5a kreće odmah.
+
+### §10.15 · Put do prvog čitanja s pravog ormara — plan (v25, odobren 2026-10-16)
+
+**Smjer (tvoja odluka):** faza 6 se zatvara na 6b. Sve što nije potrebno za vezu s pravim
+ormarom odgađa se dok se povezivost ne provjeri. **Prvi test je jedan ormar** (ime i Tailscale
+adresu javljaš ti, tag `tag:cabinet` stavljaš u admin konzoli); **drugi ormar tjedan poslije,
+istim postupkom** — koraci 4, 5 i 6 ponavljaju se za njega. Svi ormari vrte `main` softvera
+ormara; ERP cilja ugovor `main`a.
+
+Uloge: **ti-VPS** (ja pripremam skriptu u `deploy/`, ti pokrećeš i šalješ ispis, ja provjeravam;
+ja se na VPS ne spajam), **ti-ormar**, **chat ormara**, **ja** (repo).
+
+**1 · Zatvaranje faze 6** (ja): 1.1 spec v25 · 1.2 puni gate · 1.3 `main` = faza 6
+(`--ff-only`, puni gate, zeleni CI) · 1.4 `faza/5b-vps` iznova od `main`a, s runbookom 1a i
+`deploy/01_stanje.sh`. Zatim u repou: `deploy/erp-iot.service`, CI na Pythonu 3.12 i artefakt
+`frontend/dist` sa `sha256`, ime baze `erp_iot`, P-5 (odbijanje vlasnika), `scripts/live_check.py`.
+
+**2 · 5b VPS** (ti-VPS, jedan korak u isto vrijeme):
+
+| # | Korak | Provjera |
+|---|---|---|
+| 1 | snimka stanja (novi klon, `01_stanje.sh`) | „ništa nije mijenjano" |
+| 2 | UTC, NTP, swap 1 GB (swappiness 10), `unattended-upgrades`, DNS | `timedatectl`, `swapon`, `resolvectl` |
+| 3 | `nftables` u vlastitoj tablici: javno samo SSH; `tailscale0` samo 22 i 80; **bez 8081**; povratak za 3 min — **uz tvoj OK** | prijava javno i preko Tailscalea |
+| 4 | Tailscale ACL (ispod) | provjere ispod |
+| 5 | PostgreSQL 16 samo socket, peer; `erp` vlasnik baze **`erp_iot`**; **`erp_agent` kao `postgres` prije migracija**; bez `TEMPORARY` (O47); `pg_ident` | `ss -ltn` bez 5432 |
+| 6 | korisnik `erp`, `/opt/erp-iot` s `main`a, venv iz locka (Python 3.12, uz Pillow) | `pip check`, `import PIL, psycopg2` |
+| 7 | `JWT_SECRET`, `ERP_ENCRYPTION_KEY` generirani na stroju, `systemd` credentials | nitko ih ne vidi |
+| 8 | `alembic upgrade head` → **015**; `alembic check`; probe sheme; AGT-01 | `015 (head)`, 59 proba, 9/9 |
+| 9 | `erp-iot.service` na `127.0.0.1:8000`, kolektor uključen; **P3 namjerno**: `downgrade -1` → start pada s porukom → `upgrade head` | journal, `curl /api/health` |
+| 10 | agent D21 (`erp-agent`, bez mreže) | `systemctl show`, jedan prolaz |
+| 11 | `dist` iz CI artefakta `main`a | `sha256` jednak CI-ju |
+| 12 | nginx samo na Tailscale IP `:80`; ograničenje prijave (O43); **bez :8081** | UI s PC-a preko Tailscalea; javno zatvoreno |
+| 13 | ~~CrowdSec~~ → **5c** (P-7) | — |
+| 14 | prvi admin (`erp-setup-admin --base-url http://<Tailscale IP VPS-a>`), 2FA | prijava s 2FA |
+| 15 | backup minimum: dnevni `pg_dump -Fc` šifriran **javnim** `age` ključem, 7 dana lokalno; jedna kopija na PC nakon prvih pravih podataka | `.age` postoji |
+| 16 | probna obnova u `erp_restore_test` | redovi i `alembic_version` jednaki |
+| 17 | `verify_system.sh` (Cloudflare i webhook označeni „5c"/„R22"), izvještaj | sve prolazi ili je izrijekom odgođeno |
+
+`ERP_ENCRYPTION_KEY` se ne backupira (§8.3): nakon obnove na novi stroj lozinke ormara se
+**ponovno upisuju**. `erp-sim` se ne instalira (P-4).
+
+**3 · Pristup** — samo preko Tailscalea, bez javne adrese; ERP nema kolačića, pa `http://` preko
+WireGuarda radi s 2FA. 5c (Cloudflare, CrowdSec, B2) tek nakon uspješnog čitanja.
+
+**4 · Tailscale (D12), za jedan ormar:** `tag:erp → tag:cabinet:80` i ništa drugo; ormar → ERP
+**ništa** (webhook čeka R22); ormar ↛ ormar; `autogroup:admin → tag:erp:22,80`; tvoj pristup
+ormarima ostaje. Provjera s VPS-a: ormar `:80` odgovara, `:8000` i `:22` ne; s ormara VPS ne
+odgovara.
+
+**5 · Ormar prije spajanja** (ti-ormar / chat ormara): kopija baze ormara; račun `api_client`
+`erp@lika.solutions` (lozinka samo tebi); Gateway aktivan, kao **`monitor`** točno: `pedestals.health`,
+`pedestals.list`, `pedestals.status_ext`, `berths.list`, `sessions.active`, `sessions.pending`,
+`alarms.active`, `load.pedestal_get_ext`, `load.socket_get_ext`, `load.pedestal_alarms_ext`,
+`breakers.pedestal_list_ext`, `breakers.socket_get_ext`, `water.status_ext`, `sockets.config_list`,
+`valves.config_list`, `analytics.daily`, `analytics.summary`; **ništa `bidirectional`**, bez
+`camera.*`, `berths.push_image_ext`, `breakers.socket_reset_ext`, `load.auto_stop_ack_ext` i
+ostalog iz §2.3 „nikad"; webhook URL prazan; bez `X-API-Key` za ERP.
+
+**6 · 5d, samo čitanje (jedan ormar):** 6.1 `live_check.py` (LIVE-01, ja; prolazi protiv
+simulatora) · 6.2 `krk_probe.ps1` s PC-a (D17) · 6.3 `live_check.py` s VPS-a · 6.4 u ERP-u **nova
+prava marina** (ne demo), ormar, vezovi i mapiranje prema ekranu ormara · 6.5 usporedba ERP ↔
+ekran ormara (heartbeat, Smart Mode, vrata, temperatura, utičnice, sesije, alarmi, registar kWh
+dvaput) · 6.6 D18 ručno (ERP kaže „unverifiable" dok ormar nema R1) · 6.7 24 h rada. Webhookovi
+odbijeni dok ormar ne isporuči R22 — pull je istina.
+
+**7 · Prvi upravljački test** (nakon 6, samo u planu): prava marina, ti uz ormar, Smart Mode ON,
+na ormaru samo `controls.socket_cmd` → `bidirectional`, jedna utičnica, uključi pa isključi s
+razlogom, zatim natrag na `monitor`.
+
+**Odgođeno:** 6c, 6d, 6e — nakon koraka 7; **O67 — prije upisa prvog stvarnog vlasnika** (do
+tada ERP vlasnika u pravoj marini odbija, P-5); R27–R30 i upload na pravom ormaru (R26) — kad
+ih ormar isporuči; energetski agent (faza 10) — kad postoji povijest; webhook — R22/R25;
+CrowdSec, Cloudflare, B2 — 5c.
 
 ### §10.14 · Korak 6b — završni izvještaj (2026-10-16)
 
@@ -4028,7 +4117,7 @@ Nađeno usput. Nije u izvedbi gore; tvoje je da odlučiš prioritet.
 | O64 | ~~Zaslon Vezovi zove uživo prvi ormar marine~~ | **zatvoreno v20 (6a) za dashboard i kartu**: svih 150 vezova iz baze, nijedan poziv ormaru. Zaslon Vezovi s kontrolama ostaje živ — O65 |
 | O65 | Zaslon Vezovi i kontrole (Upali/Ugasi) i dalje idu na **prvi** poslužitelj marine (`get_client`). Za Krk (jedan ormar) to je točno; za marinu s više pravih ormara nije | kontrole po ormaru (klijent iz `cabinets` po vezu) — s drugim pravim ormarom u **5d** (O60) |
 | O66 | Dva alarma ormara na susjednim vezovima: na 360 px oznake se preklapaju | **v21: rješava se u 6b** — spajanje oznaka po zoomu (T2, §6.1) |
-| O67 | ~~Koliko se dugo čuvaju podaci vlasnika bivšeg plovila~~ | **odlučeno v23 (tvoja odluka 2026-10-16):** brišu se 90 dana nakon uklanjanja plovila s veza; ime i registracija ostaju (§6.10) |
+| O67 | ~~Koliko se dugo čuvaju podaci vlasnika bivšeg plovila~~ | **odlučeno v23 (tvoja odluka 2026-10-16):** brišu se 90 dana nakon uklanjanja plovila s veza; ime i registracija ostaju (§6.10). **Izvedba odgođena (v25); do tada ERP u pravoj marini (bez simuliranog ormara) tvrdo odbija upis vlasnika (P-5)** — mora biti gotovo prije upisa prvog stvarnog vlasnika |
 | O44 | `SecurityMiddleware` bilježi 403 kao „Unauthorised access" — s D20 je 403 i običan Manager na Admin ruti | šum u logu; rješava se s O2 (CrowdSec) |
 | O39 | Koja verzija ormara vrti na Krku — R14 b/c i loopback backend objavljeni su na `main` `eac7aa2`, Krk nepoznat | LIVE-01 (§10.5 b1, b7) |
 | O40 | Faza 4 tjedan stvarnog rada ne mjeri naplatu (ERP-ove sesije nastaju tek u fazi 7) | §10.6, prijedlog 2 |
