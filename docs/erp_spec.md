@@ -3,12 +3,12 @@
 Što se gradi, u kojem redoslijedu, i svaka odluka izrečena tako da ispravak
 košta jedan redak, a ne razgovor.
 
-    Verzija 22 — zamjenjuje v21 od 2026-10-16
+    Verzija 23 — zamjenjuje v22 od 2026-10-16
     Datum 2026-10-16
     Status faze 1–4 ZAVRŠENE i PRIHVAĆENE (§10.1–§10.4); korak 5a (D20), faza 8 (D21) i
            UI · Lika brand PRIHVAĆENI, na `main` (§10.7–§10.9); 5b PAUZIRAN do prihvaćanja
            faze 6 (tvoja odluka 2026-10-15); faza 6 lokalno: **6.0 demo marina ZAVRŠEN**
-           (§10.10) i PRIHVAĆEN; **6a PRIHVAĆEN** (§10.11); **6b izveden osim uploada reference** (§10.13; upload čeka P1/P2);
+           (§10.10) i PRIHVAĆEN; **6a PRIHVAĆEN** (§10.11); **6b prihvaćen** (§10.13) uz nalaz o živim pločama (§6.13); upload reference odlučen (P1, P2);
            §1 je prazan
 
 Čita se uz `docs/inputs/odluke.md` **v2.6** (odluke, obvezujuće — v2.1 dodaje **D18**, v2.2 **D19**,
@@ -18,6 +18,18 @@ v2.3 ispravak mreže u **D13**, v2.4 **D20**, v2.5 **D21**, **D22** i redoslijed
 `docs/inputs/ormar_ui_v2_spec.txt` (specifikacija ormara — uzor forme i izvor rječnika stanja).
 
 **Sve u ovom dokumentu je ODLUČENO. §1 je prazan — tri pitanja iz v15 odlučena su 2026-10-15.**
+
+### Što se promijenilo u verziji 23
+
+Tvoje odluke 2026-10-16 (pregled 6b).
+
+| | |
+|---|---|
+| **P1 odlučen** (§6.12) | ERP vodi vlastiti zapis „gateway dopušta upload" po ormaru; **R31**: ormar izlaže način gatewaya preko ext, tada ručni zapis otpada |
+| **P2 odlučen** (§6.12) | ERP ne čuva sliku; prije slanja uklanja EXIF i ostale metapodatke; format i veličina iz koda ormara (JPEG, 10 MB) |
+| **O67 odlučen** | podaci vlasnika bivšeg plovila brišu se 90 dana nakon uklanjanja; ime i registracija ostaju |
+| **§6.13 · nalaz** | Pedestal control u demo marini je govorio „Ormar 1 · Krk" za simulirani ormar; pravila koja to zatvaraju, i prijedlog izvedbe **P4** (čeka odobrenje) |
+| **§8.4 runbook** | uloga `erp_agent` stvara se **prije** `alembic upgrade head` kad vlasnik baze nema CREATEROLE; prijedlog **P3** (čeka odobrenje): bez `create_all` na PostgreSQL-u, start na bazi koja nije na `head` odbija se; `/setup` razlikuje „server unreachable" |
 
 ### Što se promijenilo u verziji 22
 
@@ -2303,6 +2315,16 @@ otvara vrata uz razlog.
 
 ### §6.10 · Vez — konfiguracija i usporedba plovila — D27 (v15)
 
+> **Odlučeno (O67, tvoja odluka 2026-10-16)** · **Podaci vlasnika bivšeg plovila** (`owner_name`,
+> `owner_contact`) **brišu se 90 dana nakon uklanjanja** plovila s veza (`berth_vessels.valid_to`),
+> ako to plovilo nije trenutno ni na jednom vezu. **Ime i registracija plovila ostaju.** Briše
+> retencija, kao i ostale rokove (`retention.py`, dnevno), a test to provjerava.
+>
+> **Zašto** · D15: osobni podatak bez svrhe se ne čuva; povijest veza (koje je plovilo bilo
+> gdje) ostaje za spor.
+>
+> **Ako griješim** · Rok je jedna postavka.
+
 > **v21 · D30** · U **fazi 1** radi samo način **PEDESTAL**: fotografija ide na ormar, ormar
 > uspoređuje, ERP prikazuje rezultat ormara. Načini **ERP** i **BOTH** te `vessel_match_results` i
 > `berth_match_config` ostaju ovdje kao **kandidati za fazu 2** i ne kodiraju se. Što se gradi sada:
@@ -2556,7 +2578,7 @@ adresi simulatora; scenarij s pravim id-em ne radi ništa; simulator ne otvara i
 (svjež `health`), ulogu Admin, razlog (najmanje 3 znaka), zapis u `command_audit` prije poziva — te
 način gatewaya koji dopušta upravljanje (P1, ispod).
 
-> **PRIJEDLOG P1 — čeka tvoje odobrenje** · **Način gatewaya ERP ne može pročitati**: katalog i
+> **Odlučeno (P1, tvoja odluka 2026-10-16)** · **Način gatewaya ERP ne može pročitati**: katalog i
 > konfiguracija gatewaya na ormaru dostupni su samo adminu ormara (`external_api_admin.py:119-149`,
 > `require_admin`). Prijedlog: ERP vodi **vlastiti zapis po ormaru** — „gateway dopušta
 > upravljanje za `berths.push_image_ext`" — koji Admin ERP-a upisuje (tko, kada, razlog) nakon što
@@ -2567,14 +2589,72 @@ način gatewaya koji dopušta upravljanje (P1, ispod).
 > a ormarov odgovor je stvarna provjera.
 >
 > **Ako griješim** · Jedan redak u `cabinet_capabilities` po ormaru.
+>
+> **R31** (§7.2): ormar izlaže način gatewaya preko ext (samo čitanje). Kad ga ormar isporuči,
+> ERP čita način s ormara i **ručni zapis otpada**.
 
-> **PRIJEDLOG P2 — čeka tvoje odobrenje** · **ERP ne čuva referentnu sliku.** Datoteka prolazi
+> **Odlučeno (P2, tvoja odluka 2026-10-16)** · **ERP ne čuva referentnu sliku.** Datoteka prolazi
 > kroz ERP do ormara i ne sprema se; `vessel_photos` čuva samo `sha256`, veličinu, vrstu, tko, kada,
 > razlog i odgovor ormara (bez `path` i `bytes` iz §6.10). Ponovno slanje znači ponovni upload.
+> **Prije slanja ERP uklanja EXIF i sve ostale metapodatke** (GPS, uređaj, vrijeme snimanja):
+> slika se dekodira i ponovno kodira kao JPEG bez metapodataka, a `sha256` se računa nad onim
+> što stvarno ide ormaru.
+>
+> **Format i veličina — iz koda ormara, ne pretpostavljeno** (`e80a4c1`):
+> - ruta sprema primljene bajtove kao `erp_<vrijeme>.jpg` i ne provjerava ni vrstu ni veličinu
+>   (`routers/ext_pedestal_endpoints.py:212-258`, `services/berth_analyzer.py:84-92`);
+> - usporedba sliku otvara Pillowom (`berth_analyzer.py:139, 215`);
+> - jedina granica je nginx ormara, `client_max_body_size 10M`
+>   (`nuc_image/overlay/cloud-iot-setup/install-cloud-iot.sh:236`).
+>
+> Zato ERP šalje **JPEG** (ime datoteke na ormaru je `.jpg`) i **najviše 10 MB nakon ponovnog
+> kodiranja**; veće odbija prije slanja. Ulaz od korisnika: JPEG, PNG ili WebP. A4 (zamjena ili
+> dodavanje, popis, brisanje) ostaje pitanje za ormar.
 >
 > **Zašto** · D30: slike ostaju na ormaru. Kopija u ERP-u treba tek načinu ERP, a on je faza 2.
 >
 > **Ako griješim** · Stupac `path` i spremište vraćaju se s fazom 2.
+
+### §6.13 · Žive ploče ormara — tko je iza njih (nalaz 6b, v23)
+
+**Nalaz (tvoj, 2026-10-16):** u demo marini Pedestal control je pokazivao „Ormar 1 · Krk",
+zadnji otkucaj 06:57, dvije aktivne sesije i gumbe Stop, dok dashboard za prave ormare iste
+marine kaže „Not connected yet".
+
+**Što je iza toga:** **simulator, ne pravi Krk.** Žive ploče uzimaju **prvi ormar marine**
+(`pedestal_api_factory.py:75-78`, `get_client`); u demo marini to je simulirani `SIM_A_02`
+(vezovi A-03/A-04) na adresi simulatora. „Ormar 1" i „Krk" su **fiksni naziv i lokacija** koje
+simulator iz faze 2 vraća za svaki ormar (`simulator/cabinet_sim.py:619`). Sesije i Stop
+pripadaju simulatoru; pravi Krk demo marini nije spojen (A-01/02 nemaju ormar do 5d). Ništa nije
+otišlo pravom ormaru — ali zaslon je to tvrdio.
+
+> **Odlučeno (tvoja odluka 2026-10-16)** · (1) **Oba zaslona govore isto**: žive ploče ormar
+> imenuju po zapisu ERP-a (`display_id`, oznaka SIM / stvaran, veza po O51), nikad po imenu koje
+> ormar sam pošalje. (2) **Nijedan upravljački gumb** za ormar koji ERP vodi kao nespojen.
+> (3) **Nikad stvarna naredba pravom ormaru iz demo marine** — provodi server, ne zaslon.
+> (4) Test za sve tri.
+>
+> **Zašto** · Zaslon koji simulator naziva „Krk" i nudi Stop navodi na radnju koju nitko nije
+> htio.
+>
+> **Ako griješim** · Pravila (2) i (3) su jedna provjera na serveru prije svake naredbe.
+
+> **PRIJEDLOG P4 — čeka tvoje odobrenje** · Izvedba:
+> - Pedestal control prikazuje **popis ormara iz ERP-a** (kao kartica Cabinets na dashboardu) i
+>   žive podatke **odabranog** ormara, dohvaćene njegovim vlastitim klijentom
+>   (`for_cabinet`) — ne više „prvi ormar marine". To rješava O65 za žive ploče.
+> - Gumbi (Allow, Deny, Stop, utičnice) postoje samo za ormar koji ERP ima u `cabinets`, čija je
+>   veza Online i Smart Mode ON; inače ih nema u DOM-u, uz jednu rečenicu.
+> - **Demo marina = marina s barem jednim simuliranim ormarom.** U njoj server **odbija svaku
+>   naredbu pravom ormaru** (409, `demo_marina_real_cabinet`), prije poziva, s upisom u
+>   `command_audit`. Naredbe simuliranim ormarima idu simulatoru kao i dosad.
+> - Testovi: naziv na živoj ploči je `display_id` iz ERP-a; za nespojen ormar nema gumba; naredba
+>   pravom ormaru u demo marini → 409 i **nula poziva** prema ormaru.
+>
+> **Zašto** · Jedan izvor istine o tome koji ormar je čiji (ERP), i brava na serveru koja ne
+> ovisi o tome što zaslon prikaže.
+>
+> **Ako griješim** · Pravilo „demo marina" je jedna funkcija; odabir ormara je jedan parametar.
 
 ## §7 Sigurnost
 
@@ -2720,6 +2800,7 @@ na dan čitanja i služi prioritizaciji — **ugovorna provjera je TC-ERP-LIVE-0
 | **R28** *(D30, match)* | **Pokretanje usporedbe, rezultat odvojen od zauzeća, popis i brisanje referenci preko ext** — ugovor ispod | danas samo `POST /api/admin/berths/{id}/match` (`berths.py:575`), reference `berths.py:828-866` | **ne** | upload radi (R19/R26); pokretanje „Not available" |
 | **R29** *(D30, sektor)* | **Čitanje i postavljanje sektora kamere po vezu preko ext** — ugovor ispod | danas samo `PUT /api/admin/berths/{id}/config` (`berths.py:736`) | **ne** | „Not available on this cabinet" |
 | **R30** *(D30, guard; zamjenjuje R21)* | **Guard preko ext: stanje, uključi/isključi, događaji bez slike** — ugovor ispod | danas samo `/api/guard/*` (JWT operatera, `guard/router.py:121-199`) | **ne** | „Not available on this cabinet" |
+| **R31** *(P1, v23)* | **Način rada gatewaya preko ext, samo čitanje** — npr. `GET /api/ext/gateway/endpoints` → `[{"id", "enabled", "mode": "monitor"\|"bidirectional"}]` za katalog koji vidi `api_client` | konfiguracija je danas samo za admina ormara (`e80a4c1:…/routers/external_api_admin.py:119-149`, `require_admin`) | **ne** | ERP drži ručni zapis po ormaru (§6.12 P1); kad R31 postoji, zapis otpada |
 | **R6** | *(bespredmetno dok Krk ne dobije zastavicu)* operaterski put bez `nfc_tag_id` | `a709cf8:…/config.py:194`; **`nfc_cross_check_required` ne postoji na Krku** | **ne postoji** | ništa — §1.1 je odlučen kao (a), pa R6 nije potreban |
 
 #### R27–R30 · predloženi ugovor prema ormaru (v21, D30)
@@ -2957,6 +3038,10 @@ završetak faze 5:
    provjera: `ss -ltn` ne pokazuje :5432
 4  systemd credentials GENERIRANE na stroju: JWT_SECRET, ERP_ENCRYPTION_KEY (nitko ih ne upisuje)
 5  venv iz LOCK datoteke (ne iz requirements.txt)
+5a uloga erp_agent PRIJE migracija, kao superuser (migracija 011 je stvara samo ako vlasnik
+   baze ima CREATEROLE; inače je samo provjeri i dodijeli prava):
+     CREATE ROLE erp_agent LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE
+                           NOREPLICATION NOBYPASSRLS NOINHERIT;
 6  alembic upgrade head
 7  dist/ iz artefakta CI runa koji je prošao gate (ne build na VPS-u, §8.2); swap 1 GB
 8  nginx + cloudflared (SAMO UI) + Cloudflare Access na /admin
@@ -2969,6 +3054,22 @@ završetak faze 5:
    6. kriva lozinka zaključava, nema DEFAULT_ADMIN_PASSWORD u okruženju
 13 TEK TADA javno izlaganje
 ```
+
+**Lokalno (Windows, vlastiti PostgreSQL):** isti korak 5a — superuser jednom stvori `erp_agent`,
+zatim `alembic upgrade head` kao vlasnik baze. README to ponavlja.
+
+> **PRIJEDLOG P3 — čeka tvoje odobrenje** · **Na PostgreSQL-u shemu mijenjaju samo migracije.**
+> Aplikacija pri startu više ne radi `create_all`; provjeri da je baza na `head` (Alembic) i, ako
+> nije, **odbije start** s porukom: „Database is at revision X, the code needs Y — run `alembic
+> upgrade head`". SQLite (testovi, demo) zadržava `create_all`. Uz to **`/setup`**: kad backend ne
+> odgovara, zaslon kaže **„Server unreachable — try again in a minute"**, a „link invalid or
+> expired" samo kad server stvarno tako odgovori.
+>
+> **Zašto** · Nalaz 2026-10-16: start na bazi 010 napravio je sedam tablica iz migracija 011–013
+> bez stupaca na postojećim tablicama, bez prava i bez okidača; sljedeći `upgrade` pada, a baza
+> izgleda gotovo ispravno. Poruka o linku krivo je slala na traženje novog linka.
+>
+> **Ako griješim** · Provjera je jedna funkcija pri startu.
 
 ---
 
@@ -3771,7 +3872,7 @@ Nađeno usput. Nije u izvedbi gore; tvoje je da odlučiš prioritet.
 | O64 | ~~Zaslon Vezovi zove uživo prvi ormar marine~~ | **zatvoreno v20 (6a) za dashboard i kartu**: svih 150 vezova iz baze, nijedan poziv ormaru. Zaslon Vezovi s kontrolama ostaje živ — O65 |
 | O65 | Zaslon Vezovi i kontrole (Upali/Ugasi) i dalje idu na **prvi** poslužitelj marine (`get_client`). Za Krk (jedan ormar) to je točno; za marinu s više pravih ormara nije | kontrole po ormaru (klijent iz `cabinets` po vezu) — s drugim pravim ormarom u **5d** (O60) |
 | O66 | Dva alarma ormara na susjednim vezovima: na 360 px oznake se preklapaju | **v21: rješava se u 6b** — spajanje oznaka po zoomu (T2, §6.1) |
-| O67 | Koliko se dugo čuvaju podaci **vlasnika bivšeg plovila** veza (`vessels.owner_*` nakon što `berth_vessels.valid_to` prođe) — D15 / GDPR | čeka tvoju odluku; do tada se čuvaju (6b, `vessels` i `berth_vessels` imenovani kao „čuva se" u testu retencije) |
+| O67 | ~~Koliko se dugo čuvaju podaci vlasnika bivšeg plovila~~ | **odlučeno v23 (tvoja odluka 2026-10-16):** brišu se 90 dana nakon uklanjanja plovila s veza; ime i registracija ostaju (§6.10) |
 | O44 | `SecurityMiddleware` bilježi 403 kao „Unauthorised access" — s D20 je 403 i običan Manager na Admin ruti | šum u logu; rješava se s O2 (CrowdSec) |
 | O39 | Koja verzija ormara vrti na Krku — R14 b/c i loopback backend objavljeni su na `main` `eac7aa2`, Krk nepoznat | LIVE-01 (§10.5 b1, b7) |
 | O40 | Faza 4 tjedan stvarnog rada ne mjeri naplatu (ERP-ove sesije nastaju tek u fazi 7) | §10.6, prijedlog 2 |
@@ -4084,7 +4185,7 @@ i čeka čovjeka; nikad ne otvara ni ne zaključava vrata.
 
 ---
 
-`docs/erp_spec.md` · verzija 22 · 2026-10-16 · zamjenjuje v21 od 2026-10-16
+`docs/erp_spec.md` · verzija 23 · 2026-10-16 · zamjenjuje v22 od 2026-10-16
 
 Faze 1–4, korak 5a, faza 8 (D21) i UI · Lika brand su završeni i prihvaćeni; 5b je pauziran do
 prihvaćanja faze 6; **6.0 demo marina je završen i prihvaćen** (§10.10), **6a je prihvaćen** (§10.11); **6b** po novom opsegu (§10.12, D30). D23–D28 su upisani (§6.6–§6.11) i izvode se kao proširena faza 6 (6a–6e); energetski

@@ -36,7 +36,6 @@ Pedestal SW instances (one per marina)
 - **Overview tab** — all existing marina content unchanged; pedestal cards are now clickable links to Pedestal Detail
 - **Berths tab** — unified berth view grouped by pedestal:
   - Per-berth occupancy badge (Occupied / Available / No Analysis)
-  - **Get Frame** button — fetches JPEG from Pedestal SW camera inline
   - **Refresh All** button + per-pedestal refresh
   - Data fetched on demand (not polled)
 
@@ -45,14 +44,12 @@ Pedestal SW instances (one per marina)
 - **Berths tab** — per-berth occupancy + frame grab + RTSP stream URL (copyable, VLC note)
 - **Controls tab** — Allow/Deny/Stop sessions + Acknowledge alarms with confirmation dialogs; mirrors PedestalControl look and feel; every action logged to audit_log
 
-### Camera & Berth Ext API (new backend endpoints)
+### Berth Ext API
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/marinas/{marina_id}/pedestals/{pedestal_id}/berths/occupancy` | Berth occupancy from Pedestal SW (cached, stale fallback) |
-| GET | `/api/marinas/{marina_id}/pedestals/{pedestal_id}/camera/frame` | Live JPEG frame from Pedestal SW camera (no cache, `Cache-Control: no-store`) |
-| GET | `/api/marinas/{marina_id}/pedestals/{pedestal_id}/camera/stream` | RTSP stream URL from Pedestal SW (cached, stale fallback) |
 
-All three endpoints require JWT auth + marina access. Camera frame fetches are logged to audit_log as operator-initiated actions.
+The endpoint requires JWT auth + marina access. No camera frame or stream is fetched (D30, spec §6.12).
 
 ## Quick Start
 
@@ -81,7 +78,14 @@ pip install -r requirements.txt
 #   ALLOWED_ORIGINS=http://localhost:5173
 #   ERP_ENCRYPTION_KEY=<generate: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())">
 
-# Run database migrations
+# Once per PostgreSQL cluster, BEFORE the first upgrade (spec §8.4 step 5a):
+# migration 011 needs the security agent's role. If the database owner has no
+# CREATEROLE, a superuser creates it (psql -U postgres):
+#   CREATE ROLE erp_agent LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE
+#                          NOREPLICATION NOBYPASSRLS NOINHERIT;
+# The migration then only checks it and grants its rights.
+
+# Run database migrations — BEFORE starting the backend on a new database
 alembic upgrade head
 
 # Start backend
@@ -223,12 +227,10 @@ CLOUD_IOT_RELEASE=1 git push origin main
 | GET | `/api/marinas/{id}/alarms/log` | Local alarm log |
 | POST | `/api/marinas/{id}/alarms/{aid}/acknowledge` | Acknowledge alarm |
 
-### Pedestal Ext (Camera & Berths)
+### Pedestal Ext (Berths)
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/marinas/{marina_id}/pedestals/{pedestal_id}/berths/occupancy` | Berth occupancy (cached, stale fallback) |
-| GET | `/api/marinas/{marina_id}/pedestals/{pedestal_id}/camera/frame` | Live JPEG frame (`image/jpeg`, no cache) |
-| GET | `/api/marinas/{marina_id}/pedestals/{pedestal_id}/camera/stream` | RTSP stream URL (cached, stale fallback) |
 
 ### Webhooks
 | Method | Endpoint | Description |
