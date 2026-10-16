@@ -138,6 +138,8 @@ class CabinetClient:
         path_params: Optional[dict] = None,
         query: Optional[dict] = None,
         body: Any = None,
+        content: Optional[bytes] = None,
+        content_type: Optional[str] = None,
         db: Optional[Session] = None,
     ) -> Outcome:
         try:
@@ -168,12 +170,14 @@ class CabinetClient:
                     _sync_log(db, self.marina_id, key, "error", started, "service-token refused")
                     return Outcome("cabinet_auth_failed", key, http_status=401)
                 async with self._http() as http:
+                    headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+                    if content is not None:          # a raw body (P5: the reference JPEG)
+                        headers["Content-Type"] = content_type or "application/octet-stream"
                     resp = await http.request(
-                        method, url,
-                        headers={"Authorization": f"Bearer {token}",
-                                 "Accept": "application/json"},
+                        method, url, headers=headers,
                         params={k: v for k, v in (query or {}).items() if v is not None} or None,
-                        json=body if body is not None else None,
+                        json=body if body is not None and content is None else None,
+                        content=content,
                     )
             except (httpx.TimeoutException, httpx.TransportError) as exc:
                 last_error = f"{type(exc).__name__}: {exc}"
@@ -396,6 +400,23 @@ class CabinetClient:
 
     async def run_diagnostics(self, pedestal_pk: int, db=None):
         return await self.call("diagnostics.run", path_params={"pedestal_id": pedestal_pk}, db=db)
+
+    async def push_reference_image(self, cabinet, cabinet_berth_id: int, jpeg: bytes,
+                                   db: Session) -> Outcome:
+        """P5 (spec §6.12): the reference photo to the cabinet, as a raw JPEG body. Refused
+        HERE, before anything is sent, unless this cabinet has the ERP's P1 record — the
+        client is shared by the cabinets of one server, so the record is read per call."""
+        from ..models.cabinet import CabinetCapability
+        key = "berths.push_image_ext"
+        rec = db.get(CabinetCapability, (cabinet.id, contract.PER_CABINET_RECORD[key]))
+        if rec is None or not rec.available:
+            logger.error("[cabinet] ERP BUG, not sent: %s without the P1 record on %s",
+                         key, cabinet.display_id)
+            return Outcome("erp_bug", key, cabinet_detail="not sent: no P1 record for this "
+                                                          "cabinet (spec §6.12)")
+        return await self.call(key, path_params={"pedestal_id": cabinet.pedestal_pk,
+                                                 "berth_id": cabinet_berth_id},
+                               content=jpeg, content_type="image/jpeg", db=db)
 
     async def socket_cmd(self, pedestal_pk: int, outlet: str, action: str,
                          nfc_tag_id: Optional[str] = None, db=None):

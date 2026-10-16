@@ -33,6 +33,9 @@ python-multipart==0.0.24
 starlette==1.0.0
 # D20: QR kod za povezivanje 2FA (cisti Python, bez ovisnosti)
 segno==1.6.1
+# P2/P5 (spec §6.12): referentna slika se dekodira i ponovno kodira kao JPEG bez
+# metapodataka (EXIF, GPS) prije slanja ormaru; ERP je ne sprema
+pillow==12.3.0
 
 # Testiranje i provjere
 pytest==9.0.2

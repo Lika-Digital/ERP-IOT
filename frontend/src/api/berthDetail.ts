@@ -8,8 +8,26 @@ export interface BerthFunction {
   key: string
   title: string
   available: boolean
-  sentence: string
+  sentence: string | null
   requires: string
+}
+
+/** P1: the Admin's record that the cabinet's gateway allows the upload (spec §6.12). */
+export interface UploadRecord {
+  enabled: boolean
+  set_by: string | null
+  reason: string | null
+  note: string | null
+  at: string | null
+}
+
+/** A reference photo SENT to the cabinet — its hash, never the picture (P2). */
+export interface SentPhoto {
+  sha256: string
+  size_bytes: number
+  uploaded_by: string
+  uploaded_at: string
+  outcome: string | null
 }
 
 export interface BerthDetail {
@@ -26,6 +44,7 @@ export interface BerthDetail {
     data_as_of: string | null
   } | null
   functions: BerthFunction[]
+  reference: { cabinet_id: number; record: UploadRecord | null; photos: SentPhoto[] } | null
   can_edit: boolean
 }
 
@@ -46,6 +65,20 @@ export const getVesselOwner = (marinaId: number, berthId: number) =>
 
 export const setVessel = (marinaId: number, berthId: number, body: VesselInput) =>
   api.put(`/marinas/${marinaId}/berths/${berthId}/vessel`, body).then((r) => r.data)
+
+export const setUploadRecord = (marinaId: number, cabinetId: number, enabled: boolean, reason: string) =>
+  api.put<{ ok: boolean; record: UploadRecord }>(`/marinas/${marinaId}/cabinets/${cabinetId}/reference-upload`,
+    { enabled, reason }).then((r) => r.data)
+
+/** P5: the file goes to the cabinet as a clean JPEG; the ERP keeps only its sha256. */
+export const uploadReferencePhoto = (marinaId: number, berthId: number, file: File, reason: string) => {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('reason', reason)
+  form.append('no_people_confirmed', 'true')
+  return api.post<{ ok: boolean; sha256: string; size_bytes: number }>(
+    `/marinas/${marinaId}/berths/${berthId}/reference-photo`, form).then((r) => r.data)
+}
 
 export const clearVessel = (marinaId: number, berthId: number, reason: string) =>
   api.delete(`/marinas/${marinaId}/berths/${berthId}/vessel`, { data: { reason } }).then((r) => r.data)

@@ -63,6 +63,9 @@ class DemoWorld:
             st.display_id, st.pk = cid, 1
             st.service_email, st.service_password = SERVICE_EMAIL, self.password
             st.erp_api_key = None                   # no channel B on a simulated cabinet
+            # P5: the demo cabinets' gateway allows the reference photo (the ERP still
+            # needs its own P1 record per cabinet before it sends one)
+            st.enabled["berths.push_image_ext"] = "bidirectional"
             self.states[cid] = st
         self.offline: dict[str, datetime] = {}       # cabinet -> when it went quiet
         self.wrong: set[str] = set()                 # berths forced to Wrong vessel
@@ -126,6 +129,7 @@ class DemoWorld:
                 code = 2 if (b.number in self.wrong or w.wrong_vessel(self.seed, b.number, t)) else 1
             row = _berth(slot, b.number, 1, state_code=code)
             row["last_analyzed"] = iso_z(t - timedelta(minutes=2))
+            row["reference_image_count"] += len(st.reference_images.get(slot, []))
             st.berths.append(row)
             if kw > 0:
                 st.sessions.append({

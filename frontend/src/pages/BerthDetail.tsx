@@ -5,14 +5,20 @@
  * every such read (D15). Admin edits, with a reason. The cabinet's own occupancy and
  * match result — a result, never a picture (D30). What the cabinet does not offer
  * over its API yet is one sentence each, never a control (D3).
+ *
+ * The reference photo (P5, spec §6.12): the upload form exists only when the server says
+ * the function is available (P1 record, Online, Smart Mode ON, a vessel, an Admin); else
+ * its one sentence. What was sent is listed by its sha256 — the ERP keeps no picture.
  */
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { askReason } from '../components/ui/ReasonDialog'
 import { detailOf } from '../api/auth'
 import {
-  clearVessel, getBerthDetail, getVesselOwner, setVessel, type BerthDetail as Detail,
+  clearVessel, getBerthDetail, getVesselOwner, setUploadRecord, setVessel, uploadReferencePhoto,
+  type BerthDetail as Detail,
 } from '../api/berthDetail'
+import { cabinetSentence } from '../api'
 import Status, { BERTH_ALARM, BERTH_COLOUR, MATCH, OCCUPANCY, SIMULATED } from '../components/ui/Status'
 import { dateTime, num } from '../utils/format'
 
@@ -126,7 +132,10 @@ export default function BerthDetail() {
       <section className="card mt-4" data-functions>
         <h2 className="text-lg font-bold tracking-tight mb-3">Assessment on the cabinet</h2>
         <ul className="divide-y divide-line">
-          {data.functions.map((f) => (
+          {data.functions.map((f) => f.key === 'reference_upload' ? (
+            <ReferencePhoto key={f.key} detail={data} available={f.available} sentence={f.sentence}
+              marinaId={mid} berthId={bid} onDone={load} />
+          ) : (
             <li key={f.key} className="py-2 flex flex-wrap items-baseline justify-between gap-2" data-function={f.key}>
               <span className="font-semibold text-sm">{f.title}</span>
               <span className="text-sm text-fg-muted">{f.sentence}</span>
@@ -135,6 +144,104 @@ export default function BerthDetail() {
         </ul>
       </section>
     </div>
+  )
+}
+
+function ReferencePhoto({ detail, available, sentence, marinaId, berthId, onDone }: {
+  detail: Detail; available: boolean; sentence: string | null
+  marinaId: number; berthId: number; onDone: () => void
+}) {
+  const [file, setFile] = useState<File | null>(null)
+  const [reason, setReason] = useState('')
+  const [noPeople, setNoPeople] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null)
+  const ref = detail.reference
+  const record = ref?.record ?? null
+  // the P1 record is written only for a simulated cabinet until the cabinet ships R26
+  const canRecord = detail.can_edit && ref !== null && detail.cabinet?.simulated
+
+  const toggleRecord = async (enabled: boolean) => {
+    if (!ref) return
+    const why = await askReason(enabled
+      ? `Record that the gateway of ${detail.cabinet?.display_id} allows the reference photo`
+      : `Take back the upload record of ${detail.cabinet?.display_id}`)
+    if (!why) return
+    setUploadRecordSafe(enabled, why)
+  }
+  const setUploadRecordSafe = (enabled: boolean, why: string) =>
+    setUploadRecord(marinaId, ref!.cabinet_id, enabled, why).then(onDone)
+      .catch((e) => setMessage({ ok: false, text: cabinetSentence(e, detailOf(e, 'The record could not be saved.')) }))
+
+  const send = () => {
+    if (!file) return
+    setBusy(true)
+    setMessage(null)
+    uploadReferencePhoto(marinaId, berthId, file, reason.trim())
+      .then((r) => {
+        setMessage({ ok: true, text: `Sent to ${detail.cabinet?.display_id} · sha256 ${r.sha256.slice(0, 12)}…` })
+        setFile(null); setReason(''); setNoPeople(false); onDone()
+      })
+      .catch((e) => setMessage({ ok: false, text: cabinetSentence(e, detailOf(e, 'The photo could not be sent.')) }))
+      .finally(() => setBusy(false))
+  }
+
+  return (
+    <li className="py-3 flex flex-col gap-3" data-function="reference_upload" data-available={available}>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <span className="font-semibold text-sm">Reference photo for the match</span>
+        {!available && <span className="text-sm text-fg-muted" data-upload-why>{sentence}</span>}
+      </div>
+      {ref && (
+        <p className="text-xs text-fg-muted flex flex-wrap items-center gap-2" data-upload-record>
+          {record?.enabled
+            ? <>Gateway allows the upload — recorded by {record.set_by} · {dateTime(record.at)} · “{record.reason}”</>
+            : record?.note ? <>Upload record switched off: {record.note}</> : <>No upload record for {detail.cabinet?.display_id}.</>}
+          {canRecord && (
+            <button className="btn-secondary btn-sm" data-record-toggle onClick={() => toggleRecord(!record?.enabled)}>
+              {record?.enabled ? 'Take back' : 'Record gateway allows upload'}
+            </button>
+          )}
+        </p>
+      )}
+      {available && (
+        <div className="flex flex-col gap-3 max-w-xl" data-upload-form>
+          <label><span className="label">Photo (JPEG, PNG or WebP)</span>
+            <input className="input" type="file" accept="image/jpeg,image/png,image/webp"
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)} /></label>
+          <p className="text-xs text-fg-muted">
+            Sent to the cabinet as a JPEG of at most 10 MB, with every metadata tag (location, device, time) removed.
+            The ERP keeps no copy — only its fingerprint (sha256).
+          </p>
+          <label><span className="label">Reason</span><input className="input" value={reason}
+            onChange={(e) => setReason(e.target.value)} placeholder="At least 3 characters — written to the audit log" /></label>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={noPeople} onChange={(e) => setNoPeople(e.target.checked)} data-no-people />
+            No person can be recognised in this photo
+          </label>
+          <div>
+            <button className="btn-primary btn-sm" data-upload-send
+              disabled={busy || !file || !noPeople || reason.trim().length < 3} onClick={send}>
+              {busy ? 'Sending…' : `Send to ${detail.cabinet?.display_id}`}
+            </button>
+          </div>
+        </div>
+      )}
+      {message && (
+        <p className={message.ok ? 'notice-ok text-sm' : 'notice-danger text-sm'} role={message.ok ? 'status' : 'alert'}
+          data-upload-message>{message.text}</p>
+      )}
+      {ref && ref.photos.length > 0 && (
+        <ul className="text-xs text-fg-muted space-y-1" data-sent-photos>
+          {ref.photos.map((p) => (
+            <li key={p.sha256 + p.uploaded_at} className="break-all">
+              {dateTime(p.uploaded_at)} · {p.uploaded_by} · {num(p.size_bytes / 1024, 0)} KB · sha256 {p.sha256.slice(0, 12)}… ·{' '}
+              <span className={p.outcome === 'ok' ? '' : 'text-st-red-fg'}>{p.outcome === 'ok' ? 'accepted by the cabinet' : p.outcome}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </li>
   )
 }
 

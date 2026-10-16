@@ -647,6 +647,7 @@ Dvije obitelji, dva pravila (`ormar_gateway_izvjestaj.md` NALAZ 1.1):
 | `controls.deny` | POST | `/api/ext/controls/{session_id}/deny` | PK | **da** | odbij sesiju |
 | `controls.stop` | POST | `/api/ext/controls/{session_id}/stop` | PK | **da** | zaustavi sesiju |
 | `diagnostics.run` | POST | `/api/ext/pedestals/{id}/diagnostics/run` | PK | **da** | servisni prozor |
+| `berths.push_image_ext` | POST | `/api/ext/pedestals/{pedestal_id}/berths/{berth_id}/reference-image` | PK\|display | **da** | referentna slika (P5): sirovi JPEG u tijelu; **samo po ormaru uz zapis P1**, klijent bez zapisa ne šalje (§6.12) |
 
 Tijela: `socket_cmd` i `water_cmd` oba primaju `{action: "activate"|"stop", nfc_tag_id?}`
 (`Cloud_IOT/backend/app/routers/controls.py:558-563`, `:752-756`). `action` je regex
@@ -686,7 +687,8 @@ write endpoint je površina.
 
 **Bidirectional (write):**
 `controls.socket_cmd`, `controls.water_cmd`, `controls.allow`, `controls.deny`,
-`controls.stop`, `alarms.acknowledge`, `diagnostics.run`
+`controls.stop`, `alarms.acknowledge`, `diagnostics.run`; **po ormaru, uz zapis P1:**
+`berths.push_image_ext` (§6.12, P5)
 
 **Izrijekom NE uključivati:**
 
@@ -2669,6 +2671,20 @@ CHECK dopušta sedam sposobnosti, ne „upload".
 > marina-iot) zapis P1 **ne može se upisati** dok ormar ne isporuči R26 (upload poštuje način
 > gatewaya). ERP to provodi na serveru: upis zapisa za ormar koji nije simuliran odbija se s 409
 > `waiting_for_cabinet_r26`. Do tada se upload testira **samo na simulatoru**.
+>
+> **Izvedeno** · Migracija 015; `app/services/reference_photo.py` (Pillow 12.3.0: ulaz JPEG,
+> PNG ili WebP do 25 MB i 40 Mpx, orijentacija iz EXIF-a primijeni se na piksele, zatim se slika
+> iscrta iznova i spremi kao JPEG bez ijednog metapodatka; > 10 MB → 413). Ugovor:
+> `berths.push_image_ext` u §2.2, `PER_CABINET_RECORD`; `CabinetClient.push_reference_image`
+> sam čita zapis P1 i bez njega ne šalje. Rute (59 / 72): `PUT …/cabinets/{id}/reference-upload`
+> (zapis P1, Admin, razlog; pravi ormar → 409 `waiting_for_cabinet_r26`) i
+> `POST …/berths/{id}/reference-photo` (multipart; provjere redom: ormar na vezu, plovilo,
+> potvrda „nema ljudi", demo-brava P4, zapis P1, Online + Smart Mode ON, slika; zatim
+> `command_audit` prije poziva, `vessel_photos` poslije; 403/503 ormara gasi zapis s bilješkom).
+> Simulator: ruta `…/reference-image` u obliku iz `e80a4c1` (bila je krivo `…/image`), demo
+> ormari je imaju uključenu. Zaslon: detalj veza — zapis P1, obrazac (datoteka, razlog,
+> kvačica) samo kad je funkcija dostupna, popis poslanih po `sha256`. Testovi:
+> `tests/test_p5_upload.py` (11), probe sheme (+6).
 
 ### §6.13 · Žive ploče ormara — tko je iza njih (nalaz 6b, v23)
 

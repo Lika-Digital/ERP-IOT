@@ -30,7 +30,7 @@ def _spec_rows():
 
 
 def test_spec_table_parses():
-    assert len(_spec_rows()) == 30          # v21: the two camera rows are gone (D30)
+    assert len(_spec_rows()) == 31          # v21: camera rows gone (D30); P5: push_image_ext
 
 
 def test_code_table_is_exactly_the_spec_table():
@@ -67,12 +67,13 @@ def test_path_rule_family_b_is_verbatim_never_doubled():
         assert "/api/ext/ext/" not in ep.path
 
 
-def test_family_b_has_17_routes_of_which_the_erp_uses_12():
-    # 17 direct routes on the cabinet (NALAZ 1.1); 3 are never enabled (§2.3):
-    # breakers.socket_reset_ext, load.auto_stop_ack_ext, berths.push_image_ext;
-    # and since v21 (D30) the ERP calls neither camera route (frame, stream)
+def test_family_b_has_17_routes_of_which_the_erp_uses_13():
+    # 17 direct routes on the cabinet (NALAZ 1.1); 2 are never enabled (§2.3):
+    # breakers.socket_reset_ext, load.auto_stop_ack_ext; since v21 (D30) the ERP calls
+    # neither camera route (frame, stream); since P5 berths.push_image_ext is in, per
+    # cabinet with the P1 record
     fam_b = [e for e in c.ENDPOINTS.values() if e.catalog_path.startswith("/api/ext/")]
-    assert len(fam_b) == 12
+    assert len(fam_b) == 13
 
 
 def test_never_enabled_keys_are_not_callable():

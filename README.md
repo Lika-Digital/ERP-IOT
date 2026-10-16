@@ -213,6 +213,12 @@ CLOUD_IOT_RELEASE=1 git push origin main
 | POST | `/api/marinas/{id}/sessions/{sid}/deny` | Deny session |
 | POST | `/api/marinas/{id}/sessions/{sid}/stop` | Stop session |
 
+### Reference photo (P5, spec §6.12)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| PUT | `/api/marinas/{id}/cabinets/{cid}/reference-upload` | Admin: record that the cabinet's gateway allows the upload (P1). A real cabinet: 409 until it ships R26 |
+| POST | `/api/marinas/{id}/berths/{bid}/reference-photo` | Admin: multipart `file`, `reason`, `no_people_confirmed`. Re-encoded to a JPEG with no metadata, ≤ 10 MB; the ERP keeps only its sha256 |
+
 Reads and commands take `?cabinet=<ERP cabinet id>`: that cabinet's own client, never the
 marina's first. In a marina with a simulated cabinet (the demo marina) a command to a REAL
 cabinet is refused with 409 `demo_marina_real_cabinet` before any call, and written to

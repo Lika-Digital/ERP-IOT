@@ -115,17 +115,27 @@ _TABLE = [
     Endpoint("controls.stop", "POST", "/api/controls/{session_id}/stop", _N, _B, "stop session"),
     Endpoint("diagnostics.run", "POST", "/api/pedestals/{pedestal_id}/diagnostics/run", _PK, _B,
              "service window"),
+    # P5 (spec §6.12, §2.3): raw JPEG body; only to a cabinet with the P1 record
+    # (PER_CABINET_RECORD below) — the client refuses it otherwise, before sending
+    Endpoint("berths.push_image_ext", "POST",
+             "/api/ext/pedestals/{pedestal_id}/berths/{berth_id}/reference-image", _PD, _B,
+             "reference photo for the cabinet's match (P5)"),
 ]
 
 ENDPOINTS: dict[str, Endpoint] = {e.key: e for e in _TABLE}
 
 # §2.3 — must NOT be enabled on the cabinet, and the ERP never calls them.
 NEVER_ENABLE = frozenset({
-    "breakers.socket_reset_ext", "load.auto_stop_ack_ext", "berths.push_image_ext",
+    "breakers.socket_reset_ext", "load.auto_stop_ack_ext",
     "led_schedule.get", "led_schedule.upsert", "led_schedule.delete", "led_schedule.test",
     "controls.reset", "controls.led", "sockets.config_patch", "valves.config_patch",
     "controls.socket_approve", "controls.socket_reject",
 })
+
+# §2.3 (P5): enabled per cabinet only, and only with the ERP's own record for that
+# cabinet (cabinet_capabilities 'reference_upload', P1). On a real cabinet the record
+# cannot be written until the cabinet ships R26.
+PER_CABINET_RECORD = {"berths.push_image_ext": "reference_upload"}
 
 # Channel B (§2.4): NFC, direct, X-API-Key, never through /api/ext.
 NFC_SCAN = "/api/nfc/scan"

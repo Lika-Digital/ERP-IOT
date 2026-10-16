@@ -337,10 +337,12 @@ def test_tc_erp_auth_01_protected_count_matches_graph():
     vlasnik (auditiran), upis i brisanje plovila (samo Admin).
     P4 (§6.13): 57 od 70 — GET /api/marinas/{id}/control/cabinets, popis ormara
     Pedestal controla iz ERP-a, zasticen i vezan uz pristup marini.
+    P5 (§6.12): 59 od 72 — PUT .../cabinets/{id}/reference-upload (zapis P1) i
+    POST .../berths/{id}/reference-photo (upload), obje samo Admin.
     Broj se mijenja samo svjesno, u istom commitu kao ruta.
     """
     rs = _routes()
-    assert (sum(p for _, _, p in rs), len(rs)) == (57, 70)
+    assert (sum(p for _, _, p in rs), len(rs)) == (59, 72)
 
 
 def test_tc_erp_auth_01_no_credentials_is_strictly_401(client):

@@ -66,7 +66,8 @@ FAMILY_B = {
     "berths.occupancy_ext": "/api/ext/pedestals/{pedestal_id}/berths/occupancy",
     "camera.frame_ext": "/api/ext/pedestals/{pedestal_id}/camera/frame",
     "camera.stream_ext": "/api/ext/pedestals/{pedestal_id}/camera/stream",
-    "berths.push_image_ext": "/api/ext/pedestals/{pedestal_id}/berths/{berth_id}/image",
+    # ext_pedestal_endpoints.py:212-258 (e80a4c1) — raw image body, no type or size check
+    "berths.push_image_ext": "/api/ext/pedestals/{pedestal_id}/berths/{berth_id}/reference-image",
     "load.pedestal_get_ext": "/api/ext/pedestals/{pedestal_id}/load",
     "load.socket_get_ext": "/api/ext/pedestals/{pedestal_id}/sockets/{socket_id}/load",
     "load.socket_history_ext": "/api/ext/pedestals/{pedestal_id}/sockets/{socket_id}/load/history",
@@ -158,6 +159,8 @@ class SimState:
     tokens: dict = field(default_factory=dict)        # token -> expiry
     contract: str = "a709cf8"                         # channel B: "a709cf8" | "r14"
     acked: list = field(default_factory=list)         # r14: session ids the ERP confirmed
+    # berths.push_image_ext: cabinet berth id -> the bytes of every image received, in order
+    reference_images: dict = field(default_factory=dict)
 
 
 def _all_enabled() -> dict:
@@ -439,6 +442,8 @@ def create_app(state: Optional[SimState] = None) -> FastAPI:
                 return r
             if not s.gateway_active or key not in s.enabled:
                 return _not_enabled_503()
+            if key == "berths.push_image_ext":
+                return _push_image(params, await request.body(), s)
             return _direct(key, params, s)
 
         # family A through the gateway (gw:203-409)
@@ -520,6 +525,22 @@ def _breaker(sock: Socket) -> dict:
             "breaker_rcd_sensitivity": "30mA", "breaker_remote_reset": "no",
             "remote_reset_available": False,
             "remote_reset_unavailable_reason": "manual reset — ordinary MCB"}
+
+
+def _push_image(p: dict, data: bytes, s: SimState) -> Response:
+    # ext_push_berth_image, ext_pedestal_endpoints.py:212-258 (e80a4c1): checks neither
+    # the gateway mode (C, R26) nor Smart Mode, nor the image's type or size — only that
+    # the pedestal and berth exist and the body is not empty
+    if _resolve(s, p["pedestal_id"]) is None:
+        return _err(404, "Pedestal not found")
+    bid = int(p["berth_id"]) if p["berth_id"].isdigit() else None
+    if bid is None or not any(b["id"] == bid for b in s.berths):
+        return _err(404, "Berth not found for this pedestal")
+    if not data:
+        return _err(422, "Empty image body")
+    s.reference_images.setdefault(bid, []).append(data)
+    stamp = s.clock().strftime("%Y%m%d-%H%M%S")
+    return JSONResponse({"ok": True, "berth_id": bid, "stored": f"erp_{stamp}.jpg"})
 
 
 def _resolve(s: SimState, ref: str) -> Optional[str]:

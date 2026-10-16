@@ -64,6 +64,9 @@
   .notice-warn {
     @apply rounded-control border px-4 py-3 text-sm bg-st-yellow-bg text-st-yellow-fg border-st-yellow-line;
   }
+  .notice-ok {
+    @apply rounded-control border px-4 py-3 text-sm bg-st-green-bg text-st-green-fg border-st-green-line;
+  }
 }
 
 /* ── D23 marina map (§6.1): the app sets only the class of each berth ─────────── */
