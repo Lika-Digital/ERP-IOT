@@ -16,6 +16,7 @@ import {
   type BerthOccupancyPayload,
 } from '../api/pedestalExt'
 import StaleDataBanner from '../components/ui/StaleDataBanner'
+import DashboardOverview from '../components/DashboardOverview'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { num } from '../utils/format'
 import Status, { OCCUPANCY, REACH, READING_ALARM, SESSION } from '../components/ui/Status'
@@ -152,25 +153,6 @@ export default function Dashboard() {
     }
   }, [id])
 
-  if (loading && !data) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-fg" />
-      </div>
-    )
-  }
-
-  if (error && !data) {
-    return (
-      <div className="page">
-        <div className="notice-danger" role="alert">
-          <p>{error}</p>
-          <button className="btn-primary btn-sm mt-3" onClick={fetchDashboard}>Retry</button>
-        </div>
-      </div>
-    )
-  }
-
   const pedestals: PedestalInfo[] = Array.isArray(data?.pedestals) ? data!.pedestals : []
   const activeSessions: SessionInfo[] = Array.isArray(data?.active_sessions) ? data!.active_sessions : []
   const pendingSessions: SessionInfo[] = Array.isArray(data?.pending_sessions) ? data!.pending_sessions : []
@@ -185,12 +167,32 @@ export default function Dashboard() {
       <div className="flex flex-wrap items-end justify-between gap-3 mb-6">
         <div>
           <h1 className="page-title">{data?.marina_name || 'Dashboard'}</h1>
-          <p className="page-lead">Live overview</p>
+          <p className="page-lead">The marina as the collector last saw it</p>
         </div>
-        <button onClick={fetchDashboard} className="btn-secondary" disabled={loading}>
+      </div>
+
+      {/* D23 (§6.6): map, three cards, cabinets — from the database, no cabinet call */}
+      <DashboardOverview marinaId={id} />
+
+      {/* Below: live from the marina's cabinet server, as before 6a */}
+      <div className="flex flex-wrap items-end justify-between gap-3 mb-3">
+        <h2 className="text-lg font-bold tracking-tight">Live from the cabinet server</h2>
+        <button onClick={fetchDashboard} className="btn-secondary btn-sm" disabled={loading}>
           {loading ? 'Refreshing…' : 'Refresh'}
         </button>
       </div>
+
+      {loading && !data && (
+        <div className="flex items-center justify-center h-24">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-fg" />
+        </div>
+      )}
+      {error && !data && (
+        <div className="notice-danger mb-6" role="alert">
+          <p>{error}</p>
+          <button className="btn-primary btn-sm mt-3" onClick={fetchDashboard}>Retry</button>
+        </div>
+      )}
 
       <StaleDataBanner isStale={data?.is_stale ?? false} onRefresh={fetchDashboard} />
 

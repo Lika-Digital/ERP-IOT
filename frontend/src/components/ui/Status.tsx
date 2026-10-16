@@ -66,7 +66,7 @@ export const BERTH_COLOUR: Record<Tone, Look> = {
   blue: { tone: 'blue', icon: 'ok', word: 'Occupied — correct vessel' },
   yellow: { tone: 'yellow', icon: 'info', word: 'Reserved' },
   orange: { tone: 'orange', icon: 'attention', word: 'Power without vessel' },
-  red: { tone: 'red', icon: 'alert', word: 'Alarm' },
+  red: { tone: 'red', icon: 'alert', word: 'Wrong vessel' },
   grey: { tone: 'grey', icon: 'unknown', word: 'Unknown' },
 }
 
@@ -138,3 +138,23 @@ export const REACH: Record<'yes' | 'no', Look> = {
   no: { tone: 'red', icon: 'alert', word: 'Unreachable' },
 }
 export const READING_ALARM: Look = { tone: 'red', icon: 'alert', word: 'Alarm' }
+
+/** Dashboard card freshness (D23, §6.6): stale is grey, never a number in full colour. */
+export const CARD_STATE: Record<'fresh' | 'partial' | 'stale', Look> = {
+  fresh: { tone: 'green', icon: 'ok', word: 'Current' },
+  partial: { tone: 'yellow', icon: 'attention', word: 'Partial' },
+  stale: { tone: 'grey', icon: 'unknown', word: 'No current data' },
+}
+
+/** A cabinet's connection, as the server computes it from the heartbeat (D2, O51). */
+export const CABINET_LINK: Record<'ONLINE' | 'STALE' | 'OFFLINE', Look> = {
+  ONLINE: { tone: 'green', icon: 'ok', word: 'Online' },
+  STALE: { tone: 'yellow', icon: 'attention', word: 'Late' },
+  OFFLINE: { tone: 'grey', icon: 'unknown', word: 'Offline' },
+}
+
+/** A cabinet alarm on a berth: a marker next to the colour, never the colour (v17). */
+export const BERTH_ALARM: Look = { tone: 'red', icon: 'alert', word: 'Alarm' }
+
+/** Simulated data (D28): seen by Admin and Marina Manager alike. */
+export const SIMULATED: Look = { tone: 'grey', icon: 'info', word: 'SIM' }

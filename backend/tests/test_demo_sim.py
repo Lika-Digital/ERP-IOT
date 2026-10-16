@@ -1,7 +1,7 @@
 """D28 — the demo marina's simulated cabinets, through the ERP's own client (spec §6.11)."""
 import asyncio
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import httpx
@@ -71,9 +71,10 @@ def test_offline_freezes_the_cabinet_past_the_erps_threshold_and_reset_restores_
     assert world.scenario("offline", "SIM_D_03")["ok"]
     clock.t = T0 + timedelta(minutes=1)
     hb = run(client("SIM_D_03").health()).data["1"]["last_heartbeat"]
-    # the heartbeat is stamped by the phase-2 simulator against the wall clock
+    # the heartbeat is stamped on the WORLD's clock (6a): a world set in the past must
+    # not look online because the wall clock has moved on
     def age(stamp):
-        return datetime.now(timezone.utc).replace(tzinfo=None) - datetime.fromisoformat(stamp.rstrip("Z"))
+        return clock.t - datetime.fromisoformat(stamp.rstrip("Z"))
     assert age(hb) > timedelta(minutes=10)
     assert world.scenario("reset", None)["ok"]
     hb = run(client("SIM_D_03").health()).data["1"]["last_heartbeat"]

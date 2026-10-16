@@ -74,3 +74,82 @@ export const listPedestals = (marinaId: number) =>
   api.get<PedestalListResponse>(`/marinas/${marinaId}/pedestals`).then((r) => r.data)
 
 // Berths: see api/berths.ts (server-computed status, spec §3)
+
+// ── D23 main dashboard (spec §6.6): one answer, everything decided on the server ──
+
+export type CardState = 'fresh' | 'partial' | 'stale'
+export type Simulated = 'none' | 'some' | 'all'
+
+interface CardBase {
+  title: string
+  state: CardState
+  sentence: string
+  as_of: string | null
+  simulated: Simulated
+  href: string
+}
+
+export interface EnergyCard extends CardBase {
+  key: 'energy'
+  electricity_kwh: number
+  water_m3: number | null
+  delta_yesterday_pct: number | null
+  delta_last_week_pct: number | null
+  silent: number
+  of: number
+}
+
+export interface SecurityCard extends CardBase {
+  key: 'security'
+  open: number
+  open_simulated: number
+  worst: 'critical' | 'warning' | 'info' | null
+}
+
+export interface OccupancyCard extends CardBase {
+  key: 'occupancy'
+  percent: number | null
+  occupied: number
+  known: number
+  unknown: number
+  reserved: number
+  silent: number
+}
+
+export type OverviewCard = EnergyCard | SecurityCard | OccupancyCard
+
+export interface MapBerth {
+  berth_id: number
+  number: string
+  svg_id: string | null
+  length_m: number | null
+  cabinet: string | null
+  simulated: boolean
+  status_code: string
+  status: string
+  berth_colour: 'green' | 'blue' | 'yellow' | 'orange' | 'red' | 'grey'
+  status_sentence: string
+  signals: { connection: string; vessel: string; power: string; reservation: string }
+  alarm: { code: string; sentence: string }[]
+  data_as_of: string | null
+}
+
+export interface OverviewCabinet {
+  display_id: string
+  simulated: boolean
+  connection: 'ONLINE' | 'STALE' | 'OFFLINE'
+  last_heartbeat_at: string | null
+}
+
+export interface OverviewResponse {
+  marina_id: number
+  marina_name: string
+  map_svg: string | null
+  generated_at: string
+  cards: OverviewCard[]
+  berths: MapBerth[]
+  cabinets: OverviewCabinet[]
+}
+
+export const getOverview = (marinaId: number) =>
+  api.get<OverviewResponse>(`/marinas/${marinaId}/overview`).then((r) => r.data)

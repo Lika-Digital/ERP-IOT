@@ -65,3 +65,42 @@
     @apply rounded-control border px-4 py-3 text-sm bg-st-yellow-bg text-st-yellow-fg border-st-yellow-line;
   }
 }
+
+/* ── D23 marina map (§6.1): the app sets only the class of each berth ─────────── */
+.map-drawing > svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 0.75rem;
+  --map-water: rgb(var(--surface-2));
+  --map-land: rgb(var(--canvas));
+  --map-walk: rgb(var(--line));
+  --map-label: rgb(var(--fg-muted));
+}
+.map-drawing > svg .berth { cursor: pointer; stroke-width: 2; }
+.map-drawing > svg .berth:focus { outline: none; stroke: rgb(var(--focus)); stroke-width: 4; }
+.map-drawing > svg .berth.is-selected { stroke: rgb(var(--fg)); stroke-width: 4; }
+.map-drawing > svg .berth.tone-green  { fill: rgb(var(--st-green-bg));  stroke: rgb(var(--st-green-line)); }
+.map-drawing > svg .berth.tone-blue   { fill: rgb(var(--st-blue-bg));   stroke: rgb(var(--st-blue-line)); }
+.map-drawing > svg .berth.tone-yellow { fill: rgb(var(--st-yellow-bg)); stroke: rgb(var(--st-yellow-line)); }
+.map-drawing > svg .berth.tone-orange { fill: rgb(var(--st-orange-bg)); stroke: rgb(var(--st-orange-line)); }
+.map-drawing > svg .berth.tone-red    { fill: rgb(var(--st-red-bg));    stroke: rgb(var(--st-red-line)); }
+.map-drawing > svg .berth.tone-grey   { fill: rgb(var(--st-grey-bg));   stroke: rgb(var(--st-grey-line)); stroke-dasharray: 4 3; }
+.map-drawing > svg .berth.is-selected { stroke: rgb(var(--fg)); stroke-dasharray: none; }
+.map-alarm {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 4px;
+  border-radius: 9999px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  white-space: nowrap;
+  pointer-events: none;
+  background: rgb(var(--st-red-bg));
+  color: rgb(var(--st-red-fg));
+  border: 1px solid rgb(var(--st-red-line));
+}

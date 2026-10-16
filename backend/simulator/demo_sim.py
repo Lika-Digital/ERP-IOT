@@ -103,6 +103,7 @@ class DemoWorld:
         st.heartbeat_age_s = (self.clock() - quiet).total_seconds() + OFFLINE_HEARTBEAT_S \
             if quiet is not None else 5.0
         st.smart_mode = True
+        st.clock = self.clock
         n_sockets = 4
         st.sockets = [Socket(i, 3 if (i == 1 and spec.kind == "full") else 1,
                              32.0 if (i <= 2 and spec.kind == "full") else 16.0)

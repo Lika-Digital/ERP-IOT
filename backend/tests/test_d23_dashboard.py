@@ -253,3 +253,19 @@ def test_map_file_must_be_a_file_name(seeded, db):
         with pytest.raises(IntegrityError):
             db.commit()
         db.rollback()
+
+
+def test_a_cabinet_gone_quiet_turns_its_berths_grey_and_the_card_partial(seeded, db):
+    """End to end on the world's own clock: the `offline` scenario, the real collector,
+    then the dashboard. Last in this file: it leaves SIM_A_02 offline in the database."""
+    later = LATER + timedelta(minutes=1)
+    world = DemoWorld(seed=28, password="pw", clock=lambda: later)
+    world.scenario("offline", "SIM_A_02")
+    _collect(later, world)
+    out = overview.build(db, _marina(db, seeded), later)
+    rows = {b["number"]: b for b in out["berths"]}
+    for n in ("A-03", "A-04"):                                  # SIM_A_02's two berths
+        assert (rows[n]["berth_colour"], rows[n]["status_code"]) == ("grey", "no_contact")
+    assert next(c for c in out["cabinets"] if c["display_id"] == "SIM_A_02")["connection"] == "OFFLINE"
+    card = next(c for c in out["cards"] if c["key"] == "occupancy")
+    assert card["state"] == "partial" and card["silent"] == 2 and card["unknown"] == 6

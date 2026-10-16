@@ -529,7 +529,7 @@ def main() -> int:
                     m = f"{spa_url}/marinas/{marina_id}"
                     for name, url, ready in (
                         ("03-marinas", f"{spa_url}/marinas", "[data-marina]"),
-                        ("04-dashboard", f"{m}/dashboard", "[data-page='dashboard']"),
+                        ("04-dashboard", f"{m}/dashboard", "[data-card='occupancy']"),   # D23: from the DB
                         ("05-pedestal", f"{m}/pedestals/1", "[data-page='pedestal']"),
                         ("06-control", f"{m}/control", "[data-page='control']"),
                         ("07-energy", f"{m}/energy", "[data-page='energy']"),

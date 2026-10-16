@@ -3,12 +3,13 @@
 Što se gradi, u kojem redoslijedu, i svaka odluka izrečena tako da ispravak
 košta jedan redak, a ne razgovor.
 
-    Verzija 19 — zamjenjuje v18 od 2026-10-15
+    Verzija 20 — zamjenjuje v19 od 2026-10-16
     Datum 2026-10-16
     Status faze 1–4 ZAVRŠENE i PRIHVAĆENE (§10.1–§10.4); korak 5a (D20), faza 8 (D21) i
            UI · Lika brand PRIHVAĆENI, na `main` (§10.7–§10.9); 5b PAUZIRAN do prihvaćanja
            faze 6 (tvoja odluka 2026-10-15); faza 6 lokalno: **6.0 demo marina ZAVRŠEN**
-           (§10.10) i PRIHVAĆEN, sljedeći 6a; §1 je prazan
+           (§10.10) i PRIHVAĆEN; **6a dashboard i karta ZAVRŠEN** (§10.11), čeka tvoj pregled;
+           §1 je prazan
 
 Čita se uz `docs/inputs/odluke.md` **v2.6** (odluke, obvezujuće — v2.1 dodaje **D18**, v2.2 **D19**,
 v2.3 ispravak mreže u **D13**, v2.4 **D20**, v2.5 **D21**, **D22** i redoslijed 5a–5e, v2.6 **D23–D28**),
@@ -17,6 +18,15 @@ v2.3 ispravak mreže u **D13**, v2.4 **D20**, v2.5 **D21**, **D22** i redoslijed
 `docs/inputs/ormar_ui_v2_spec.txt` (specifikacija ormara — uzor forme i izvor rječnika stanja).
 
 **Sve u ovom dokumentu je ODLUČENO. §1 je prazan — tri pitanja iz v15 odlučena su 2026-10-15.**
+
+### Što se promijenilo u verziji 20
+
+| | |
+|---|---|
+| **6a gotov** (§10.11) | dashboard iz baze: karta svih vezova, tri kartice, veza po ormaru; nijedan poziv ormaru za crtanje |
+| **§3.2 podijeljen** (odluka v17 izvedena) | boja = zauzeće; rangovi 3–7 u polju `alarm`; novi sivi redak `no_cabinet` |
+| **§6.6 dopunjen izvedbom** | svježina iz spremljenih odgovora (10 min), agent javlja prolaz (`security_agent_passes`), karta = ime datoteke u `marinas.map_svg`, težina alarma ormara na kartici |
+| **§11** | O51 i O64 zatvoreni; O65, O66 novi |
 
 ### Što se promijenilo u verziji 19
 
@@ -2044,6 +2054,43 @@ koje treba biti; izvor je usporedba s ormara ili D27), Power without vessel (nar
 Ime plovila i vlasnik **ne** prikazuju se na karti ni na dashboardu (D27, D15); karta pokazuje
 broj veza. Status veze po ormaru (O51) dolazi na ovaj zaslon u 6a.
 
+> **Odlučeno (izvedba 6a)** · **Dashboard se crta iz baze, ne iz ormara.** `GET
+> /api/marinas/{id}/overview` vraća kartu, tri kartice i ormare u jednom odgovoru i ne zove
+> nijedan ormar (test to provjerava zamjenom klijenta koji puca). Stanje veza računa ista
+> funkcija kao zaslon Vezovi (§3.2), nad onim što je kolektor spremio **po poslužitelju**
+> (`app/cabinet/marina_state.py`). Spremljeni odgovor star više od **10 min** (2 × najsporije
+> čitanje koje vez treba, `berths.list` i `load.*` 300 s) ili onaj čije je zadnje čitanje palo
+> vrijedi kao „ormar nije odgovorio": vezovi tog ormara su sivi, s vremenom podatka.
+>
+> **Zašto** · O64: demo marina ima 74 ormara; živi poziv pri svakom otvaranju stranice bio bi
+> 74 × 7 poziva, a prvi ormar je pokazivao 2 od 146 vezova.
+>
+> **Ako griješim** · Jedna konstanta (`CACHE_FRESH_FOR`).
+
+> **Odlučeno (izvedba 6a)** · **Agent javlja da je prošao.** Svaki prolaz sigurnosnog agenta
+> upisuje redak u `security_agent_passes` (migracija 013; agent smije INSERT tamo i nigdje
+> drugdje novo — AGT-01/02 to provjeravaju na PostgreSQL-u). Kartica Safety & Security je
+> `stale` kad je zadnji prolaz stariji od 10 min (2 × `--every 300`). Retencija 7 dana.
+>
+> **Zašto** · Agent nema stanja (§13.1); bez ovoga „0 otvorenih" od agenta koji ne radi
+> izgledalo bi kao nula.
+
+> **Odlučeno (izvedba 6a)** · Pojedinosti kartica:
+> - **Electricity & Water:** danas od 00:00 po vremenskoj zoni marine (`marinas.timezone`;
+>   `tzdata` pinan jer Windows nema bazu zona); interval koji prelazi granicu broji se
+>   razmjerno vremenu; Δ prema istom dijelu dana jučer i prije tjedan dana. **Voda je „—"**
+>   dok ne dođe povijest vode (O62). `partial` = neki ormar nema očitanja brojila 10 min.
+> - **Safety & Security:** otvoreni i potvrđeni alarmi D21 + alarmi ormara na vezovima
+>   (curenje vode i pregrijavanje = Critical, ostali = Warning). Simulirano se broji zasebno
+>   („+2 SIM") i nikad ne podiže najtežu razinu. Alarmi D21 nisu vezani uz marinu (§13.1) pa
+>   ih vidi svaka marina; fizička strana (D25) dolazi sa 6d.
+> - **Occupancy:** `zauzeti / vezovi poznatog stanja`; sivi (bez ormara, tihi ormar,
+>   samostalni rad) su „unknown" i nisu u nazivniku; `partial` kad dio vezova šuti.
+> - **Karta:** `marinas.map_svg` je **ime datoteke** pod `/maps/`; baza odbija putanju, URL i
+>   sve što nije `.svg`. Bez karte zaslon je kartice + popis vezova (§6.1).
+> - **Oznaka alarma** stoji **iznad** crteža (položaj iz okvira veza), a crtež se ne mijenja;
+>   **„SIM"** je jedan redak iznad karte i oznaka na kartici, vezu i retku popisa.
+
 ### §6.7 · Electricity & Water — D24 (v15)
 
 Klik na karticu vodi na **sve mjerne točke** s ormara — utičnice i ventile — s detaljima.
@@ -3034,6 +3081,48 @@ VPS-a se preklapaju); 5c odmah nakon 5b ako je domena spremna; 5d 2–3 dana; 5e
 faza 6 lokalno protiv simulatora za vrijeme tog tjedna; faza 7 poslije njega. Prijedlog v9
 „faza 5 se piše dok teče 4.5 c" je bespredmetan — 4.5 je obrisana, a 5a kreće odmah.
 
+### §10.11 · Korak 6a · Dashboard i karta (D23) — izvještaj (2026-10-16)
+
+**Grana `faza/6-d23-d27`.** Snimke: `docs/ui/6a/light-desktop.png`, `dark-desktop.png`,
+`light-mobile.png` — **pravi** ERP, pravi kolektor (jedan krug) i jedan prolaz agenta protiv
+simulatora demo marine, pravi bundle, Chromium. Sat je postavljen na zadnji trenutak u kojem
+svijet simulatora ima alarm ormara (14. 10. 04:59 UTC, SIM_A_08 se pregrijava), da se vidi
+oznaka; uz to scenariji `wrong-vessel C-11` i `offline SIM_E_03`.
+
+| Mjera | Prije (6.0) | Kraj 6a | Kako izmjereno |
+|---|---|---|---|
+| Backend testova | 550 | **573**, 0 preskočenih | gate |
+| Vezova na zaslonu, demo marina | 2 od 146 (O64) | **150 od 150** | `test_d23_dashboard.py`, preglednik |
+| Poziva ormaru za dashboard | 1 poslužitelj uživo | **0** | test sa zamijenjenim klijentom |
+| Boje karte = svijet simulatora | — | **150 / 150** | boja izračunata iz svijeta neovisno o kodu |
+| Na snimci | — | 108 plavih, 22 zelena, 10 žutih, 4 crvena, 6 sivih; 2 oznake alarma; 0 px vodoravnog pomaka na 360 px | `shot_6a.py` |
+| Rute (zaštićene / ukupno) | 53 / 66 | **54 / 67** | AUTH-01 |
+
+**Što je napravljeno:**
+- **§3.2 podijeljen:** boja = zauzeće (crvena samo Wrong vessel); rangovi 3–7 u polju
+  `alarm`, najteži prvi; „no contact" ne zna ni alarme; novi sivi `no_cabinet` (pravi vezovi
+  demo marine do 5d).
+- **Stanje marine iz baze** (`marina_state.py`), rezervacije iz ERP-a (žuto), veza po ormaru.
+- **Tri kartice** (`services/overview.py`), svaka `fresh / partial / stale` s rečenicom sa
+  servera; „SIM" na kartici, vezu i retku; simulirani alarmi zasebno.
+- **Migracija 013:** `marinas.map_svg`, `security_agent_passes` + dozvola agentu; sonde baze +3
+  odbijanja, +1 dopuštenje; demo seed postavlja kartu.
+- **Frontend:** karta (mijenja samo klasu veza), legenda, oznaka alarma iznad crteža, klik na
+  vez → ploča veza, „Needs attention" / „All berths", ormari (O51). Dosadašnji živi dio
+  dashboarda ostaje ispod, pod naslovom „Live from the cabinet server".
+
+**Nađeno usput, ispravljeno:**
+- **Simulator je otkucaj ormara računao po stvarnom satu**, a ostatak svijeta po svom: svijet
+  postavljen u prošlost izgledao bi zauvijek „online" (scenarij `offline` ne bi ništa
+  posivio). Sada se otkucaj mjeri satom svijeta; test koji je opisivao staro ponašanje
+  prepravljen.
+- **Kartice su mogle reći „No open alerts" uz „+2 SIM"** — rečenica sada kaže da nema
+  stvarnih, a simulirani su zasebno.
+
+**Što 6a nije mogao:** kontrole po ormaru za marinu s više pravih ormara (O65, 5d); vodu na
+kartici (O62, 6c); fizičke alarme D25 (6d); D27 usporedbu plovila (6b) — „Wrong vessel" je za
+sada samo signal ormara.
+
 ### §10.10 · Korak 6.0 · Demo marina (D28) — izvještaj (2026-10-15)
 
 **Grana `faza/6-d23-d27`**, na `main` (`f5aee7e`) + spec v15–v17. Lokalno, protiv simulatora;
@@ -3394,7 +3483,7 @@ Nađeno usput. Nije u izvedbi gore; tvoje je da odlučiš prioritet.
 | O48 | Radno vrijeme za `socket_cmd_odd_hour` je **06–22 h, isto za sve marine**, po `marinas.timezone`. Windows bez paketa `tzdata` ne zna zone, pa računa u UTC-u i to piše u dokaz. Linux (VPS, CI) ih zna **potvrđeno (v14): 06–22 h je u redu**; po marini kad zatreba; `tzdata` nije dodan kao ovisnost |
 | O49 | Mamci: `DECOY_ACCOUNT_EMAILS` i `DECOY_API_KEYS` **prazni su po defaultu**, vrijednosti se upisuju na VPS-u. Lažni ormar u Tailscale mreži je infrastruktura, ne kod | **potvrđeno (v14): 5b** |
 | O50 | Pragovi pravila su u kodu (`rules.py`), isti za sve marine; novo pravilo je kod s testom, kako D13 traži | namjerno |
-| O51 | Dashboard nema **status veze po ormaru**: „Online / Offline" je uklonjen jer se računao u pregledniku iz `opta_connected` (D2). Server ga već računa po vezu (`connection` u §3.1) | dodati `connection` po ormaru u `/dashboard` i prikazati ga kroz `<Status>`; do tada kartica pokazuje vrijeme zadnjeg javljanja — **v15: faza 6a** (§6.6) |
+| O51 | ~~Dashboard nema status veze po ormaru~~ | **zatvoreno v20 (6a)** — kartica „Cabinets" na dashboardu: Online / Late / Offline po ormaru, računa server iz `last_heartbeat_at` (D2) |
 | O52 | **Ventili su uvijek „Unknown"** — ERP ne čita stanje ventila, pa nudi obje naredbe (§10.9) | otvoreno; zatvara se kad ERP čita stanje ventila (R15/R16 s ormara) |
 | O53 | Prozori VT/NT za analitiku (D24) — po marini; prozori distributera razlikuju se zimi i ljeti | Admin ih upisuje pri izvedbi 6c; do tada samo ukupno |
 | O54 | Voda po priključku za povijest (D24) | čeka R16; do tada iz sesija, i tako označeno |
@@ -3407,7 +3496,9 @@ Nađeno usput. Nije u izvedbi gore; tvoje je da odlučiš prioritet.
 | O61 | ~~Provjera u pregledniku povremeno pada: `GET /api/marinas/{id}/berths` ne odgovori u 10 s~~ | **zatvoreno (6.0)** — uzrok izmjeren: klijent ormara stvara `httpx.AsyncClient` po pozivu, a httpx svakom gradi novi TLS kontekst i iznova čita CA paket — **~0,24 s CPU-a na petlji događaja po pozivu**; ruta ima ~10 poziva zaredom, a kolektor isto radi iz svoje niti. Zaključavanje baze izmjereno i **isključeno** (nijedan upis na tom putu ne drži zaključavanje > 0,5 s). Popravak: jedan TLS kontekst za proces (`app/cabinet/client.py` `TLS`, ista provjera certifikata). Poziv simulatoru preko pravog HTTP-a: **268 ms → 6 ms**. Testovi: svaki poziv ormaru dijeli `TLS`; nijedan `httpx` klijent u aplikaciji ne gradi svoj (oba padaju bez popravka). Timeout nije mijenjan |
 | O62 | Voda u demo marini: svijet ima profil, ali simulirani ormar, kao i Krk danas, ne izlaže registar vode (R16) | povijest vode za demo dolazi sa 6c, uz odluku smije li simulirani ormar pokazivati ugovor R16 prije Krka |
 | O63 | Ciklus kolektora za 74 poslužitelja na SQLite-u: prosjek 2,7 s, najviše 7,5 s (jedan po jedan) | na VPS-u (PostgreSQL) do 8 paralelno; izmjeriti u 5b nakon faze 6 |
-| O64 | Zaslon Vezovi (prije 6a) zove uživo **prvi** ormar marine (`get_client`) — za demo marinu prikazuje 2 od 146 povezanih vezova | 6a: zaslon i karta čitaju stanje koje je kolektor spremio, po vezu, iz baze |
+| O64 | ~~Zaslon Vezovi zove uživo prvi ormar marine~~ | **zatvoreno v20 (6a) za dashboard i kartu**: svih 150 vezova iz baze, nijedan poziv ormaru. Zaslon Vezovi s kontrolama ostaje živ — O65 |
+| O65 | Zaslon Vezovi i kontrole (Upali/Ugasi) i dalje idu na **prvi** poslužitelj marine (`get_client`). Za Krk (jedan ormar) to je točno; za marinu s više pravih ormara nije | kontrole po ormaru (klijent iz `cabinets` po vezu) — s drugim pravim ormarom u **5d** (O60) |
+| O66 | Dva alarma ormara na susjednim vezovima: na 360 px oznake se preklapaju | popis „Needs attention" ispod karte ih navodi pojedinačno; razmaknuti oznake ako smeta |
 | O44 | `SecurityMiddleware` bilježi 403 kao „Unauthorised access" — s D20 je 403 i običan Manager na Admin ruti | šum u logu; rješava se s O2 (CrowdSec) |
 | O39 | Koja verzija ormara vrti na Krku — R14 b/c i loopback backend objavljeni su na `main` `eac7aa2`, Krk nepoznat | LIVE-01 (§10.5 b1, b7) |
 | O40 | Faza 4 tjedan stvarnog rada ne mjeri naplatu (ERP-ove sesije nastaju tek u fazi 7) | §10.6, prijedlog 2 |
@@ -3703,9 +3794,9 @@ i čeka čovjeka; nikad ne otvara ni ne zaključava vrata.
 
 ---
 
-`docs/erp_spec.md` · verzija 19 · 2026-10-16 · zamjenjuje v18 od 2026-10-15
+`docs/erp_spec.md` · verzija 20 · 2026-10-16 · zamjenjuje v19 od 2026-10-16
 
 Faze 1–4, korak 5a, faza 8 (D21) i UI · Lika brand su završeni i prihvaćeni; 5b je pauziran do
-prihvaćanja faze 6; **6.0 demo marina je završen i prihvaćen** (§10.10), sljedeći je 6a. D23–D28 su upisani (§6.6–§6.11) i izvode se kao proširena faza 6 (6a–6e); energetski
+prihvaćanja faze 6; **6.0 demo marina je završen i prihvaćen** (§10.10), **6a dashboard je završen** (§10.11). D23–D28 su upisani (§6.6–§6.11) i izvode se kao proširena faza 6 (6a–6e); energetski
 agent (D24) je faza 10. Demo marina (D28, §6.11) je korak 6.0. **§1 je prazan** — tri pitanja iz v15
 odlučena su 2026-10-15.

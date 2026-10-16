@@ -39,7 +39,7 @@ import copy
 import secrets
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response
@@ -131,6 +131,9 @@ class SimState:
     display_id: str = "MAR_KRK_ORM_01"
     smart_mode: bool = True
     heartbeat_age_s: float = 5.0
+    # the demo marina (D28) runs its world on a clock of its own; the heartbeat age is
+    # measured on that clock, or a world set in the past would look online forever
+    clock: Callable[[], datetime] = field(default=_now)
     gateway_active: bool = True
     # what the cabinet operator enabled, and in which mode
     enabled: dict = field(default_factory=dict)
@@ -475,7 +478,7 @@ def create_app(state: Optional[SimState] = None) -> FastAPI:
 
 def _health(s: SimState) -> dict:
     # pedestal_config.py:397-477 — object keyed by PK (string in JSON)
-    hb = _now() - timedelta(seconds=s.heartbeat_age_s)
+    hb = s.clock() - timedelta(seconds=s.heartbeat_age_s)
     feat = {"enabled": True, "available": True, "reason": None}
     return {str(s.pk): {
         "opta_connected": True,     # never set back to false after startup (main.py:600-603)
@@ -533,7 +536,7 @@ def _direct(key: str, p: dict, s: SimState) -> Response:
         disp = _resolve(s, p["pedestal_id"])
         if disp is None:
             return _err(404, "Pedestal not found")
-        hb = _now() - timedelta(seconds=s.heartbeat_age_s)
+        hb = s.clock() - timedelta(seconds=s.heartbeat_age_s)
         return JSONResponse({
             "pedestal_id": disp,
             "temperature": {"value": s.temperature, "unit": "°C",

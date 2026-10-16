@@ -161,7 +161,8 @@ def security_card(db: Session, marina: Marina, berths: list, now: datetime) -> d
             f"The security agent has been silent since {_hhmm(last_pass, tz)}" if last_pass
             else "The security agent has not run yet"))
     elif not real:
-        card.update(state="fresh", sentence="No open alerts")
+        card.update(state="fresh", sentence="No open alerts" if not sim
+                    else "No real open alerts — the simulated ones are counted apart")
     else:
         card.update(state="fresh", sentence=f"Worst: {worst.capitalize()}")
     return card
@@ -196,7 +197,7 @@ def occupancy_card(marina: Marina, berths: list, cabinets_polled: Optional[datet
     elif silent:
         card.update(state="partial", sentence=f"{silent} berths on silent cabinets")
     else:
-        card.update(state="fresh", sentence=f"{occupied} / {len(known)}")
+        card.update(state="fresh", sentence="Vessels on berths whose state is known")
     return card
 
 
