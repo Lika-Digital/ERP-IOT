@@ -24,7 +24,8 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
         with:
-          python-version: "3.11"
+          # the VPS runs Ubuntu 24.04's Python 3.12; the lock is proven on that (v25, P-1)
+          python-version: "3.12"
       - uses: actions/setup-node@v5
         with:
           node-version: "24"
@@ -46,3 +47,18 @@ jobs:
           # growth check measures bytes per table on real Postgres (pg_total_relation_size)
           GROWTH_DATABASE_URL: postgresql://erp:erp-ci-only@localhost:5432/erp_growth
         run: bash scripts/gate.sh
+      # 5b step 11: the VPS gets THIS bundle — the one the gate built and the browser
+      # check passed — never a build of its own (spec §8.2). Byte-for-byte repeatable
+      # tarball, and its sha256 to check on the VPS before it is unpacked.
+      - name: frontend/dist for the VPS
+        run: |
+          tar --sort=name --mtime='2026-01-01 00:00Z' --owner=0 --group=0 --numeric-owner               -C frontend -cf - dist | gzip -n > erp-iot-dist.tar.gz
+          sha256sum erp-iot-dist.tar.gz | tee erp-iot-dist.tar.gz.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: erp-iot-dist-${{ github.sha }}
+          path: |
+            erp-iot-dist.tar.gz
+            erp-iot-dist.tar.gz.sha256
+          retention-days: 90
+          if-no-files-found: error

@@ -1,0 +1,65 @@
+# ERP-IOT backend (spec §8, §8.1, §8.3) — uvicorn on 127.0.0.1:8000, nginx in front.
+#
+# The secrets are not in this file and not next to the app: JWT_SECRET and
+# ERP_ENCRYPTION_KEY are generated ON the VPS (5b step 7) into /etc/erp-iot/,
+# readable by root only, and handed to this one process by systemd
+# (LoadCredential). The database has no password: Unix socket, peer auth, the
+# system user erp is the role erp (§8.3).
+#
+# On start the app refuses a database that is not at the migrations' head (P3,
+# spec §8.4): run `deploy/erp-run alembic upgrade head` first.
+#
+# Not installed by the repo. On the VPS (5b step 9):
+#   install -m 0644 deploy/erp-iot.service /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now erp-iot
+
+[Unit]
+Description=ERP-IOT backend (uvicorn, 127.0.0.1:8000)
+After=postgresql.service network-online.target
+Wants=network-online.target
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=erp
+Group=erp
+WorkingDirectory=/opt/erp-iot/backend
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=DATABASE_URL=postgresql+psycopg2://erp@/erp_iot?host=/var/run/postgresql
+# where the UI is reached; goes into one-time links and CORS (5b: the VPS's Tailscale address)
+EnvironmentFile=/etc/erp-iot/erp-iot.env
+LoadCredential=jwt_secret:/etc/erp-iot/jwt_secret
+LoadCredential=erp_encryption_key:/etc/erp-iot/erp_encryption_key
+# 127.0.0.1 only (§8.1); the client address comes from nginx on loopback (lockout, O43)
+ExecStart=/bin/sh -c 'JWT_SECRET="$(cat "$CREDENTIALS_DIRECTORY/jwt_secret")" ERP_ENCRYPTION_KEY="$(cat "$CREDENTIALS_DIRECTORY/erp_encryption_key")" exec /opt/erp-iot/backend/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1 --proxy-headers --forwarded-allow-ips 127.0.0.1'
+Restart=on-failure
+RestartSec=10
+
+# It talks to Postgres (Unix socket), nginx (loopback) and the cabinets (Tailscale,
+# IPv4/IPv6); which cabinet ports it may reach is the Tailscale ACL's job (§7.0).
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryMax=768M
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

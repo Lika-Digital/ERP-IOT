@@ -12,3 +12,12 @@ Repo na VPS-u (javni, samo za čitanje):
 | Korak | Skripta | Mijenja sustav? |
 |---|---|---|
 | 1 | `01_stanje.sh` — snimka stanja | ne, samo čita |
+
+Datoteke koje koraci instaliraju (ne instalira ih repo):
+
+| Datoteka | Korak | Što je |
+|---|---|---|
+| `erp-iot.service` | 9 | backend, uvicorn na `127.0.0.1:8000`, tajne iz systemd credentials, baza `erp_iot` preko socketa |
+| `erp-run` | 8, 14 | `sudo deploy/erp-run <naredba>` — jedna naredba kao aplikacija (korisnik `erp`, iste tajne), npr. `alembic upgrade head` |
+| `erp-agent.service` | 10 | agent D21, bez mreže |
+| `erp-sim.service` | — | demo simulator; **ne instalira se u prvom testu** (v25, P-4) |

@@ -55,7 +55,7 @@ The endpoint requires JWT auth + marina access. No camera frame or stream is fet
 
 ### Prerequisites
 - PostgreSQL 16+ running locally or via Docker
-- Python 3.11+
+- Python 3.12 (as on the VPS, Ubuntu 24.04, and in CI)
 - Node.js 18+
 
 ### Backend
