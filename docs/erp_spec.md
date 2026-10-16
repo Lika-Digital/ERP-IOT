@@ -3,21 +3,39 @@
 Što se gradi, u kojem redoslijedu, i svaka odluka izrečena tako da ispravak
 košta jedan redak, a ne razgovor.
 
-    Verzija 25 — zamjenjuje v24 od 2026-10-16
+    Verzija 26 — zamjenjuje v25 od 2026-10-16
     Datum 2026-10-16
     Status faze 1–4 ZAVRŠENE i PRIHVAĆENE (§10.1–§10.4); korak 5a (D20), faza 8 (D21) i
            UI · Lika brand PRIHVAĆENI, na `main` (§10.7–§10.9); **faza 6 ZATVORENA na 6b**
            (6.0, 6a, 6b PRIHVAĆENI, §10.10–§10.14; 6c–6e odgođeni); **sljedeće: put do
            prvog čitanja s pravog ormara (§10.15)** — 5b VPS, pa 5d samo čitanje;
-           §1 je prazan
+           **v26: prijedlog v3 — četiri modula i višemarinski model (§14, §10.16)
+           ČEKA ODOBRENJE**; §1 ima 20 otvorenih pitanja (§1.5–§1.24)
 
 Čita se uz `docs/inputs/odluke.md` **v2.6** (odluke, obvezujuće — v2.1 dodaje **D18**, v2.2 **D19**,
 v2.3 ispravak mreže u **D13**, v2.4 **D20**, v2.5 **D21**, **D22** i redoslijed 5a–5e, v2.6 **D23–D28**),
 `docs/inputs/ormar_gateway_izvjestaj.md` (ugovor s ormarom, file:line),
-`docs/inputs/erp_inventar.md` (stanje repoa 2026-10-10) i
+`docs/inputs/erp_inventar.md` (stanje repoa 2026-10-10),
+`docs/inputs/moduli_v3_ulaz.md` (ulaz za v3: četiri modula i višemarinski model, 2026-10-16) i
 `docs/inputs/ormar_ui_v2_spec.txt` (specifikacija ormara — uzor forme i izvor rječnika stanja).
 
-**Sve u ovom dokumentu je ODLUČENO. §1 je prazan — tri pitanja iz v15 odlučena su 2026-10-15.**
+**Sve u ovom dokumentu je ODLUČENO, osim §14 i §10.16 (prijedlog v3, v26) i pitanja §1.5–§1.24.**
+Tri pitanja iz v15 odlučena su 2026-10-15.
+
+### Što se promijenilo u verziji 26
+
+Tvoj zadatak 2026-10-16: spec v3 iz `docs/inputs/moduli_v3_ulaz.md`. **Sve novo je prijedlog** i
+čeka odobrenje (§0.0). Nijedan redak koda nije napisan.
+
+| | |
+|---|---|
+| **§14 · novo** | četiri modula (ERP-IOT, CRM, Work, Finance) i višemarinski model: RLS s `FORCE`, 19 tablica dobiva `marina_id`, matrica prava, admin mode, cross-tenant testovi MT-01..07; CRM, Work i Finance s modelom, tokovima i zaslonima; eRačun prema posredniku; predlošci, numeracija, uvoz |
+| **§14.0 · odstupanja od ulaza** | OD-1..OD-6, svako s razlogom |
+| **§14.7 · D31** | **izmjereno:** 74 simulirana ormara = 4,31 zahtjeva/s, 8,1 % jedne jezgre, ~19 ms CPU po zahtjevu; procjena za 10/50/100 marina; koraci 0–3 s mjerljivim okidačima; jedna točka kvara |
+| **§1.5–§1.24** | 20 pitanja s preporukom; za M0 trebaju §1.5–§1.9, §1.23, §1.24 |
+| **§7.2** | R32 store-and-forward, R33 `event_id` + `seq`, R34 MQTT prema ERP-ovom brokeru |
+| **§10.16** | faze M0–M6 sa „Završava s" i procjenom; M0 prije prvog stvarnog kupca u bazi |
+| **§12** | dodano što v3 ne gradi; fiskalizacija označena prema §14.5.5 |
 
 ### Što se promijenilo u verziji 25
 
@@ -522,8 +540,8 @@ sesije, a `session_l` je uvijek `null` (`ext_pedestal_endpoints.py:363`); alarm 
 
 ## §1 Blokirajuće
 
-**Prazno.** Tri pitanja iz v15 (§1.2–§1.4) odlučena su 2026-10-15 — u svakom je prihvaćena
-preporuka; tekst ostaje radi razloga.
+**v26: otvoreno je 20 pitanja iz v3, §1.5–§1.24.** Tri pitanja iz v15 (§1.2–§1.4) odlučena su
+2026-10-15; u svakom je prihvaćena preporuka, a tekst ostaje radi razloga.
 
 Sekcija ostaje jer je mjesto kamo ide prva odluka koja mi zatreba. Pravilo iz prompta vrijedi
 i dalje: odluku koja nedostaje ne izmišljam — dodajem je ovdje i nastavljam s onim što ne
@@ -599,6 +617,55 @@ Adminovo odobrenje iz D22 vrijedi za eskalaciju „nesigurna ocjena". Dodajem tr
 **Zašto** · D22 je ERP-u dao pogled samo na zahtjev; D27 ga čini rutinskim. To je prihvatljivo samo
 ako je slika već zamagljena i ako rutinski pogled ne ostavlja arhivu.
 **Ako griješim** · Uvjet 2 je jedna zastavica; uvjet 1 je zastavica po ormaru.
+
+### §1.5–§1.24 · Pitanja iz v3 (moduli, §14) *(v26 — otvoreno)*
+
+Dvadeset pitanja. Pitanja 2–8 dolaze iz ulaza §8; ulaz je 1 (fiskalizacija) i 4 (plaće) već
+odlučio. Ostala sam našao pri pregledu, uz kod ili uz D0–D30. Svako ima preporuku. **Za M0 trebaju
+samo §1.5–§1.9 i §1.24**; ostala se mogu odlučiti prije faze u kojoj su (stupac „Treba za").
+
+| # | Pitanje | Preporuka | Treba za |
+|---|---|---|---|
+| **1.5** | Izolacija: RLS u jednoj bazi ili baza po marini? (ulaz §8, 2) | **RLS u jednoj bazi**, dva zida (§14.1.1) | M0 |
+| **1.6** | Postojeća tablica `contracts` (`models/billing.py:34`) su **uvjeti potrošnje** (prepaid/postpaid, granice, tarifa), a ne ugovor o vezu. CRM treba ime | **preimenovati u `consumption_accounts`**, `contracts` je CRM ugovor; jedna migracija, rute i testovi u istom commitu | M0 |
+| **1.7** | D20 kaže **dvije uloge**. v3 traži Marina Ownera i uloge zaposlenika | **mijenja se D20 t. 1:** `users.platform_role` (Admin) + **uloga po članstvu u marini** (matrica §14.1.3); Owner preuzima konfiguraciju marine, osim strojnih tajni | M0 |
+| **1.8** | P-5 (v25) tvrdo odbija upis vlasnika u pravoj marini dok O67 nije izveden. CRM bez toga ne prima kupce | **O67 ulazi u M0** (brisanje 90 dana nakon uklanjanja, posao koji se testira), a P-5 se ukida u istom commitu | M0 |
+| **1.9** | Sigurnosni agent (D21) je platformski. Vidi li Owner njegove alarme? | **vidi alarme čiji dokaz imenuje ormar njegove marine**, samo čitanje; pravila, mamci i uvozi ostaju Adminu | M0 |
+| **1.10** | Rezervacija veza pri plaćanju (zahtjev vlasnika): smije li postojati i **opcija** s istekom dok ponuda čeka? (ulaz §8, 3) | **da**, `berth_holds`, zadano **7 dana**, istek otpušta vez sam; najviše jedna opcija po mjestu i razdoblju (baza, `EXCLUDE`) | M2 |
+| **1.11** | Jezici dokumenata (ulaz §8, 6) | **HR, EN, DE** u M1; SL i IT kad marina zatraži (predložak po jeziku, bez koda) | M1 |
+| **1.12** | Owner vs Manager: tko vidi financije i plaće? (ulaz §8, 7) | Owner sve; Manager izvješća i KPI, **bez plaća po osobi i bez EBITDA**; Owner to može proširiti po korisniku | M3 |
+| **1.13** | „Ledger": glavna knjiga ili upravljačka? (OD-5) | **upravljačka knjiga** + izvoz knjigovođi; zakonske knjige ostaju u njegovu programu. Pitanje za tebe: **koji program i koji format izvoza** | M5 |
+| **1.14** | Očekivano plovilo veza (D27): iz ugovora ili ručno? | **iz aktivnog ugovora**; ručni upis samo za vez bez ugovora; razlika ugovor ↔ ručni upis je upozorenje, ne tiho prepisivanje (isto načelo kao D18) | M2 |
+| **1.15** | D15: imena kupaca ne idu na zaslone marine. CRM ih mora pokazati | **D15 se precizira:** imena na zaslonima CRM-a, Financea i detalja naloga, samo ulogama iz matrice; nikad na karti, dashboardu ERP-IOT-a, zidnim i javnim zaslonima | M2 |
+| **1.16** | Podugovarač: prijava ili ne? | **bez prijave u M4**; nalog kao PDF ili e-mail, izvršenje upisuje voditelj. Portal je zasebna faza ako zatreba | M4 |
+| **1.17** | Sadržaj paketa Servis 1/2/3 i zimovanja (ulaz §8, 5) | zadani sadržaj kao u ulazu §2.6, **kao predložak koji Owner uređuje**; potvrdi stavke | M4 |
+| **1.18** | Boravišna pristojba i prijava gostiju (eVisitor) | **ERP računa pristojbu** (osoba × noć × iznos po općini i sezoni, postavka) i **izvozi** prijavu; izravno slanje u eVisitor tek kad marina zatraži | M6 |
+| **1.19** | KPI po zaposleniku: radno pravo i GDPR (ulaz §3) | **po timu i vrsti naloga**; po osobi samo osoba, Owner i Manager; svrha na zaslonu, retencija 24 mj.; marina obavještava radnike | M4 |
+| **1.20** | Koji informacijski posrednik za eRačun, i treba li više njih? | **jedan adapter**, za posrednika kojeg odabere prva marina; drugi kad ga druga marina zatraži. Treba mi ime posrednika i pristup njegovoj testnoj okolini | M5 |
+| **1.21** | B2C računi za gotovinu i karticu (fiskalizacija s JIR/ZKI): tko fiskalizira? (ulaz §4.4) | **do M5 blagajna recepcije** (kao §1.0, 1.4). Ako ERP izdaje B2C, to je **certifikat marine u ERP-u** i zasebna faza s vlastitim testovima | M5 |
+| **1.22** | Prijelaz: koliko dugo paralelni rad i što je izvor istine? (ulaz §8, 8) | **postojeći sustav je izvor istine** dok ERP-ov REKAPITULATION nije **3 mjeseca zaredom** jednak ili objašnjen; potvrđuje Owner, u ERP-u, s auditom | M1–M3 |
+| **1.23** | O67 briše podatke vlasnika bivšeg plovila nakon 90 dana, a izdani računi i ugovori moraju se čuvati po zakonu | **izdani dokumenti se ne mijenjaju:** podaci kupca u računu i ugovoru su zapisani u dokumentu (snimka), a O67 briše samo **kartoteku** (kontakt, organizacija, dokumenti plovila) kad nema otvorenog duga ni dokumenta u roku čuvanja | M0 |
+| **1.24** | **D31 arhitektura** (§14.7): odvojeni procesi odmah, red u PostgreSQL-u kad stigne push, MQTT broker kad ga ormari dobiju, NATS po mjerenju | **odobriti §14.7** | M0 |
+
+**Zašto ovako, ukratko, po pitanjima koja mijenjaju postojeće odluke:**
+
+- **1.6** · `contracts` danas nosi `billing_mode` i granice potrošnje (§4.5). Kad bi ime ostalo, svaki
+  upit CRM-a pisao bi „ugovor" za dvije različite stvari. Tablica nema nijednu rutu, uslugu ni
+  zaslon: model `Contract` (`models/billing.py:33`) ne koristi nijedan kod, a spominje je samo
+  popis tablica u `tests/test_collection.py:549` (§6.4 i faza 7 nisu izvedeni). Zato je
+  preimenovanje sada najjeftinije.
+  **Ako griješim:** CRM tablica se zove `agreements`, a postojeća ostaje.
+- **1.7** · Owner koji stvara korisnike svoje marine i konfigurira je (ulaz §1.1) nije ni Admin ni
+  Manager iz D20. Uloga po članstvu dopušta i rijetki, stvarni slučaj: ista osoba je Manager u
+  jednoj marini i Računovodstvo u drugoj.
+  **Ako griješim:** jedna uloga po korisniku je `CHECK` na broju članstava.
+- **1.8 i 1.23** · P-5 je bio pravilo „dok O67 nije izveden". v3 je točka u kojoj O67 mora biti
+  izveden, jer CRM bez vlasnika nema smisla. Zakonsko čuvanje dokumenata i O67 nisu u sukobu ako
+  dokument nosi vlastitu snimku podataka kupca.
+  **Ako griješim:** rok i opseg brisanja su postavke, a dokumenti se ne diraju u oba slučaja.
+- **1.14 i 1.15** · Isti razlog kao D18: dva izvora iste činjenice uspoređuju se, a ne prepisuju.
+  D15 je pisan za zaslone ERP-IOT-a, kad CRM nije postojao. Precizira se, ne ukida.
+  **Ako griješim:** vidljivost je matrica u jednoj tablici (§14.1.3).
 
 ## §2 Ugovor s ormarom
 
@@ -2910,6 +2977,9 @@ na dan čitanja i služi prioritizaciji — **ugovorna provjera je TC-ERP-LIVE-0
 | **R29** *(D30, sektor)* | **Čitanje i postavljanje sektora kamere po vezu preko ext** — ugovor ispod | danas samo `PUT /api/admin/berths/{id}/config` (`berths.py:736`) | **ne** | „Not available on this cabinet" |
 | **R30** *(D30, guard; zamjenjuje R21)* | **Guard preko ext: stanje, uključi/isključi, događaji bez slike** — ugovor ispod | danas samo `/api/guard/*` (JWT operatera, `guard/router.py:121-199`) | **ne** | „Not available on this cabinet" |
 | **R31** *(P1, v23)* | **Način rada gatewaya preko ext, samo čitanje** — npr. `GET /api/ext/gateway/endpoints` → `[{"id", "enabled", "mode": "monitor"\|"bidirectional"}]` za katalog koji vidi `api_client` | konfiguracija je danas samo za admina ormara (`e80a4c1:…/routers/external_api_admin.py:119-149`, `require_admin`) | **ne** | ERP drži ručni zapis po ormaru (§6.12 P1); kad R31 postoji, zapis otpada |
+| **R32** *(v26, D31)* | **Store-and-forward:** kad veza s ERP-om padne, ormar čuva događaje i očitanja (sesije, alarmi, registri brojila) i šalje ih **redom** kad se veza vrati. Čuva najmanje 7 dana, a najstarije briše tek kad je prostor pun i tada to javlja alarmom. Svaki zapis nosi `event_id` (R22) i vrijeme mjerenja, ne vrijeme slanja | prijedlog v3 (ulaz §9.4) | **ne** | ništa danas: pull (D7) ionako čita stanje registra pa prekid ne gubi kWh. Bez R32 gubi se samo **kada** je unutar prekida nešto počelo ili stalo |
+| **R33** *(v26, D31)* | **`event_id` jedinstven po ormaru i redni broj (`seq`) koji raste** u svakom događaju (webhook, MQTT, odgođeni zapisi R32) | proširuje R22 | **ne** | red čekanja (§14.7) preskače duplikat po `event_id`; `seq` otkriva rupu i pokreće pull |
+| **R34** *(v26, D31, kad ormar dobije MQTT prema van)* | **MQTT klijent prema ERP-ovom brokeru:** TLS, korisnik i lozinka **po ormaru** (ili certifikat), objavljuje samo pod `marina/<marina>/cabinet/<display_id>/…`, QoS 1, poruke u obliku R22. Ormar ne prima naredbe preko MQTT-a od ERP-a | prijedlog v3 (ulaz §9.3, korak 2) | **ne** | korak 2 iz §14.7.3; do tada pull |
 | **R6** | *(bespredmetno dok Krk ne dobije zastavicu)* operaterski put bez `nfc_tag_id` | `a709cf8:…/config.py:194`; **`nfc_cross_check_required` ne postoji na Krku** | **ne postoji** | ništa — §1.1 je odlučen kao (a), pa R6 nije potreban |
 
 #### R27–R30 · predloženi ugovor prema ormaru (v21, D30)
@@ -3354,6 +3424,8 @@ ugovorom pokrivenim simulatorom, L1 je posao iscrtavanja nad fiksnim oblikom.
 računa cijenu, pa naplata ne čeka ništa osim faza prije sebe. Pri prvom spajanju ormara vrti
 se **TC-ERP-LIVE-01** (§9.1b), koji provjerava živi odgovor.
 
+**v3 (v26, prijedlog):** četiri modula idu kao faze **M0–M6** (§10.16), nakon §10.15.
+
 ### §10.1 · Faza 1 — izvještaj (2026-10-11)
 
 **Gate zelen.** `bash scripts/gate.sh` → `GATE (full): 5/5 stages passed`, 83 s na ovom stroju
@@ -3504,6 +3576,32 @@ VPS-a se preklapaju); 5c odmah nakon 5b ako je domena spremna; 5d 2–3 dana; 5e
 (ERP-ove sesije nastaju tek NFC tokom u fazi 7, pa usklađivač vidi samo „tuđe" sesije, D19);
 faza 6 lokalno protiv simulatora za vrijeme tog tjedna; faza 7 poslije njega. Prijedlog v9
 „faza 5 se piše dok teče 4.5 c" je bespredmetan — 4.5 je obrisana, a 5a kreće odmah.
+
+### §10.16 · Faze v3 — moduli (PRIJEDLOG v26, čeka odobrenje)
+
+Faze v3 nose oznaku **M** da se ne miješaju s fazama 1–10. **M0 kreće tek kad je put do prvog
+čitanja s pravog ormara (§10.15) gotov.** Do tada vrijedi „jedna stvar u isto vrijeme", a VPS je
+prioritet. Faze 7–10 ostaju kako su; M2 i faza 7 dijele `customers` i katalog, pa faza 7 ide
+**nakon M1**.
+
+| # | Faza | Završava s | Procjena |
+|---|---|---|---|
+| **M0** | **Višemarinski temelj** (§14.1): `marina_id` + složeni ključevi na 19 tablica, RLS (`FORCE`) na svih 31 tablica marine, `tenant()` umjesto `require_marina_access`, popis ruta, uloge po članstvu + matrica (§1.7), Marina Owner, admin mode s auditom, **O67** i ukidanje P-5 (§1.8, §1.23), `contracts` → `consumption_accounts` (§1.6); odvojeni procesi API / prikupljanje / agent (§14.7.4) | **MT-01..07 zeleni na PostgreSQL-u**; nijedna postojeća provjera nije crvena; **gotovo prije prvog stvarnog kupca u bazi** | 2–3 tjedna |
+| **M1** | **Matični podaci, predlošci, uvoz** (§14.6): katalog s PDV-om i KPD šiframa, kupci, organizacija, plovila, zaposlenici, resursi; predlošci s brandom, PDF, numeracija bez rupa; uvoz sa stagingom, probnim uvozom i izvještajem razlika | **probni uvoz pravog izvoza marine** (na VPS-u, ne u repou) daje izvještaj razlika bez neobjašnjenih redaka | 3 tjedna |
+| **M2** | **CRM jezgra** (§14.3): upit → ponuda → opcija → ugovor → rate → uplate (ručno); mjesto i karta (§14.3.3), „Unbilled", produljenja, CRM dashboard, pristup (`access_grants`, bez provedbe) | ugovor iz ponude jednim klikom; **dvostruka prodaja odbijena u bazi**; karta pokazuje rezervaciju i očekivano plovilo iz ugovora | 4–5 tjedana |
+| **M3** | **Finance I** (§14.5.1–3): izvješća iz Umsatzübersichta, KPI s formulama, uvoz izvoda camt.053 i uparivanje; **paralelni rad** s postojećim sustavom (§1.22) | REKAPITULATION ERP-a = postojećeg sustava za **jedan zatvoreni mjesec**, ili je svaka razlika objašnjena | 3 tjedna + paralelni rad |
+| **M4** | **Work** (§14.4): radni nalozi i ploča, resursi s kalendarom (dizalica + kamion u jednom koraku), zaliha i utrošak, podugovarači, kontrolne liste i fotografije, mobilni prikaz „Mine", KPI (§1.19); servisna zona iz CRM-a (§14.3.6) | uplov od recepcije do mornara na mobitelu; dizalica se ne može bukirati dvaput; utrošak smanjuje zalihu | 4 tjedna |
+| **M5** | **Finance II i eRačun** (§14.5.4–5): eRačun prema posredniku (adapter + simulator posrednika), ulazni računi, izvještavanje o naplati, arhiva; upravljačka knjiga, uvoz plaća, poslovni plan i projekcija | **račun prošao kroz testnu okolinu posrednika** i vratio status; projekcija do 31.12. iz plana i ugovora | 5–6 tjedana (ovisi o posredniku) |
+| **M6** | **Dodatne usluge** (§14.3.5): sobe s cjenikom A/B/C i boravišnom pristojbom (§1.18), najam plovila, parking, ugostiteljstvo kao stavka, provedba prava pristupa u Safety & Security (D25, uz 6d) | soba od rezervacije do računa; pravo pristupa iz ugovora vidljivo u S&S | 4 tjedna |
+
+**Procjena** je u radnim tjednima uz današnji ritam: Code gradi, ti pregledavaš svaku fazu. Nije
+mjerena. Koraci 6.0–6b izvedeni su u dva dana (2026-10-15 i 16) uz isti ritam, ali M-faze imaju više novog
+modela i ovise o vanjskim stranama (izvoz postojećeg sustava, posrednik, knjigovođa). **Ukupno
+M0–M6 je ~25–28 tjedana**, plus paralelni rad M3. Najveći rizik za rok je M5, jer ovisi o
+dokumentaciji i testnoj okolini posrednika (§1.20).
+
+**Prije M0 trebaju odluke §1.5–§1.9, §1.23 i §1.24.** Ostale trebaju prije svoje faze (§1, stupac
+„Treba za").
 
 ### §10.15 · Put do prvog čitanja s pravog ormara — plan (v25, odobren 2026-10-16)
 
@@ -4146,7 +4244,8 @@ Nađeno usput. Nije u izvedbi gore; tvoje je da odlučiš prioritet.
 - **ERP ništa ne šalje natrag ormaru iz provjere slike** (D22). Istina o zauzeću se gleda u ERP-u.
 - **Ne gradim fiskalizaciju.** Odluka 1.4 je (a): fiskalni račun za pilot izdaje blagajna
   recepcije. ERP **nikad ne ispisuje dokument koji izgleda kao račun** — izvozi obračunske
-  zapise i time je gotov.
+  zapise i time je gotov. *(v26, prijedlog: vrijedi **do M5**; tada ERP izdaje eRačun preko
+  posrednika, §14.5.5. B2C fiskalizacija i dalje ne, §1.21.)*
 - **Ne prihvaćam cijenu od ormara.** Ormar mjeri i izvršava, ERP odlučuje i naplaćuje (D0, D4).
   Polje s cijenom se **odbacuje pri parsiranju**, i test traži njegovu **odsutnost** u modelu —
   ne ignoriranje.
@@ -4176,6 +4275,15 @@ Nađeno usput. Nije u izvedbi gore; tvoje je da odlučiš prioritet.
 - **Nijedan agent ne otvara ni ne zaključava vrata** (D25, D21).
 - **Simulirano nikad ne naplaćujem, ne stavljam u izvještaj upravi i ne predajem agentu kao
   stvarno** (D28). Provodi to baza (okidač, CHECK), ne pažnja.
+- *(v26, prijedlog v3)* **ERP nije informacijski posrednik** za eRačun (ulaz §4.4). **Ne obračunava
+  plaće**, nego ih uvozi. **Ne vodi zakonske poslovne knjige**, nego upravljačku knjigu i izvoz
+  knjigovođi (§1.13).
+- *(v26)* **Ne gradim blagajnu ugostitelja** (POS, stolovi, kuhinja). Ugostiteljstvo ulazi kao
+  stavka računa (§14.3.5).
+- *(v26)* **Ne uvodim Kafku** i **ne dijelim bazu po marini** bez mjerenja i tvoje odluke
+  (§14.7, §1.5).
+- *(v26)* **Ne pratim zaposlenike skriveno.** KPI po osobi su vidljivi osobi, sa svrhom na
+  zaslonu (§1.19).
 
 ---
 
@@ -4437,3 +4545,804 @@ Faze 1–4, korak 5a, faza 8 (D21) i UI · Lika brand su završeni i prihvaćeni
 prihvaćanja faze 6; **6.0 demo marina je završen i prihvaćen** (§10.10), **6a je prihvaćen** (§10.11); **6b** po novom opsegu (§10.12, D30). D23–D28 su upisani (§6.6–§6.11) i izvode se kao proširena faza 6 (6a–6e); energetski
 agent (D24) je faza 10. Demo marina (D28, §6.11) je korak 6.0. **§1 je prazan** — tri pitanja iz v15
 odlučena su 2026-10-15.
+
+---
+
+## §14 Četiri modula i višemarinski model — v3 (PRIJEDLOG, čeka odobrenje)
+
+> **Status** · Sve u §14 je **prijedlog**. Nijedan redak koda se ne piše dok ga ne odobriš
+> (§0.0). Pitanja koja traže tvoju odluku su u **§1.5–§1.24**; tamo gdje je ovdje napisano
+> „preporuka", odluka je tvoja.
+
+Ulaz: `docs/inputs/moduli_v3_ulaz.md` (2026-10-16; isti sadržaj kao
+`ERP_v3_specifikacija_ulaz.docx`). Citira se kao **ulaz §n**. Ulaz ne sadrži osobne podatke, i
+ovaj dio ih ne sadrži: svako ime, iznos i broj u primjerima niže je izmišljen.
+
+### §14.0 · Položaj, pravila i odstupanja od ulaza
+
+ERP-IOT (sve od §2 do §13) postaje **prvi od četiri modula**. Druga tri, **CRM**, **Work** i
+**Finance**, dijele s njim iste matične podatke: marinu, vezove, plovila, kupce, katalog, zaposlenike i
+resurse. Ništa od dosad odlučenoga se ne poništava. Gdje v3 mijenja postojeću odluku, to je rečeno
+izričito i ide kroz §1 (D15, D20, D27).
+
+**Odstupanja od ulaza, i zašto**
+
+| # | Ulaz kaže | Predlažem | Zašto |
+|---|---|---|---|
+| OD-1 | `marina_id` na **svakoj** tablici (ulaz §1.1) | na svakoj tablici **marine**. **Platformske** tablice (korisnici, prijave, sigurnosni agent) ga nemaju, a pristup im ima samo Admin (§14.1) | sigurnosni agent i prijava su jedan sustav za sve marine (D21, D20). `marina_id` na njima bio bi izmišljen, a RLS bi skrio upravo ono što Admin mora vidjeti |
+| OD-2 | red čekanja u PostgreSQL-u već u v3, korak 1 (ulaz §9.3) | u M0 se **odvajaju procesi** (API / prikupljanje / agent). **Red čekanja** dolazi s prvim izvorom koji ERP-u sam šalje (webhook po R22, MQTT, store-and-forward R32) | izmjereno (§14.7): pull je ERP-ov tempo, pa ga ormari ne mogu zatrpati. Skok dolazi samo s pushom, a pusha danas nema (webhook se odbija do R22, §2.6) |
+| OD-3 | redoslijed: Work (3) prije Finance I (4) (ulaz §7) | **Finance I prije Work** (M3 prije M4, §10.16) | Umsatzübersicht je „osnova obračuna" (ulaz §4.1). Kad su ugovori i uplate u ERP-u, izvješća §4.2 su upiti, a paralelni rad s Excelom je **provjera uvoza** (§14.6). Work je neovisan i ništa ne čeka |
+| OD-4 | „fiskalni računi tek nakon odluke §4.4" (ulaz §7, 7) | odluka postoji, ali **ERP ne izdaje račune dok eRačun nije gotov** (M5). Do tada ERP računa **„za naplatu"**, a račune izdaje postojeći sustav | od 1.1.2026. račun B2B izdan izvan eRačuna nije valjan (ulaz §4.4). Račun koji ERP izda „privremeno" bio bi drugi izvor istine o istom dugu |
+| OD-5 | „ledger" kao glavna knjiga (ulaz §0, §4.1) | **upravljačka knjiga** (prihodi i troškovi po segmentu i mjesecu) i izvoz knjigovođi. Zakonske poslovne knjige ostaju u knjigovodstvenom programu. Odluka je tvoja: **§1.13** | dvojno knjigovodstvo s kontnim planom, PDV evidencijama i zaključkom godine samostalan je proizvod. Plaće se već uvoze (ulaz §4.4), i zakonske knjige drži isti knjigovođa |
+| OD-6 | ugovor se veže na vez (ulaz §2.2) | ugovor se veže na **mjesto**: vez u moru, mjesto u hali ili suhi vez. Mjesto je redak u `berths` s vrstom (`kind`) | 6+6 ugovor u istoj godini ima i vez u moru i mjesto u hali. Druga tablica „mjesta" dala bi dva izvora za isti pojam na karti |
+
+**Što se ne mijenja:** jezik sučelja je engleski (§6.0), a dokumenti za kupca su višejezični (§1.11).
+D2 ostaje: ugovor je **izvor** signala „rezervacija" i očekivanog plovila. Nije peti signal i ne
+spaja se s ostalima (§14.3.4). D7 ostaje: pull je istina. D28 ostaje: simulirani podaci nikad ne idu
+u obračun, izvješća ni agenta. Demo marina je vlastita marina (vlastiti `marina_id`).
+
+### §14.1 · Višemarinski temelj (ulaz §1) — faza M0
+
+#### §14.1.1 · Što je „instanca"
+
+> **Prijedlog** · Instanca je **logička izolacija u jednoj bazi**. Svaki redak marine nosi
+> `marina_id`, a dva zida su neovisna:
+> 1. **Aplikacija:** jedna ovisnost po zahtjevu određuje marinu, a svaki upit ide kroz nju.
+> 2. **Baza:** PostgreSQL **Row-Level Security** na svakoj tablici marine.
+>
+> **Zašto** · To je preporuka arhitekta (ulaz §1.2) i slažem se. Baza po marini množi migracije,
+> backup, obnovu i `alembic check` s brojem marina, a dobiva izolaciju koju RLS daje već na razini
+> retka. Realna prijetnja nije napadač s pristupom procesu, jer on vidi sve u oba modela. Realna
+> prijetnja je **zaboravljen `WHERE`** u novoj ruti. Upravo to RLS hvata, i to neovisno o kodu.
+>
+> **Ako griješim** · Ako marina zatraži fizičko odvajanje (ugovor, propis), njezini se podaci
+> izvoze po `marina_id` u zasebnu bazu iste sheme. Model se ne mijenja, mijenja se samo
+> `DATABASE_URL` te instalacije. Odluka je tvoja: **§1.5**.
+
+**Kako RLS stvarno radi ovdje.** Aplikacija se spaja kao `erp`, a `erp` je vlasnik tablica (§8.3).
+**Vlasnik tablice zaobilazi RLS**, osim ako je tablica `FORCE ROW LEVEL SECURITY`. Zato:
+
+```
+-- po tablici marine (migracija M0, samo PostgreSQL):
+ALTER TABLE <t> ENABLE ROW LEVEL SECURITY;
+ALTER TABLE <t> FORCE  ROW LEVEL SECURITY;
+CREATE POLICY tenant ON <t>
+  USING      (marina_id = ANY (string_to_array(current_setting('erp.marinas', true), ',')::int[])
+              OR current_setting('erp.scope', true) = 'platform')
+  WITH CHECK (marina_id = ANY (string_to_array(current_setting('erp.marinas', true), ',')::int[])
+              OR current_setting('erp.scope', true) = 'platform');
+```
+
+- **Bez postavke upit ne vidi ništa** (zatvoreno prema zadanome). Ruta koja zaboravi postaviti
+  marinu dobiva prazan rezultat, ne tuđe retke.
+- **API zahtjev** postavlja `SET LOCAL erp.marinas = '<id>'` jednom, u ovisnosti `tenant()`, za
+  marinu iz putanje (`/api/marinas/{marina_id}/…`) i tek nakon provjere članstva.
+- **Platformski opseg** (`erp.scope = 'platform'`) ima samo ono što radi za sve marine: prikupljanje
+  (`collector.py`), retencija, migracije i sigurnosni agent (`erp_agent`, D21, samo čita). Admin
+  u UI-ju **ne dobiva** platformski opseg. U marinu ulazi kroz admin mode, s jednom marinom.
+- **SQLite** (lokalni razvoj, brzi gate) nema RLS. Zid 2 zato se testira samo na PostgreSQL-u, u
+  CI-ju (već postoji, §9) i u punom gateu. Zid 1 se testira na oba.
+
+#### §14.1.2 · Tablice: što se mijenja (stanje `main` `b00ff59`)
+
+**Već imaju `marina_id`, dobivaju samo RLS:**
+- `berths` `models/berth.py:21`
+- `vessels` `models/berth.py:143`
+- `customers` `models/billing.py:24`
+- `tariffs` `models/billing.py:111`
+- `marina_billing_policy` `models/billing.py:148`
+- `cabinets` `models/cabinet.py:40`
+- `pedestal_cache` `models/cache.py:20`
+- `alarm_log` `models/cache.py:46`
+- `session_log` `models/cache.py:62`
+- `sync_log` `models/cache.py:73`
+- `audit_log` `models/cache.py:87`
+- `user_marina_access` `models/user.py:60`
+
+**Pripadaju marini preko roditelja i dobivaju `marina_id` (NOT NULL + RLS):**
+
+| Tablica | Gdje (`backend/app/`) | Roditelj danas |
+|---|---|---|
+| `berth_reservations` | `models/berth.py:34` | `berth_id` |
+| `berth_outlets`, `berth_outlets_cabinet`, `mapping_comparison` | `models/berth.py:60, 85, 97` | vez / ormar |
+| `outlet_nfc_tags` | `models/berth.py:111` | `outlet_id` |
+| `berth_vessels`, `vessel_photos` | `models/berth.py:156, 175` | vez, plovilo |
+| `contracts` → **preimenuje se**, §1.6 | `models/billing.py:34` | `customer_id` |
+| `credit_ledger`, `billing_records` | `models/billing.py:56, 125` | `customer_id` |
+| `cabinet_capabilities`, `outlets` | `models/cabinet.py:69, 91` | `cabinet_id` |
+| `sessions`, `consumption_intervals`, `consumption_monthly`, `outlet_meter_state` | `models/metering.py:22, 85, 116, 133` | ormar / priključak |
+| `reconciliation_runs`, `command_audit` | `models/metering.py:143, 166` | `cabinet_id` |
+| `service_windows` | `models/security.py:82` | `cabinet_id` |
+
+> **Prijedlog** · Dijete nosi `marina_id` **i** složeni strani ključ prema roditelju:
+> `FOREIGN KEY (marina_id, cabinet_id) REFERENCES cabinets (marina_id, id)`. Roditelj zato dobiva
+> `UNIQUE (marina_id, id)`.
+>
+> **Zašto** · Sam `marina_id` u djetetu je kopija koja se može razići s roditeljem. Složeni ključ
+> čini nemogućim redak koji je u marini A, a pokazuje na ormar marine B. Baza ga odbija, a ne test
+> koji ga možda pogodi. RLS politika je tada jednaka na svakoj tablici: jedan stupac, bez spojeva.
+>
+> **Ako griješim** · Trošak su 4 bajta po retku i jedan indeks po tablici. Najveća tablica,
+> `consumption_intervals`, zbog D28 (`collector.py`, demo na 300 s) i spajanja nultih intervala
+> raste sporo. Izmjereno je u §14.7.
+
+**Platformske tablice, bez `marina_id`, samo Admin:**
+- `marinas` `models/marina.py:8`
+- `users` `models/user.py:14`
+- `user_backup_codes`, `setup_tokens`, `auth_audit` `models/user.py:70, 85, 108`
+- `security_alarms`, `security_agent_passes`, `decoy_hits`, `admin_imports`, `security_rule_settings`
+  `models/security.py:34, 69, 100, 117, 132`
+
+Marina Owner vidi alarme agenta samo kad dokaz imenuje ormar njegove marine (§1.9).
+
+**Rute.** Od 67 dekoratora ruta u `backend/app/routers/*.py` (mjereno `grep -c "@router\."`),
+`require_marina_access` danas zovu `alarms`, `auth`, `berth_detail`, `controls`, `dashboard`,
+`marinas`, `pedestal_ext` i `_cabinet` (`routers/auth.py:105`; Admin prolazi bez provjere,
+`auth.py:107`). M0 je zamjenjuje ovisnošću `tenant()`, koja i provjerava i postavlja `erp.marinas`.
+
+> **Prijedlog** · **Popis ruta je test.** Svaka ruta mora biti razvrstana kao `tenant`, `platform`
+> ili `public`. Nova ruta bez razvrstavanja ruši gate.
+>
+> **Zašto** · Zid 1 drži samo ako ga nijedna ruta ne zaobiđe. Popis koji se ne provjerava zastarjet
+> će već s prvom rutom CRM-a.
+>
+> **Ako griješim** · Jedan rječnik u testu.
+
+#### §14.1.3 · Uloge i matrica prava
+
+Ovo mijenja **D20 točku 1**: umjesto dvije uloge, uloga postaje **članstvo u marini**. Odluka je
+tvoja: **§1.7**.
+
+```
+users                      -- platformska; dodaje se platform_role
+  platform_role  TEXT NULL     -- 'admin' | NULL   (Lika Digital)
+user_marina_access         -- postojeća (models/user.py:57); postaje članstvo
+  role           TEXT NOT NULL -- vidi matricu; CHECK
+  employee_id    INT NULL      -- veza na zaposlenika (Work), kad je korisnik i zaposlenik
+```
+
+**Matrica** (✓ smije · č čita · — ne smije · „svoje" = nalozi kojima je izvršitelj):
+
+| Pravo | Admin | Owner | Manager | Recepcija | Gl. mornar | Mornar · dizaličar · vozač | Vod. servisa | Serviser | Čišćenje | Računovodstvo |
+|---|---|---|---|---|---|---|---|---|---|---|
+| ERP-IOT: karta, vezovi, sesije | ✓ | ✓ | ✓ | č | č | č | č | — | — | — |
+| ERP-IOT: utičnice/ventili, ručno uz razlog (§5.3) | ✓ | ✓ | ✓ | — | — | — | — | — | — | — |
+| ERP-IOT: konfiguracija (ormari, mapiranje, NFC, tarife) | ✓ | ✓ ¹ | — | — | — | — | — | — | — | — |
+| Kupci i plovila; imena (D15) | ✓ ² | ✓ | ✓ | ✓ | č ³ | — ³ | č | — ³ | — | č |
+| Upiti, ponude, ugovori | ✓ ² | ✓ | ✓ | ✓ | č | — | ✓ servis | — | — | č |
+| Cijene, popusti iznad praga | ✓ ² | ✓ | ✓ do praga | — | — | — | — | — | — | — |
+| Radni nalozi: stvaranje, dodjela | ✓ ² | ✓ | ✓ | ✓ uplov/isplov | ✓ | — | ✓ servis | — | — | ✓ financ. |
+| Radni nalozi: izvršenje | — | — | — | svoje | svoje | svoje | svoje | svoje | svoje | svoje |
+| Finance: izvješća, KPI | ✓ ² | ✓ | č ⁴ | — | — | — | — | — | — | ✓ |
+| Finance: plaće (uvezene), po osobi | — | ✓ | — ⁴ | — | — | — | — | — | — | ✓ |
+| Računi, uplate, eRačun | ✓ ² | ✓ | č | ✓ uplate | — | — | — | — | — | ✓ |
+| Korisnici marine | ✓ | ✓ | — | — | — | — | — | — | — | — |
+| Predlošci, brand, numeracija, uvoz | ✓ | ✓ | — | — | — | — | — | — | — | č |
+
+1 · Owner dobiva konfiguraciju koju danas ima samo Admin (D20). Servisne račune ormara i NFC uvoz
+i dalje unosi Admin, jer su strojne tajne (D20 točka 5). Odluka: **§1.7**.
+2 · Admin u **admin modeu** (§14.1.4). Čitanje osobnih podataka traži razlog, jednom po ulasku.
+3 · Mornar i serviser vide **plovilo i vez**, ne vlasnika. Ime vlasnika nije im potrebno za rad (D15).
+4 · Manager vidi troškove zbirno, bez plaća po osobi. Odluka: **§1.12**.
+
+**Podugovarač** nema prijavu u M4. Nalog mu ide kao PDF ili e-mailom, a izvršenje upisuje voditelj.
+Odluka: **§1.16**. 2FA i sva ostala pravila D20 vrijede za svaku ulogu. Owner stvara korisnike svoje
+marine jednokratnim linkom (D20, 24 h). Admin stvara marinu i prvog Ownera.
+
+> **Prijedlog** · Uloge su **fiksne u kodu**, a matrica je **jedna tablica** iz koje se
+> generiraju i provjera i test. Owner dodjeljuje uloge, ali ih ne uređuje.
+>
+> **Zašto** · Matrica koju Owner sam slaže ne može se testirati unaprijed. Prava koja se ne mogu
+> testirati su upravo ona koja se kasnije pokažu krivima.
+>
+> **Ako griješim** · Uređive uloge su tablica `role_permissions` iznad iste provjere, a
+> fiksne uloge postaju njezin zadani sadržaj.
+
+#### §14.1.4 · Admin mode
+
+- Nakon prijave Admin vidi **popis svih marina** (danas `/marinas`, `App.tsx:36`) s istim
+  brojkama kao glavni dashboard (D23). Klik na marinu otvara je u admin modeu.
+- Na vrhu svakog zaslona tada stoji traka **„Admin mode — <marina> · Exit"**, u boji upozorenja
+  (status = ikona + riječ + boja, §6.0).
+- Ulazak, izlazak i svako čitanje osobnih podataka idu u `audit_log` marine: `admin_enter`,
+  `admin_exit`, `admin_read_personal` s razlogom. Owner ih vidi na zaslonu Users → Audit.
+  Lika je izvršitelj obrade (D15), a Owner mora moći vidjeti tko je od izvršitelja što čitao.
+
+#### §14.1.5 · Cross-tenant testovi (izlaz M0)
+
+| Test | Što dokazuje |
+|---|---|
+| **MT-01** | za **svaku** `tenant` rutu iz popisa: korisnik marine A, putanja s marinom B → **403**; objekt marine B pod putanjom marine A → **404** (ne odaje postojanje) |
+| **MT-02** | za **svaku** tablicu marine (iz kataloga baze, ne iz liste): uz `erp.marinas = A` `SELECT` ne vraća nijedan redak B; `INSERT`/`UPDATE` retka B pada na `WITH CHECK` (samo PG) |
+| **MT-03** | bez `erp.marinas` i bez platformskog opsega svaka tablica marine je prazna (zatvoreno prema zadanome) |
+| **MT-04** | složeni strani ključ odbija dijete marine A s roditeljem marine B |
+| **MT-05** | popis ruta: svaka ruta je razvrstana; nova nerazvrstana ruši test |
+| **MT-06** | admin mode: ulazak, izlazak i čitanje osobnih podataka su u auditu; bez razloga čitanje se odbija |
+| **MT-07** | sigurnosni agent (`erp_agent`) i prikupljanje i dalje vide sve marine; Owner ne vidi platformske tablice |
+
+MT-02 i MT-03 traže tablice iz `pg_class`. Nova tablica s `marina_id` bez politike ruši test sama.
+
+**Prije prvog stvarnog kupca u bazi** (ulaz §7, 0), M0 uključuje i **O67** (brisanje podataka
+vlasnika 90 dana nakon uklanjanja, v23) te s njim **zamjenu P-5**. Do tada ERP u pravoj marini
+odbija upis vlasnika (v25). CRM bez toga ne može primiti nijednog kupca: **§1.8**.
+
+### §14.2 · Izbornik i zasloni
+
+> **Prijedlog** · Lijevi izbornik dobiva **četiri modula** kao skupine. Svaka skupina pokazuje
+> samo stavke koje uloga smije (matrica §14.1.3). Modul bez ijedne dopuštene stavke se ne
+> iscrtava (§6.0: odsutno se ne iscrtava). Ruta modula: `/marinas/:id/<modul>/<zaslon>`. Postojeće
+> rute ERP-IOT-a ostaju (`App.tsx:40-48`) i nalaze se pod skupinom ERP-IOT.
+
+```
+┌──────────────────────┬───────────────────────────────────────────────────────────────┐
+│ [Lika]  Marina ERP   │ ⚠ Admin mode — Marina Alfa · Exit           (samo Admin)      │
+│                      ├───────────────────────────────────────────────────────────────┤
+│ All marinas          │                                                               │
+│ Users · Security     │   (sadržaj zaslona)                                           │
+│ ──────────────────── │                                                               │
+│ MARINA ALFA          │                                                               │
+│ ▾ ERP-IOT            │                                                               │
+│     Dashboard        │                                                               │
+│     Pedestal control │                                                               │
+│     Energy · Alarms  │                                                               │
+│     Berths           │                                                               │
+│ ▾ CRM                │                                                               │
+│     Dashboard        │                                                               │
+│     Inquiries        │                                                               │
+│     Offers           │                                                               │
+│     Contracts        │                                                               │
+│     Customers        │                                                               │
+│     Vessels          │                                                               │
+│     Services         │                                                               │
+│ ▸ Work               │                                                               │
+│ ▸ Finance            │                                                               │
+│ ──────────────────── │                                                               │
+│ Settings (Owner)     │  ← predlošci, brand, numeracija, katalog, uvoz, korisnici     │
+│ owner@… · Owner      │                                                               │
+│ ◐ Theme · Sign out   │                                                               │
+└──────────────────────┴───────────────────────────────────────────────────────────────┘
+```
+
+Na 360 px izbornik je ladica kao danas (`Layout.tsx:66-69`). Skupina koju je korisnik zadnju otvorio
+ostaje otvorena (lokalno spremanje, ne server).
+
+### §14.3 · CRM (ulaz §2) — faza M2
+
+#### §14.3.1 · Model podataka
+
+Svaka tablica niže ima `marina_id` sa složenim ključem prema roditelju (§14.1.2) i RLS. Novci su
+`NUMERIC(12,2)`, stope `NUMERIC(5,2)`, datumi su `DATE`, trenuci `TIMESTAMPTZ` u UTC-u.
+
+```
+customers                -- postojeća (models/billing.py:18); proširuje se
+  kind            TEXT NOT NULL   -- 'person' | 'company'
+  country         CHAR(2)         -- ISO 3166-1
+  tax_id          TEXT            -- OIB / VAT ID (tvrtka; osoba po potrebi za račun)
+  address, email, phone, doc_language CHAR(2)   -- jezik dokumenata, §1.11
+  customer_type   TEXT            -- 'retail' | 'company' | 'charter' | 'supplier' …  (katalog marine)
+  is_supplier     BOOLEAN NOT NULL DEFAULT false  -- podugovarač/dobavljač je ista tablica
+
+customer_members         -- „Organizacija": obitelj i posada (ulaz §2.4)
+  customer_id, full_name, relation ('family'|'crew'|'skipper'|'other'), contact,
+  can_access BOOLEAN       -- smije li dobiti prava pristupa (D25, §14.3.5)
+
+vessels                  -- postojeća (models/berth.py:135, D27); proširuje se
+  registration, flag CHAR(2), vessel_type, length_m, beam_m, draft_m,
+  engine_type, engine_kw, owner_customer_id → customers   -- O67 vrijedi (§1.8)
+vessel_documents         -- vrsta, broj, vrijedi_do, datoteka (privatna, izvan weba)
+
+berths                   -- postojeća; dodaje se (OD-6)
+  kind            TEXT NOT NULL DEFAULT 'sea'  -- 'sea' | 'hall' | 'dry_outdoor'
+  -- hala i suhi vez nemaju ormar; na 2D karti mora su samo 'sea' (D23)
+
+contract_types           -- katalog po marini; zadani sadržaj iz ulaza §2.2
+  code, name, direction ('revenue'|'cost'), place_kinds TEXT[],
+  term ('annual'|'6+6'|'multi_year'|'monthly'|'daily'|'open'), months INT NULL
+
+inquiries                -- upit
+  customer_id NULL, contact_name, contact_email, vessel_desc, length_m, wanted_from, wanted_to,
+  place_kind, source ('web'|'email'|'phone'|'walk_in'), status ('new'|'offered'|'lost'|'won')
+offers                   -- ponuda
+  number, inquiry_id NULL, customer_id, vessel_id NULL, valid_until, status
+  ('draft'|'sent'|'accepted'|'rejected'|'expired'), language
+offer_lines              -- item_id, qty, list_price, agreed_price, vat_rate (iz kataloga)
+berth_holds              -- privremena opcija veza dok ponuda čeka (§1.10)
+  berth_id, offer_id, from_date, to_date, expires_at, released_at
+
+contracts                -- NOVA (ime oslobađa §1.6)
+  number, direction ('revenue'|'cost'), contract_type_id, customer_id,
+  vessel_id NULL, berth_id NULL,                 -- mjesto (OD-6); NULL za troškovne ugovore
+  date_from, date_to,                            -- pravi datumi (ulaz §4.2), ne tekst
+  list_amount, agreed_amount,                    -- cjenik vs dogovoreno; popust = razlika
+  status ('draft'|'reserved'|'active'|'ended'|'cancelled'),
+  offer_id NULL, renews_contract_id NULL, note
+contract_lines           -- item_id, qty, unit_price, vat_rate, net, vat, gross (§14.5.2)
+payment_schedule         -- rate: contract_id, due_date, amount_gross
+payments                 -- uplate: customer_id, contract_id NULL, invoice_id NULL,
+                         --   amount, paid_on, method ('bank'|'card'|'cash'), reference,
+                         --   source ('manual'|'bank_import')
+                         -- „plaćeno" i „ostatak" se RAČUNAJU iz uplata (ulaz §4.2), nikad ne upisuju
+```
+
+> **Prijedlog** · Ugovor ima **jednu tablicu za obje grupe** (`direction`), a kupci i dobavljači
+> su **jedna tablica** (`customers.is_supplier`).
+>
+> **Zašto** · Ulaz §2.1 ih dijeli po smjeru novca, ne po obliku. Polja su ista: broj, druga
+> strana, razdoblje, iznos, rate, status. Dvije tablice dale bi dva toka, dva zaslona i dva
+> izvješća za istu stvar. Tvrtka koja je i kupac i dobavljač ionako postoji (servis koji drži
+> brod u marini).
+>
+> **Ako griješim** · Pogled `supplier_contracts` je jedan `WHERE`.
+
+#### §14.3.2 · Tok ugovora (ulaz §2.3)
+
+```
+ upit ──1 klik──▶ ponuda ──poslana──▶ prihvaćena ──▶ potvrda ILI plaćanje ──▶ REZERVACIJA VEZA
+   │                │                     │                                       │
+   │                └─ opcija veza (§1.10) ┘                                       ▼
+   └─ izgubljen                                                     ugovor 'reserved' (od < datum_od)
+                                                                               │  datum_od
+                                                                               ▼
+                       rate (payment_schedule) ──▶ uplate ──▶ ugovor 'active' ──▶ istek ──▶ produljenje?
+                                                                                     │         │
+                                                                                 'ended'   novi ugovor
+                                                                                        (renews_contract_id)
+```
+
+- **Upit → ponuda jednim klikom** (ulaz §2.3, obavezno): ponuda nasljeđuje kupca, plovilo,
+  datume i vrstu mjesta. Ako kupca nema, nastaje iz kontakta upita.
+- **Rezervacija veza nastaje kad marina potvrdi ili kad stigne prva uplata.** Okidač po vrsti
+  ugovora bira Owner (ulaz §2.3, zahtjev vlasnika). Prije toga vez je zauzet samo opcijom, ako
+  je odobrena (§1.10).
+- **Dvostruka prodaja je nemoguća u bazi.** Dva ugovora ili opcije ne smiju imati isto mjesto u
+  razdobljima koja se preklapaju: `EXCLUDE USING gist (berth_id WITH =, daterange(date_from,
+  date_to, '[]') WITH &&) WHERE status IN ('reserved','active')`. Isto vrijedi za `berth_holds`
+  dok `released_at IS NULL` (istekle opcije otpušta posao svake minute; vrijeme ne smije biti u
+  uvjetu ograničenja). To traži proširenje `btree_gist` (dio paketa
+  `postgresql-16`). SQLite ga nema, pa aplikacija provjerava i sama, a test odbijanja u bazi ide
+  samo na PostgreSQL (kao MT-02).
+- **Produljenje:** 60 dana prije isteka (postavka marine) ugovor ulazi na listu „Renewals due".
+  Novi ugovor se stvara iz starog jednim klikom. Stopa produljenja i prognoza produljenja
+  (JAHRESVERTRÄGE, ulaz §4.2) računaju se iz `renews_contract_id`.
+
+#### §14.3.3 · Ugovor i karta (D2, D27) — izričita veza
+
+| Što karta pita | Danas (ERP-IOT) | Od M2 |
+|---|---|---|
+| signal **rezervacija** (D2) | `berth_reservations` (`models/berth.py:34`) | `contracts` u statusu `reserved`/`active` čije razdoblje pokriva danas + `berth_holds` koja nije istekla. `berth_reservations` ostaje za ručne jednodnevne rezervacije (tranzit bez ugovora) |
+| **očekivano plovilo** (D27, „Occupied — correct vessel" / „Wrong vessel") | `berth_vessels` koje Admin upiše | **plovilo aktivnog ugovora** na tom mjestu; `berth_vessels` se puni iz ugovora, a ručni upis ostaje samo za vez bez ugovora. Odluka: **§1.14** |
+| signali **veza, plovilo, struja** | ormar | nepromijenjeno |
+
+Signali se i dalje ne spajaju (D2). Ugovor je **izvor** dvaju od njih, ne novi signal. Zato pravilo
+boja (§3.2, odlukom §1.2) ostaje nepromijenjeno.
+
+**„Nefakturirano"** (NEFAKTURIRANO, ulaz §4.2) je automatska iznimka. Vez se na nju stavlja kad je
+signal **plovilo = prisutno** (`state_code` 1 ili 2) ili postoji **električna sesija**, a nema
+ugovora ni rezervacije koja pokriva taj dan.
+- Lista je u CRM-u, s datumom prvog opažanja i vezom.
+- Rješava se ugovorom, tranzitom ili oznakom „izuzeto" s razlogom (audit).
+- Vez s ormarom koji je OFFLINE, STALE ili u Smart Mode OFF se ne prijavljuje, jer je stanje
+  nepoznato (D2), ne prazno.
+- Simulirani ormari ne prijavljuju (D28).
+
+#### §14.3.4 · Zasloni CRM-a
+
+```
+CRM · Dashboard                                                            Year 2026 ▾
+┌─────────────────┬─────────────────┬─────────────────┬─────────────────┐
+│ Open (unpaid)   │ Paid this month │ Contracts 2026  │ Unbilled berths │
+│ 37  € 48,210    │ 22  € 61,400    │ 214             │ ⚠ 3             │
+└─────────────────┴─────────────────┴─────────────────┴─────────────────┘
+Revenue contracts by type            │ Cost contracts by segment
+ Annual sea ███████████ 96           │  Electricity ██ 2   Services ████ 7
+ 6+6        ████ 31                  │  Water       █ 1    Internet █ 1
+ Hall       ███ 22   Transit ███ 41  │
+Length class (1 m)  count   %   revenue    avg length  avg price   │ Waiting list
+ 8–9 m               12   6%   € 21,600     8.4 m       € 1,800    │  10–11 m: 4
+ 9–10 m              19   9%   € 39,900     9.5 m       € 2,100    │  12–13 m: 2
+ …                                                                   │ Renewal rate 2025: 81%
+```
+
+```
+CRM · Contract  RC-2026-0042                     [Active]   ◂ Back
+┌ Customer ─────────────┐ ┌ Vessel ────────────────┐ ┌ Place ─────────────────┐
+│ Test Kunde GmbH  (DE) │ │ MY Primjer · 11.2 m     │ │ Sea berth B-14  [map]  │
+│ ✉ · ☎ · OIB/VAT      │ │ reg. ST-0000 · flag DE  │ │ 01.01.2026 – 31.12.2026│
+└───────────────────────┘ └─────────────────────────┘ └────────────────────────┘
+Type: Annual sea   List € 4,200.00   Agreed € 3,780.00  (−10%)   Offer OF-2025-118
+Schedule      due          amount     paid       open
+              15.01.2026   € 1,890    € 1,890    —
+              15.06.2026   € 1,890    € 0        € 1,890  ⚠ overdue
+Payments  [+ Add]   Documents [Offer PDF] [Contract PDF]   Renewal: due 01.11.2026
+```
+
+Ostali zasloni CRM-a su popisi s filtrom i detaljem po istom uzoru:
+- **Inquiries:** stupac „→ Offer" je onaj jedan klik.
+- **Offers**, **Customers** (s Organizacijom) i **Vessels** (s dokumentima).
+- **Services** (§14.3.6).
+- **Unbilled berths.**
+
+Imena kupaca su na zaslonima CRM-a, a ti zasloni postoje samo ulogama iz matrice. Karta,
+dashboard ERP-IOT-a i zidni zasloni i dalje ih ne pokazuju (D15, D27). Odluka: **§1.15**.
+
+#### §14.3.5 · Dodatne usluge i pristup (ulaz §2.5, D25)
+
+- **Jedan registar prava pristupa** (`access_grants`: kupac ili član organizacije, vrata, zona ili
+  parkirno mjesto, od–do, izvor). **CRM ga piše**: dodjela pri aktivaciji ugovora, ručna dodjela
+  s razlogom, oduzimanje pri isteku. **Safety & Security ga čita i provodi** (D25). Nema drugog
+  registra.
+- Sobe, najam plovila, parkirna mjesta i dizalica su **resursi** s kalendarom (§14.4.2). CRM
+  prodaje njihovo vrijeme, a Work izvršava.
+- Ugostiteljstvo (narudžbe, stolovi) ulazi kao stavka kataloga na računu. **Blagajna ugostitelja
+  nije u opsegu**; prijedlog je u §12.
+- Boravišna pristojba i prijava gostiju (eVisitor): **§1.18**.
+
+#### §14.3.6 · Servisna zona (ulaz §2.6)
+
+- **Paketi su predlošci, ne kod:** `service_packages(code, name)` i
+  `service_package_lines(item_id, qty)` iz kataloga, s kontrolnom listom za Work. Zadani sadržaj
+  su Servis 1, 2, 3 i zimovanje iz ulaza §2.6. Owner ih uređuje, a potvrda sadržaja je **§1.17**.
+- **Tok:** rezervacija servisa → ponuda (paket + stavke) → prihvaćena → **servisni nalog = radni
+  nalog vrste `service`** (§14.4) → materijal i podugovarači na nalogu → račun.
+- **Registar ponuda servisa** (ulaz §2.6) je pogled nad ponudama i nalozima vrste `service`, ne
+  zasebna tablica: vanjski dobavljač i iznos su stavke `work_order_subcontracts`.
+- **KPI:** omjer vlastiti / vanjski rad, cilj 50:50 (Σ rad vlastitih ljudi / Σ vanjske usluge na
+  nalozima servisa, u eurima); prihod servisa; broj naloga godišnje.
+
+### §14.4 · Work — radni nalozi (ulaz §3) — faza M4
+
+#### §14.4.1 · Model
+
+```
+employees                -- marina_id, ime, radno mjesto, user_id NULL (§14.1.3), active
+work_order_types         -- katalog po marini; zadano: arrival, departure, launch, haul_out,
+                         --   transport, cleaning, service, accounting
+work_orders
+  number, type_id, status ('new'|'assigned'|'in_progress'|'done'|'cancelled'),
+  priority ('low'|'normal'|'high'|'urgent'), due_at,
+  vessel_id NULL, berth_id NULL, contract_id NULL, offer_id NULL,
+  responsible_employee_id, created_by, done_at
+work_order_assignees     -- employee_id, minutes_spent       (utrošeno vrijeme po izvršitelju)
+work_order_materials     -- item_id, qty, from_stock BOOLEAN  → stock_moves
+work_order_subcontracts  -- supplier (customers.is_supplier), description, amount_net, invoice_ref
+work_order_checklist     -- iz predloška (paket servisa, vrsta naloga); stavka, done_by, done_at
+work_order_photos        -- datoteka, snimljeno, autor   (fotografije kvarova, ulaz §2.6)
+
+resources                -- 'crane'|'travel_lift'|'truck'|'trailer'|'room'|'parking'|'boat'
+resource_bookings        -- resource_id, from_at, to_at, work_order_id NULL, contract_id NULL
+                         --   EXCLUDE (resource_id =, tstzrange &&)  — dizalica se ne bukira dvaput
+stock_items / stock_moves  -- zaliha iz kataloga; nabavna i prodajna cijena; utrošak na nalogu
+                           --   je kretanje 'out' s work_order_id; stanje = Σ kretanja (samo dodavanje)
+```
+
+#### §14.4.2 · Tokovi
+
+- **Uplov:** recepcija stvara nalog `arrival` (dokumenti, prijava), glavni mornar dodjeljuje vez
+  (provjera: mjesto je slobodno ili rezervirano za to plovilo), mornar izvršava vez i privez →
+  `done`. Ako ugovora nema, završen uplov stavlja vez na „Unbilled", dok to ne potvrdi kamera.
+- **Isplov:** nalog `departure`. Za ugovor koji završava, vez se oslobađa kad je nalog `done`.
+- **Spuštanje / vađenje:** nalog `launch` / `haul_out` rezervira dizalicu **i** kamion/prikolicu
+  u istom koraku, oboje ili ništa. Noćni transport je oznaka na nalogu. Kalendar „Transports"
+  zamjenjuje današnji vanjski kalendar (ulaz §3).
+- **Čišćenje, servis, računovodstvo:** nalozi bez veza ili s vezom. Servis dolazi iz CRM-a
+  (§14.3.6).
+
+```
+Work · Board                            Today ▾   Mine │ All        [+ Work order]
+NEW (4)            ASSIGNED (6)          IN PROGRESS (3)        DONE today (9)
+┌──────────────┐   ┌──────────────┐      ┌──────────────┐       ┌──────────────┐
+│ WO-0311 ⚑High│   │ WO-0307      │      │ WO-0299      │       │ WO-0290 ✓    │
+│ Haul-out     │   │ Arrival B-14 │      │ Service 2    │       │ Cleaning D   │
+│ MY Primjer   │   │ ⏱ 10:30     │      │ 2/9 checklist│       │ 45 min       │
+│ 🏗 Crane 14:00│   │ 👤 Mornar 2  │      │ 👤 Serviser 1│       │              │
+└──────────────┘   └──────────────┘      └──────────────┘       └──────────────┘
+Resources today   Crane ████░░██░░  Truck ░░██░░░░██  Travel lift ░░░░████░░
+```
+
+Na mobitelu izvršitelj vidi samo **„Mine"**: listu naloga s gumbom za status, kontrolnom listom,
+fotografijom i utrošenim vremenom. To je isti API kao web (§14.7.5).
+
+#### §14.4.3 · KPI i praćenje rada
+
+KPI se računaju iz naloga, ne unose se:
+- vrijeme odziva (`assigned` − `new`);
+- % izvršenih u roku;
+- % izvršenja plana dizanja i spuštanja;
+- broj transporta i noćnih transporta;
+- incidenti (nalog vrste `incident`).
+
+Ocjene gostiju čekaju izvor (§11).
+
+> **Prijedlog** · KPI se prikazuju **po vrsti naloga i timu**. **Po osobi** ih vide samo ta osoba,
+> Owner i Manager. Na zaslonu Work stoji svrha praćenja, a podaci po osobi brišu se nakon
+> 24 mjeseca. Odluka: **§1.19**.
+>
+> **Zašto** · Ulaz §3 sam upozorava da je praćenje rada pitanje radnog prava i GDPR-a. Mjerenje
+> po osobi je obrada osobnih podataka zaposlenika. Treba joj svrha, razmjernost i obavještavanje
+> radnika, a to je obveza marine kao poslodavca, ne ERP-a. ERP može biti pomoć, ali ne smije biti
+> zamka.
+>
+> **Ako griješim** · Rok i vidljivost su postavke marine. Pravni savjet marine ima prednost.
+
+### §14.5 · Finance (ulaz §4) — faze M3 i M5
+
+#### §14.5.1 · Izvješća iz Umsatzübersichta — računaju se, ne upisuju (M3)
+
+Svako izvješće je **upit nad ugovorima, stavkama, ratama i uplatama** na zadani datum. Nijedno nema
+svoju tablicu s brojkama. Brojka u izvješću i brojka u ugovoru zato se ne mogu razići.
+
+| List u Excelu (ulaz §4.2) | Izvješće u ERP-u | Računa se iz |
+|---|---|---|
+| WASSERLIEGEPLATZ-VERTRÄGE 20xx | Contracts signed in year · sea | `contracts` (`direction='revenue'`, mjesto `sea`, godina sklapanja) + rate + uplate |
+| HALLENSTELLPLATZ-VERTRÄGE 20xx | isto · hall / dry outdoor | isto, `kind IN ('hall','dry_outdoor')` |
+| JAHRESVERTRÄGE | Active annual contracts on date + renewal forecast | aktivni na datum; prognoza = ugovori koji istječu × stopa produljenja te vrste (zadnje 2 godine) |
+| ABRECHNUNGSPLAN | Cash plan by month | `payment_schedule` (dospijeća) + prognoza produljenja + plan novih iz poslovnog plana (§14.5.4) |
+| TRANSITLIEGEPLÄTZE | Transit | ugovori vrste `daily` (noćenja = dani) + uplate |
+| ZAR 65, ZAR 85 | Boat rental | `resource_bookings` resursa `boat` + račun |
+| NEFAKTURIRANO | Unbilled berths | iznimka iz zauzeća (§14.3.3) |
+| WEITERE DIENSTLEISTUNGEN | Additional services by group | stavke računa po grupi artikla iz kataloga |
+| UNTERKUNFT | Accommodation | rezervacije soba + račun + boravišna pristojba (§1.18) |
+| REKAPITULATION | Revenue by source on date | po izvoru: ugovoreno / plaćeno / za naplatu, **neto** |
+| STATISTIK | Length-class statistics | §14.3.4, isti upit kao CRM dashboard |
+
+Svako izvješće ima CSV i PDF izvoz s brandom (§14.6). **„Plaćeno" i „ostatak" uvijek se računaju
+iz uplata** (ulaz §4.2).
+
+#### §14.5.2 · PDV po stavci, i gdje se zaokružuje
+
+Svaka stavka (ponude, ugovora, računa) čuva **neto, stopu, iznos PDV-a i bruto**. Stopa dolazi iz
+kataloga artikla na dan izdavanja i ostaje u stavci; ERP stopu nikad ne pretpostavlja (ulaz §4.2:
+Excel radi bruto / 1,25).
+
+> **Prijedlog** · Na **računu** se ukupni PDV računa **po stopi**: Σ neto stavki te stope × stopa,
+> zaokruženo jednom. Iznos PDV-a na stavci služi za prikaz.
+>
+> **Zašto** · eRačun slijedi normu EN 16931, koja PDV računa po kategoriji i stopi, ne zbrojem
+> zaokruženih stavki. Račun s 30 stavki inače može odstupati za koji cent, a posrednik ga tada
+> odbija. Bolje je da pravilo bude jedno i u ERP-u, ne samo u izvozu.
+>
+> **Ako griješim** · Jedna funkcija za ukupne iznose; testovi provjeravaju primjere s
+> centima.
+
+#### §14.5.3 · KPI na dashboardu Financea (ulaz §4.3)
+
+Formule su dio speca. Svaka brojka na zaslonu ima „i" s formulom i razdobljem.
+
+| KPI | Formula |
+|---|---|
+| Popunjenost veza u moru / suhog veza | **komercijalna:** dani-mjesta pod ugovorom / raspoloživi dani-mjesta · **fizička:** iz signala plovila (D2, ERP-IOT). Prikazuju se obje; razlika je „Unbilled" + nedolasci |
+| RevPAB | prihod od mjesta / raspoloživi dani-mjesta × 365 (po raspoloživom vezu godišnje) |
+| Prihod po metru | prihod od mjesta / Σ ugovorene duljine (m) |
+| EBITDA marža | (prihod − OPEX) / prihod; OPEX = troškovni ugovori + ulazni računi + uvezene plaće (bez amortizacije i kamata) |
+| OPEX / prihod | isto, bez oduzimanja |
+| Udio dodatnih prihoda | prihod grupa artikala izvan „mjesta" / ukupni prihod (gorivo, struja i voda, trgovina, parking…) |
+| ARPU | prihod / broj kupaca s aktivnim ugovorom u razdoblju |
+| Stopa produljenja | godišnji ugovori produljeni / godišnji ugovori koji su istekli u razdoblju |
+| Lista čekanja | otvoreni upiti bez ponude zbog nedostatka mjesta, po razredu duljine 1 m |
+| YoY | isto razdoblje prošle godine; tamo gdje nema podataka stoji **—** (§0.6: null nije 0) |
+
+Struja i voda (D24) ulaze kao grupa artikla. Naplaćuju se iz `billing_records` (faza 7), ne iz
+procjene.
+
+#### §14.5.4 · Upravljačka knjiga, poslovni plan, projekcija (M5)
+
+- **Upravljačka knjiga** (OD-5, **§1.13**): mjesečni zapisi prihoda i troškova **po segmentu**
+  (mjesta, servis, smještaj, najam, ugostiteljstvo, energija, opći troškovi). Izvori su izdani
+  računi, ulazni računi, troškovni ugovori i uvezene plaće. Iz nje se računaju performanse po
+  mjesecu i YTD. Knjigovođi ide izvoz u CSV-u i u formatu njegova programa (§1.13).
+- **Poslovni plan:** uvoz CSV-a `godina, mjesec, segment, iznos` po marini. Plan se ne uređuje u
+  ERP-u, nego se uvozi nova verzija, a stara ostaje.
+- **Projekcija do kraja godine** = ostvareno YTD + ugovorene rate do 31.12. + za neugovoreno
+  ostatak plana × stopa produljenja te vrste. Prikazuju se tri crte: plan, ostvareno i projekcija.
+- **Plaće se ne obračunavaju** (ulaz §4.4). Uvoz je CSV `mjesec, mjesto troška, ukupni trošak
+  (bruto 2)`, a po osobi samo ako to odluči **§1.12**.
+
+```
+Finance · Dashboard                       2026 ▾   YTD to 30.09.     ⓘ formulas
+┌ Revenue YTD ─────┬ EBITDA margin ────┬ Occupancy sea ──────┬ Renewal rate ───┐
+│ € 1,284,000      │ 31.4 %            │ comm. 88 % · phys.   │ 81 %            │
+│ plan € 1,250,000 │ plan 30 %         │ 84 %                 │ 2025: 78 %      │
+└──────────────────┴───────────────────┴──────────────────────┴─────────────────┘
+ Revenue by month  ▁▂▃▅▇██▇▅  plan ─ ─   projection to 31.12.: € 1,610,000 (plan 1,580,000)
+ By source (net)      contracted     paid        open
+   Berths (sea)       € 812,000      € 760,000   € 52,000
+   Hall / dry         € 214,000      € 198,000   € 16,000
+   Services           € 141,000      € 120,000   € 21,000
+```
+
+#### §14.5.5 · eRačun prema posredniku i ulazni računi (M5) — odlučeno u ulazu §4.4
+
+ERP **nije informacijski posrednik**. ERP izrađuje kompletan eRačun i predaje ga posredniku kojeg
+marina odabere. Ulazne eRačune ERP prima od posrednika.
+
+| Dio | Prijedlog |
+|---|---|
+| Format | **EN 16931**, sintaksa **UBL 2.1** (Invoice i CreditNote), uz hrvatska pravila (HR CIUS) i **KPD šifru na svakoj stavci** (katalog, §14.6.3). Točan profil i obvezna polja provjeravaju se prema dokumentaciji Porezne uprave i odabranog posrednika **prije** M5 |
+| Sučelje | **adapter po posredniku** (`einvoice/providers/<ime>.py`) iza jednog sučelja: `send(xml) → id`, `status(id)`, `fetch_inbound(since)`, `ack(id)`, `report_payment(id, …)`, `reject(id, razlog)`. Prvi adapter je za posrednika kojeg marina odabere (**§1.20**); testira se protiv **simulatora posrednika** (kao ormar, §9.1) |
+| Statusi | `draft → issued → sent → delivered \| rejected \| error`. Odbijen račun nije izbrisan: ispravak je novi račun ili odobrenje (CreditNote), uz vezu na izvorni |
+| Veza | račun ↔ ugovor (`contract_id`) ↔ rate ↔ uplate. Uplata koja zatvori račun pokreće **izvještavanje o naplati** prema posredniku, ako ga propis za taj račun traži |
+| Ulazni | `purchase_invoices`: XML se sprema kakav je stigao (sha256), plus raščlanjena polja. Veza je na dobavljača i troškovni ugovor; tok je odobri ili odbij s razlogom (odbijanje ide posredniku) |
+| Arhiva | izvorni XML izlaznih i ulaznih računa, nepromjenjiv (samo dodavanje, sha256 u bazi), u zakonskom roku čuvanja (**potvrditi s knjigovođom**). Backup ga pokriva (§8.4). Retencija iz §4.7 ga ne briše |
+| Tajne | pristupni podaci posrednika su strojne tajne (D20 t. 5): šifrirani, uneseni kroz UI i nikad prikazani natrag |
+| B2C (gotovina, kartica) | **otvoreno: §1.21** |
+
+**Numeracija računa** u obliku `broj/poslovni prostor/naplatni uređaj`, npr. `15/MAR1/1`, slijedi
+§14.6.2 (bez rupa).
+
+**Uplate iz banke (M3):** uvoz izvoda **ISO 20022 camt.053**. Uplata se uparuje po pozivu na
+broj, koji ERP stavlja na svaku ratu i račun (model HR01 s brojem dokumenta). Što se ne upari, ide
+na listu za ručno uparivanje. Uparena uplata je redak u `payments` sa `source='bank_import'`.
+
+### §14.6 · Predlošci, numeracija, matični podaci, uvoz (ulaz §5–§6) — faza M1
+
+#### §14.6.1 · Predlošci s brandom
+
+- Vrste predložaka:
+  - ponuda, ugovor, račun, odobrenje;
+  - nalog za servis, radni nalog (PDF za podugovarača);
+  - cjenici (smještaj, najam, usluge);
+  - popis roba i usluga.
+- Lika isporučuje **osnovne predloške** (HTML + CSS). Marina bira osnovni i dodaje:
+  - logo;
+  - podatke tvrtke: naziv, OIB, IBAN, adresa, sud i broj upisa, temeljni kapital, uprava;
+  - boju naglaska i podnožje.
+
+  Podaci tvrtke su **obavezni prije prvog izdanog dokumenta**. Bez njih je gumb „Issue"
+  odsutan, a umjesto njega stoji rečenica koja kaže što nedostaje.
+- **PDF** nastaje na serveru iz HTML-a. Alat se bira u M1 uz izmjeren RAM na VPS-u (§8.2; npr.
+  WeasyPrint traži sistemske biblioteke). Generira se na zahtjev, a sprema se samo izdani
+  dokument (račun, ugovor), sa sha256.
+- **Jezik dokumenta** određuje `customers.doc_language`. Tekstovi predloška su po jeziku; koji
+  jezici, odlučuje **§1.11**. Sučelje ostaje engleski (§6.0).
+
+#### §14.6.2 · Numeracija
+
+`document_sequences(marina_id, doc_type, year, business_unit, device, prefix, next_value)`.
+
+- Broj se dodjeljuje **u istoj transakciji** u kojoj se dokument izdaje (`SELECT … FOR UPDATE`).
+- Za **račune i odobrenja broj je bez rupa**: poništen račun se ne briše, nego ga zatvara
+  odobrenje.
+- Ponude i nalozi smiju imati rupe.
+- Format je postavka marine; zadani format je `RC-2026-0042` za ugovor i `15/MAR1/1` za račun.
+
+#### §14.6.3 · Matični podaci koji nedostaju (ulaz §6)
+
+```
+item_groups   -- marina_id, code, name, segment (upravljačka knjiga §14.5.4), parent_id
+items         -- marina_id, code, name, group_id, unit ('kom'|'h'|'dan'|'noć'|'m'|'kWh'|'l'…),
+              --   price_net, vat_rate, kpd_code, extra_code, is_commission, is_stock_item,
+              --   purchase_price, valid_from    -- promjena cijene = novi redak, stari ostaje
+employees, resources      -- §14.4.1
+customers, customer_members, vessels   -- §14.3.1
+```
+
+#### §14.6.4 · Uvoz iz postojećeg sustava
+
+Redoslijed je fiksan: **katalog → kupci → plovila → ugovori (s ratama i uplatama) → zaliha**.
+Svaki korak prolazi isti put:
+
+1. **Datoteka → staging** (`import_batches`, `import_rows`; izvorni redak se čuva doslovno).
+2. **Provjera:** greške (red se ne može uvesti) i upozorenja (uvest će se, ali pogledaj), po retku,
+   s razlogom.
+3. **Probni uvoz** u transakciji koja se na kraju poništi. Izvještaj kaže „ovo bi nastalo".
+4. **Uvoz**, uz autora i audit.
+5. **Izvještaj razlika:** broj zapisa po vrsti, Σ ugovorenog po godini i vrsti, otvoreni dug po
+   kupcu. Uspoređuje se izvor naspram ERP-a, a svaka razlika ima redak i razlog.
+
+**Ispravci iz ulaza §4.2 rade se pri uvozu, ne poslije:**
+- datum kao tekst postaje pravi datum;
+- ugovor bez veza ide na listu „needs a place";
+- iznosi postaju neto + stopa iz kataloga, a gdje stopa nije poznata, zapis ide na upozorenje.
+
+Ništa se ne pretpostavlja tiho.
+
+**Paralelni rad:** svaki mjesec ERP i postojeći sustav daju REKAPITULATION, a ERP ispisuje
+razliku. Kad su razlike **N mjeseci zaredom nula** ili objašnjene, izvor istine prelazi na ERP.
+N i to tko potvrđuje odlučuje **§1.22**.
+
+### §14.7 · Arhitektura — D31 (ulaz §9), prijedlog s trojkom
+
+#### §14.7.1 · Izmjereno danas: 74 simulirana ormara
+
+**Metoda.** Pravi kolektor (`services/collector.py`, raspored §5.2) radio je **601 s u stvarnom
+vremenu** protiv demo simulatora na `127.0.0.1:18080`: 74 ormara, svaki je zaseban poslužitelj
+kao pravi. Baza je bila privremeni SQLite sa sijanom demo marinom (1 dan povijesti). Svaki HTTP
+zahtjev brojao je omotač oko transporta. Stroj je razvojni PC, mjereno 2026-10-16. Skripta nije u
+repou, jer je mjerenje, ne test. Ponavlja se istim koracima na VPS-u u 5e (O35).
+
+| Mjera | Vrijednost |
+|---|---|
+| zahtjeva prema ormarima | **2 590** u 601 s = **4,31/s** = 259/min = **3,49 po ormaru u minuti** |
+| po ruti (u minuti) | `health` 73,9 · `sessions/active` 73,9 · `alarms/active` 36,9 · `pedestals/{n}/status` 36,9 · `berths` 14,8 · `pedestals/{n}/load` 14,8 (simulirani na 300 s, D28) · prijava servisnog računa 7,4 |
+| promet odgovora | 1,1 MB = **1,8 KiB/s** |
+| latencija (lokalno) | p50 7,1 ms · p95 14,1 ms · max 114 ms; greške 0 |
+| trajanje jednog prolaza (tick, 5 s) | p50 **0,11 s** · max 13,0 s (prvi prolaz, kad je sve dospjelo odjednom; SQLite = jedan poslužitelj u isto vrijeme) |
+| CPU procesa ERP-a | 48,8 s u 601 s = **8,1 % jedne jezgre** ≈ **19 ms CPU po zahtjevu**, uključujući parsiranje i upis |
+| RAM procesa | ~115 MB radnog skupa (`tasklist` u 4. minuti) |
+| upis u bazu | prvih 10 minuta dominira prvi prolaz (stanje brojila i ključevi cachea, jednom). Stabilni tempo intervala je izmjeren u D28: **~115 000 redaka dnevno za 74 ormara na 60 s**, a na 300 s to je **~23 000** (izvedeno: 115 000 / 5; izvor `collector.py`, komentar uz D28) |
+
+**Što to znači:** danas je opterećenje **malo i stalno**. Ne ovisi o tome radi li ikoga, jer ga
+određuje raspored pulla. Oko 70 % zahtjeva su provjere „je li se išta promijenilo" (`health`,
+`sessions`, `alarms`, `status`).
+
+#### §14.7.2 · Procjena za 10, 50 i 100 marina po 75 ormara
+
+Pretpostavke:
+- pravi ormar je **zaseban poslužitelj**, kao Krk;
+- radi na 60 s kad je zauzet (§5.2), a ne na 300 s kao simulirani;
+- usklađuje se svakih 900 s;
+- to je **~4,6 zahtjeva po ormaru u minuti**, umjesto izmjerenih 3,49;
+- CPU je izmjerenih ~19 ms po zahtjevu.
+
+| | Ormara | Zahtjeva/s (pull) | CPU kolektora | Redaka intervala/dan (najgore, 60 s) |
+|---|---|---|---|---|
+| danas, demo | 74 | 4,3 (izmjereno) | 0,08 jezgre (izmjereno) | ~23 000 (300 s, izvedeno) |
+| 1 marina | 75 | ~6 | ~0,1 jezgre | ~117 000 |
+| **10 marina** | 750 | **~58** | **~1,1 jezgre** | ~1,2 mil. (~14/s) |
+| **50 marina** | 3 750 | **~290** | **~5,5 jezgri** | ~5,8 mil. (~68/s) |
+| **100 marina** | 7 500 | **~575** | **~11 jezgri** | ~11,6 mil. (~135/s) |
+
+Tri zaključka, svaki s brojkom:
+1. **Prvo puca CPU kolektora, ne baza.** Kod 10 marina jedan Python proces (jedna jezgra zbog
+   GIL-a) je na rubu. Rješenje je **više procesa kolektora**, svaki sa svojim dijelom ormara.
+   Vodeća brava (`collector.py`, advisory lock) postaje brava po dijelu.
+2. **Pull troši na pitanja bez odgovora.** Kod 50 i više marina ~70 % od ~290 zahtjeva/s su
+   provjere bez promjene. **Push** (MQTT ili webhook s R22) to pretvara u promet koji postoji samo
+   kad se nešto dogodi. Pull tada služi samo za usklađivanje (D7). Zato korak 2 dolazi s
+   ormarovim MQTT-om, a ne s brojem marina.
+3. **Baza podnosi broj redaka, uz particije.** 135 redaka/s u paketima je malo za PostgreSQL. Ali
+   11 milijuna redaka dnevno bez **mjesečnih particija** znači da retencija briše `DELETE`-om
+   umjesto `DROP PARTITION`, a to je ono što bi stvarno zagušilo bazu.
+
+**Zahtjevi weba i mobitela** su odvojen i manji problem: desetci korisnika po marini, ograničeni
+ljudskim tempom. Rizik je u tome da ih kolektor uspori, ne u njihovu broju. Danas kolektor radi u
+**vlastitoj niti** istog procesa (`collector.py`, `CollectorThread`), pa API dijeli GIL s njim.
+
+#### §14.7.3 · Načelo i koraci
+
+**Prijem je odvojen od upisa u bazu, a između njih je red čekanja** (ulaz §9.2). Koraci dolaze tek
+kad ih nešto stvarno traži:
+
+| Korak | Kada | Što | Okidač (mjerljiv) |
+|---|---|---|---|
+| **0** | **M0** | **odvojeni procesi:** `erp-iot.service` (API, `COLLECTOR_ENABLED=false`), `erp-iot-collector.service` (kolektor, isti kod) i `erp-agent` (postoji, D21). Za bazu: pool po procesu, `statement_timeout` (API 5 s, kolektor 30 s), `idle_in_transaction_session_timeout` | odmah: ne košta ništa, a uklanja jedini današnji rizik (§14.7.2, zadnji odlomak) |
+| **1** | prvi push izvor: webhook po R22 **ili** odgođeni zapisi R32 | **red u PostgreSQL-u:** `ingest_queue(event_id UNIQUE, cabinet_id, seq, received_at, payload JSONB)`. Prijem samo upisuje redak (`ON CONFLICT DO NOTHING`, duplikat je preskočen) i vraća 202. Radnici čitaju s `FOR UPDATE SKIP LOCKED` u paketima po 100 i upisuju idempotentno po `event_id`. Rupa u `seq` (R33) pokreće pull tog ormara. Ograničenje po ormaru: najviše N poruka/s, višak se odbija s 429, a ormar ga zadržava (R32) | ormar isporuči R22 ili R32 |
+| **2** | ormari dobiju MQTT prema van (R34) | **MQTT broker** (Mosquitto) kao **zaseban servis**, samo na Tailscaleu: korisnik i ACL po ormaru, ormar smije samo svoju temu. Most iz brokera u **isti** `ingest_queue`. Vanjski sustavi nikad ne dobivaju broker (D12) | R34 na prvom ormaru |
+| **3** | po mjerenju | **NATS JetStream** (ugrađen MQTT) **ili** Redpanda, umjesto tablice reda; mijenja se samo sloj između prijema i radnika | `ingest_queue` > 500 poruka/s **ili** kašnjenje radnika p95 > 30 s **ili** > 20 % CPU baze na red, tjedan dana zaredom |
+
+Particije po mjesecu za `consumption_intervals`, `sync_log`, `alarm_log` i `ingest_queue` uvode se
+**kad tablica prijeđe 10 milijuna redaka ili kod 10. marine**, što god dođe prije. Retencija tada
+briše particiju. Dashboardi i dalje čitaju unaprijed izračunate brojke (`marina_state.py`, §6.6).
+
+> **Prijedlog (D31)** · Korak 0 u M0, korak 1 s prvim push izvorom, korak 2 s MQTT-om ormara,
+> korak 3 samo po mjerljivom okidaču. **Kafka ne.**
+>
+> **Zašto** · Izmjereno: danas su 4 zahtjeva/s, a kod 10 marina ~58, što jedna baza podnosi bez
+> reda. Skok koji red treba upiti dolazi samo iz pusha. Pull je ERP-ov tempo i ne može zatrpati
+> sam sebe. Red bez pusha bio bi kod koji ništa ne radi, a održava se. Kafka traži 2–4 GB RAM-a
+> sama za sebe (VPS ima 3,8 GB), ne govori MQTT, i bila bi još jedan sustav za zaštitu
+> (ulaz §9.3). Ulaz je predlagao red već u v3 (OD-2). Mjerenje kaže da je jedini rizik koji
+> postoji danas zajednički proces, a njega rješava korak 0.
+>
+> **Ako griješim** · Korak 1 je jedna tablica i jedan radnik. Ako push stigne prije reda,
+> webhook se do tada odbija (§2.6), pa se ništa ne gubi: pull je istina (D7). Okidači koraka 3 su
+> brojke koje kolektor i radnik ionako mjere.
+
+Ova točka **ne mijenja D12**: broker je opcija koju D12 ostavlja, kao zaseban servis bez pristupa
+izvana. Uvodi se tek kad ormar sam ponudi MQTT prema van (R34).
+
+#### §14.7.4 · Jedna točka kvara (jedan VPS)
+
+| Kada | Što se odvaja | Dobiva se |
+|---|---|---|
+| **sada (5b)** | ništa; backup + **probna obnova** (§8.4) i zapisano vrijeme obnove | znamo koliko traje povratak (RTO) i koliko podataka gubimo (RPO = zadnji backup) |
+| **prva marina koja plaća, ili prvi stvarni kupci u CRM-u** | WAL arhiviranje (PITR) na drugo mjesto | RPO pada s dana na minute; to je uvjet za račune (M5) |
+| **3. marina ili prvi ugovor sa SLA** | **baza na zaseban stroj** (drugi VPS ili upravljani PostgreSQL), s replikom | kvar VPS-a aplikacije ne gubi podatke; obnova je samo novi API čvor |
+| **10. marina** | **drugi API čvor** + drugi konektor tunela (5c); kolektor ima vodeću bravu pa drugi čvor čeka u pripravnosti (`collector.py`, već izvedeno) | ispad jednog čvora nije ispad ERP-a |
+
+#### §14.7.5 · Web i mobitel
+
+Web i mobitel koriste **isti API** i ista prava (matrica §14.1.3). Mobilni prikaz je isti frontend
+(360 px je već pravilo, §6.0), ne zasebna aplikacija. Push obavijesti na mobitel (nalog dodijeljen,
+alarm) idu **Web Pushom** (PWA). Vlastita mobilna aplikacija ostaje aplikacija za kupce (D6), a ne
+za osoblje.
