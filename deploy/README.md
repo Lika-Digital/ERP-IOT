@@ -13,6 +13,12 @@ Repo na VPS-u (javni, samo za čitanje):
 |---|---|---|
 | 1 | `01_stanje.sh` — snimka stanja | ne, samo čita |
 | 2 | `02_osnova.sh` — UTC, NTP, swap 1 GB (swappiness 10), sigurnosna ažuriranja; DNS samo provjerava | da; ponovljivo, povratak ispiše na kraju |
+| 5 | `05_postgres.sh` — PostgreSQL 16 samo na socketu, pg_hba samo peer, uloge `erp` i `erp_agent`, baza `erp_iot`, bez TEMPORARY za PUBLIC | da; ponovljivo, povratak ispiše na kraju |
+| — | `slusaci.sh` — `ss -ltn` po pravilu v25.1 (javno samo :22); svaki korak ga zove na kraju | ne, samo čita |
+
+**Redoslijed (spec v25.1, §10.15):** 1, 2, 5–12, 14–17 → test čitanja s pravim ormarom →
+3 (vatrozid) i 4 (Tailscale ACL) → 17 ponovno → tek onda 5c. Koraci 3 i 4 su uvjet za svako
+javno izlaganje.
 
 Datoteke koje koraci instaliraju (ne instalira ih repo):
 

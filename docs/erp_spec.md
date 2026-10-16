@@ -3,7 +3,7 @@
 Što se gradi, u kojem redoslijedu, i svaka odluka izrečena tako da ispravak
 košta jedan redak, a ne razgovor.
 
-    Verzija 25 — zamjenjuje v24 od 2026-10-16
+    Verzija 25.1 — dopuna v25 od 2026-10-16
     Datum 2026-10-16
     Status faze 1–4 ZAVRŠENE i PRIHVAĆENE (§10.1–§10.4); korak 5a (D20), faza 8 (D21) i
            UI · Lika brand PRIHVAĆENI, na `main` (§10.7–§10.9); **faza 6 ZATVORENA na 6b**
@@ -18,6 +18,16 @@ v2.3 ispravak mreže u **D13**, v2.4 **D20**, v2.5 **D21**, **D22** i redoslijed
 `docs/inputs/ormar_ui_v2_spec.txt` (specifikacija ormara — uzor forme i izvor rječnika stanja).
 
 **Sve u ovom dokumentu je ODLUČENO. §1 je prazan — tri pitanja iz v15 odlučena su 2026-10-15.**
+
+### Što se promijenilo u verziji 25.1
+
+Tvoja odluka 2026-10-16 (nakon koraka 2 u 5b).
+
+| | |
+|---|---|
+| **§10.15 · redoslijed 5b** | koraci **3 (vatrozid) i 4 (Tailscale ACL i tagovi) idu na kraj**: nakon što test čitanja s pravim ormarom radi, **obavezno prije** bilo kakvog javnog izlaganja (5c) |
+| **Javni SSH ostaje** | `:22`, samo ključ, uz Tailscale; u koraku 3 javno je dopušten samo `:22` (§7.0, §8.4 usklađeni) |
+| **Slušači nakon svakog koraka** | `ss -ltn`: na `0.0.0.0`/`[::]` samo SSH; Postgres samo socket, uvicorn samo `127.0.0.1`, nginx samo na Tailscale IP (`deploy/slusaci.sh`) |
 
 ### Što se promijenilo u verziji 25
 
@@ -2784,7 +2794,7 @@ otišlo pravom ormaru — ali zaslon je to tvrdio.
 | **Ormar → ERP** | **samo port prijemnika webhooka** na Tailscale adresi ERP-a | nginx na VPS-u sluša na **Tailscale adresi**, port `8081`, i propušta **samo** `POST /api/webhooks/cabinet/*` (sve ostalo 404); ACL `tag:cabinet → tag:erp:8081`; nftables to isto ponavlja na `tailscale0` |
 | **Ormar ↛ ormar** | ništa | ACL bez ijednog pravila `tag:cabinet → tag:cabinet` (Tailscale je default-deny) |
 | **Javni UI** | samo kroz `cloudflared` | nginx UI blok sluša **samo na `127.0.0.1`**; `/api/webhooks/` u tom bloku vraća 404 — webhook nikad nije javan |
-| **SSH na VPS** | samo preko Tailscalea | `sshd ListenAddress` = Tailscale adresa (ili Tailscale SSH); nftables: javno sučelje **default-deny bez iznimki** |
+| **SSH na VPS** | **javno `:22`, samo ključ, i preko Tailscalea** *(v25.1, tvoja odluka)* | nftables: javno sučelje default-deny, **jedina iznimka `:22`**; prijava lozinkom i kao root isključena |
 
 Tailscale je enkripcija (WireGuard), zato je `http://` prema ormaru unutar tailneta prihvatljiv;
 TLS je na Cloudflareu za javni UI. ACL prijedlog (JSON) i nftables pravila su artefakti faze 5.
@@ -3145,7 +3155,7 @@ završetak faze 5:
    DNSSEC=no (slika plusvps.com dolazi s DNSSEC=yes, koji ruši SVE upite: missing-key);
    provjera: `resolvectl query deb.debian.org` i `apt update` prolaze
 2  Tailscale + ACL po §7.0; provjeri: ormar → ERP SAMO :8081 webhook, ormar ↛ ormar,
-   javno sučelje bez ijednog otvorenog ulaznog porta (nmap izvana), SSH samo preko Tailscalea
+   javno sučelje bez ijednog otvorenog ulaznog porta osim :22 (nmap izvana); SSH samo ključ (v25.1)
 3  PostgreSQL samo na Unix socketu (listen_addresses = ''), sistemski korisnik erp, peer auth;
    provjera: `ss -ltn` ne pokazuje :5432
 4  systemd credentials GENERIRANE na stroju: JWT_SECRET, ERP_ENCRYPTION_KEY (nitko ih ne upisuje)
@@ -3530,8 +3540,8 @@ ja se na VPS ne spajam), **ti-ormar**, **chat ormara**, **ja** (repo).
 |---|---|---|
 | 1 | snimka stanja (novi klon, `01_stanje.sh`) | „ništa nije mijenjano" |
 | 2 | UTC, NTP, swap 1 GB (swappiness 10), `unattended-upgrades`, DNS | `timedatectl`, `swapon`, `resolvectl` |
-| 3 | `nftables` u vlastitoj tablici: javno samo SSH; `tailscale0` samo 22 i 80; **bez 8081**; povratak za 3 min — **uz tvoj OK** | prijava javno i preko Tailscalea |
-| 4 | Tailscale ACL (ispod) | provjere ispod |
+| 3 | **→ na kraj (v25.1)** · `nftables` u vlastitoj tablici: javno samo SSH `:22`; `tailscale0` samo 22 i 80; **bez 8081**; povratak za 3 min — **uz tvoj OK** | prijava javno i preko Tailscalea |
+| 4 | **→ na kraj (v25.1)** · Tailscale ACL i tagovi (ispod) | provjere ispod |
 | 5 | PostgreSQL 16 samo socket, peer; `erp` vlasnik baze **`erp_iot`**; **`erp_agent` kao `postgres` prije migracija**; bez `TEMPORARY` (O47); `pg_ident` | `ss -ltn` bez 5432 |
 | 6 | korisnik `erp`, `/opt/erp-iot` s `main`a, venv iz locka (Python 3.12, uz Pillow) | `pip check`, `import PIL, psycopg2` |
 | 7 | `JWT_SECRET`, `ERP_ENCRYPTION_KEY` generirani na stroju, `systemd` credentials | nitko ih ne vidi |
@@ -3546,10 +3556,21 @@ ja se na VPS ne spajam), **ti-ormar**, **chat ormara**, **ja** (repo).
 | 16 | probna obnova u `erp_restore_test` | redovi i `alembic_version` jednaki |
 | 17 | `verify_system.sh` (Cloudflare i webhook označeni „5c"/„R22"), izvještaj | sve prolazi ili je izrijekom odgođeno |
 
+**Redoslijed (v25.1, tvoja odluka 2026-10-16):** brojevi koraka ostaju imena, redoslijed je
+**1, 2, 5–12, 14–17 → ormar prije spajanja (5) → 5d samo čitanje (6) → 3, 4 → 17 ponovno →
+tek onda 5c**. Razlog: dok ne radi osnovni model komunikacije, ne uvodi se ništa što može
+sakriti pravi uzrok problema. Koraci 3 i 4 su **uvjet za 5c** — nijedno javno izlaganje bez njih.
+Do koraka 4 vrijedi postojeća politika tailneta: 6.3 zato prvo provjeri da VPS doseže ormar
+`:80`, a UI na Tailscale IP-u (korak 12) vidi svaki uređaj u tailnetu.
+
+**Nakon svakog koraka** ispis sadrži `ss -ltn` (`deploy/slusaci.sh`): na `0.0.0.0`/`[::]` smije
+slušati **samo SSH `:22`**; Postgres **samo socket** (nijedan `:5432`), uvicorn samo `127.0.0.1`,
+nginx samo na Tailscale IP. Sve drugo je greška koraka.
+
 `ERP_ENCRYPTION_KEY` se ne backupira (§8.3): nakon obnove na novi stroj lozinke ormara se
 **ponovno upisuju**. `erp-sim` se ne instalira (P-4).
 
-**3 · Pristup** — samo preko Tailscalea, bez javne adrese; ERP nema kolačića, pa `http://` preko
+**3 · Pristup** — UI samo preko Tailscalea, bez javne adrese (SSH i javno, samo ključ, v25.1); ERP nema kolačića, pa `http://` preko
 WireGuarda radi s 2FA. 5c (Cloudflare, CrowdSec, B2) tek nakon uspješnog čitanja.
 
 **4 · Tailscale (D12), za jedan ormar:** `tag:erp → tag:cabinet:80` i ništa drugo; ormar → ERP
