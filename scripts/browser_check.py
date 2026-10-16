@@ -58,7 +58,8 @@ EXPECTED = [
     "sim: cabinet simulator comes up",
     "erp: migration + backend come up",
     "spa: the real bundle is served",
-    "D20: one-time link in the browser - password, QR, code, backup codes once",
+    "D20: one-time link in the browser - password, QR, code, backup codes once; "
+    "a used link says invalid, a backend that is down says Server unreachable (P3)",
     "D20: sign-in in the browser - password, then a backup code",
     "D20: Users screen - the admin is listed with 2FA linked",
     "erp: marina pointed at the simulator",
@@ -121,11 +122,14 @@ def spa_app(backend: str):
     from starlette.websockets import WebSocket
 
     async def api(request: Request):
-        async with httpx.AsyncClient(base_url=backend, timeout=30) as c:
-            r = await c.request(request.method, request.url.path,
-                                params=request.query_params, content=await request.body(),
-                                headers={k: v for k, v in request.headers.items()
-                                         if k.lower() not in ("host", "content-length")})
+        try:
+            async with httpx.AsyncClient(base_url=backend, timeout=30) as c:
+                r = await c.request(request.method, request.url.path,
+                                    params=request.query_params, content=await request.body(),
+                                    headers={k: v for k, v in request.headers.items()
+                                             if k.lower() not in ("host", "content-length")})
+        except httpx.ConnectError:
+            return Response("Bad Gateway", 502)      # what nginx answers for a backend that is down
         return Response(r.content, r.status_code, media_type=r.headers.get("content-type"))
 
     async def ws(socket: WebSocket):
@@ -273,6 +277,24 @@ def main() -> int:
                 fail(3, f"{type(exc).__name__}: {exc}")
             if "#token" in page.url or link in page.url:
                 fail(3, "the used link is still in the address bar")
+            # P3: "invalid" only when the server says so; no backend is "Server unreachable"
+            other = browser.new_page()
+            try:
+                other.goto(f"{spa_url}/setup#token={link}")
+                other.wait_for_selector("[data-error='invalid']", timeout=15000)
+                dead_port = free_port()
+                serve_in_thread(spa_app(f"http://127.0.0.1:{free_port()}"), dead_port)
+                wait_port(dead_port, None, "spa without a backend")
+                other.goto(f"http://127.0.0.1:{dead_port}/setup#token={link}")
+                other.wait_for_selector("[data-error='unreachable']", timeout=15000)
+                if "Server unreachable" not in other.inner_text("[data-error]")                         or other.locator("text=invalid").count():
+                    fail(3, "a backend that is down was not told apart from a bad link")
+            except SystemExit:
+                raise
+            except Exception as exc:  # noqa: BLE001
+                fail(3, f"P3: {type(exc).__name__}: {exc}")
+            finally:
+                other.close()
             ok(3)
 
             # ── D20: sign out, sign in again with password + backup code ─────

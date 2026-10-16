@@ -29,7 +29,7 @@ Tvoje odluke 2026-10-16 (pregled 6b).
 | **P2 odlučen** (§6.12) | ERP ne čuva sliku; prije slanja uklanja EXIF i ostale metapodatke; format i veličina iz koda ormara (JPEG, 10 MB) |
 | **O67 odlučen** | podaci vlasnika bivšeg plovila brišu se 90 dana nakon uklanjanja; ime i registracija ostaju |
 | **§6.13 · nalaz** | Pedestal control u demo marini je govorio „Ormar 1 · Krk" za simulirani ormar; pravila koja to zatvaraju, i prijedlog izvedbe **P4** (čeka odobrenje) |
-| **§8.4 runbook** | uloga `erp_agent` stvara se **prije** `alembic upgrade head` kad vlasnik baze nema CREATEROLE; prijedlog **P3** (čeka odobrenje): bez `create_all` na PostgreSQL-u, start na bazi koja nije na `head` odbija se; `/setup` razlikuje „server unreachable" |
+| **§8.4 runbook** | uloga `erp_agent` stvara se **prije** `alembic upgrade head` kad vlasnik baze nema CREATEROLE; **P3** (odobreno, izvedeno): bez `create_all` na PostgreSQL-u, start na bazi koja nije na `head` odbija se; `/setup` razlikuje „server unreachable" |
 
 ### Što se promijenilo u verziji 22
 
@@ -3058,7 +3058,7 @@ završetak faze 5:
 **Lokalno (Windows, vlastiti PostgreSQL):** isti korak 5a — superuser jednom stvori `erp_agent`,
 zatim `alembic upgrade head` kao vlasnik baze. README to ponavlja.
 
-> **PRIJEDLOG P3 — čeka tvoje odobrenje** · **Na PostgreSQL-u shemu mijenjaju samo migracije.**
+> **Odlučeno — P3 (tvoje odobrenje 2026-10-16)** · **Na PostgreSQL-u shemu mijenjaju samo migracije.**
 > Aplikacija pri startu više ne radi `create_all`; provjeri da je baza na `head` (Alembic) i, ako
 > nije, **odbije start** s porukom: „Database is at revision X, the code needs Y — run `alembic
 > upgrade head`". SQLite (testovi, demo) zadržava `create_all`. Uz to **`/setup`**: kad backend ne
@@ -3070,6 +3070,14 @@ zatim `alembic upgrade head` kao vlasnik baze. README to ponavlja.
 > izgleda gotovo ispravno. Poruka o linku krivo je slala na traženje novog linka.
 >
 > **Ako griješim** · Provjera je jedna funkcija pri startu.
+>
+> **Izvedeno** · `app/database.py`: `init_db` na SQLite-u radi `create_all`, na PostgreSQL-u
+> zove `check_schema_at_head` (Alembic `ScriptDirectory` prema `alembic_version`) i diže
+> `SchemaNotAtHead` s gornjom porukom, pa uvicorn ne starta. Testovi `tests/test_p3_startup.py`
+> (baza na 010 i prazna baza odbijene s porukom, baza na `head` prolazi, na PostgreSQL-u nema
+> `create_all`). `/setup`: „invalid or expired" samo na odgovor servera (4xx); bez odgovora ili
+> 5xx od proxyja → „Server unreachable — try again in a minute"; provjera u pregledniku (stavka
+> D20 u BOOT-01b: iskorišten link → invalid, SPA bez backenda → unreachable).
 
 ---
 

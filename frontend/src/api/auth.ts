@@ -67,6 +67,13 @@ export const getMe = (token?: string) =>
 export const refreshToken = () =>
   api.post<TokenResponse>('/auth/refresh').then((r) => r.data)
 
+/** No answer from the backend: no response at all, or the proxy in front of it
+ *  (nginx 502/504, the dev proxy's 500) answering for it — spec §8.4 P3. */
+export function isUnreachable(err: unknown): boolean {
+  const r = (err as { response?: { status?: number } })?.response
+  return !r || (r.status ?? 0) >= 500
+}
+
 /** The server's sentence, or the fallback. */
 export function detailOf(err: unknown, fallback: string): string {
   const d = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail

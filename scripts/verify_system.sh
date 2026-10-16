@@ -206,7 +206,7 @@ if command -v psql &>/dev/null; then
     fi
 else
     warn "psql not found — cannot verify tables directly"
-    info "Run alembic upgrade head or init_db() on startup"
+    info "Run alembic upgrade head (the app never creates tables on PostgreSQL)"
 fi
 echo ""
 
