@@ -3,12 +3,12 @@
 Što se gradi, u kojem redoslijedu, i svaka odluka izrečena tako da ispravak
 košta jedan redak, a ne razgovor.
 
-    Verzija 18 — zamjenjuje v17 od 2026-10-15
-    Datum 2026-10-15
+    Verzija 19 — zamjenjuje v18 od 2026-10-15
+    Datum 2026-10-16
     Status faze 1–4 ZAVRŠENE i PRIHVAĆENE (§10.1–§10.4); korak 5a (D20), faza 8 (D21) i
            UI · Lika brand PRIHVAĆENI, na `main` (§10.7–§10.9); 5b PAUZIRAN do prihvaćanja
            faze 6 (tvoja odluka 2026-10-15); faza 6 lokalno: **6.0 demo marina ZAVRŠEN**
-           (§10.10), sljedeći 6a; §1 je prazan
+           (§10.10) i PRIHVAĆEN, sljedeći 6a; §1 je prazan
 
 Čita se uz `docs/inputs/odluke.md` **v2.6** (odluke, obvezujuće — v2.1 dodaje **D18**, v2.2 **D19**,
 v2.3 ispravak mreže u **D13**, v2.4 **D20**, v2.5 **D21**, **D22** i redoslijed 5a–5e, v2.6 **D23–D28**),
@@ -17,6 +17,13 @@ v2.3 ispravak mreže u **D13**, v2.4 **D20**, v2.5 **D21**, **D22** i redoslijed
 `docs/inputs/ormar_ui_v2_spec.txt` (specifikacija ormara — uzor forme i izvor rječnika stanja).
 
 **Sve u ovom dokumentu je ODLUČENO. §1 je prazan — tri pitanja iz v15 odlučena su 2026-10-15.**
+
+### Što se promijenilo u verziji 19
+
+| | |
+|---|---|
+| **6.0 prihvaćen** | tvoja odluka 2026-10-16 |
+| **Gate po grani** (§9, TC-ERP-GATE-01) | pre-push na grani faze vrti **brzi** gate, puni vrti CI; grana je gotova tek kad je CI zelen. `main` bez promjene: puni gate lokalno + zeleni CI. Test pokreće pravi hook i tvrdi da `main` i dalje dobiva puni gate |
 
 ### Što se promijenilo u verziji 18
 
@@ -2741,11 +2748,26 @@ završetak faze 5:
 > **Ako griješim** · Ako faza 2 zakasni, 01b se može privremeno vrtjeti protiv snimljenog
 > odgovora — ali tada je to jedan test oblika, ne tvrdnja da sustav radi, i to se tako i zove.
 | **TC-ERP-BOOT-02** | gate ne može proći prazno | ako backend nije podignut, stage **pada**, nikad `exit 0`; ispiše broj preskočenih | netko „popravi" gate preskakanjem |
-| **TC-ERP-GATE-01** | gate je u repou | `.githooks/pre-push` postoji **i** `core.hooksPath` je postavljen; CI vrti isti skript | gate je samo lokalan |
+| **TC-ERP-GATE-01** | gate je u repou | `.githooks/pre-push` postoji **i** `core.hooksPath` je postavljen; CI vrti isti skript, **puni**, na pushu svake grane; pravi hook pokrenut u testu: push na `main` (i kad je `main` jedna od više referenci) → puni gate, push grane → `--fast` | gate je samo lokalan; netko „olakša" i `main` |
 | **TC-ERP-DEP-01** | ovisnosti su pinane | lock datoteka postoji; instalacija iz nje daje izmjerene verzije (§0.4) | netko doda nepinanu ovisnost |
 | **TC-ERP-AUTH-01** | neautentificirano = **401** | sve **27** zaštićene rute od **31** (mjereno iz grafa ovisnosti aplikacije, ne grepom — grep po `Depends(get_current_user)` daje 23 jer promašuje rute zaštićene kroz `require_super_admin`/`require_any_operator`); javni skup je **imenovan** (login, refresh, webhook, health) i nova nezaštićena ruta pada; **strogo 401**, ne `in (401, 403)`, i bez tokena i s neispravnim tokenom | HTTPBearer se vrati na 403 (§0.1) |
 | **TC-ERP-AUTH-02** | `JWT_SECRET` fail-fast | podizanje bez njega **pada** | netko vrati slučajno generiranje |
 | **TC-ERP-CACHE-01** | keš preživi restart | `cache_key` kao stupac; dva procesa, isti ključ, isti redak | hash se vrati kao ključ |
+
+> **Odlučeno (tvoja odluka 2026-10-16)** · **Tko vrti koji gate:**
+>
+> | Kada | Lokalno | CI | Gotovo kad |
+> |---|---|---|---|
+> | commit | brzi (lint, pytest, bandit) | — | — |
+> | push grane faze | brzi | **puni** (preglednik, PostgreSQL, rast 7 dana) | **CI zelen** |
+> | push na `main` | **puni** | puni | puni lokalno **i** CI zelen |
+>
+> **Zašto** · Puni gate na pushu grane triput je prekinut zbog nedostatka memorije dok je na
+> istom stroju radilo nešto drugo — nijedan put zbog crvenog koda. CI vrti isti skript na svakom
+> pushu i jedini provjerava PostgreSQL. `main` ostaje kako je bio: on je ono što ide na VPS.
+>
+> **Ako griješim** · Jedan redak u `.githooks/pre-push`. Test
+> `test_tc_erp_gate_01_push_to_main_still_runs_the_full_gate` pada ako se olakša i `main`.
 
 ### §9.1 · Ugovorni testovi protiv simulatora ormara
 
@@ -3681,9 +3703,9 @@ i čeka čovjeka; nikad ne otvara ni ne zaključava vrata.
 
 ---
 
-`docs/erp_spec.md` · verzija 18 · 2026-10-15 · zamjenjuje v17 od 2026-10-15
+`docs/erp_spec.md` · verzija 19 · 2026-10-16 · zamjenjuje v18 od 2026-10-15
 
 Faze 1–4, korak 5a, faza 8 (D21) i UI · Lika brand su završeni i prihvaćeni; 5b je pauziran do
-prihvaćanja faze 6; **6.0 demo marina je završen** (§10.10), sljedeći je 6a. D23–D28 su upisani (§6.6–§6.11) i izvode se kao proširena faza 6 (6a–6e); energetski
+prihvaćanja faze 6; **6.0 demo marina je završen i prihvaćen** (§10.10), sljedeći je 6a. D23–D28 su upisani (§6.6–§6.11) i izvode se kao proširena faza 6 (6a–6e); energetski
 agent (D24) je faza 10. Demo marina (D28, §6.11) je korak 6.0. **§1 je prazan** — tri pitanja iz v15
 odlučena su 2026-10-15.

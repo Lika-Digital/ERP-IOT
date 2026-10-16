@@ -506,6 +506,67 @@ def test_tc_erp_gate_01_hooks_are_versioned_and_call_the_gate():
             assert arg in text
 
 
+def _bash() -> str:
+    """Git's own bash on Windows (System32\\bash.exe is WSL), plain bash elsewhere."""
+    import shutil
+
+    if sys.platform == "win32":
+        r = subprocess.run(["git", "--exec-path"], capture_output=True, text=True)
+        git_bash = Path(r.stdout.strip()).parents[2] / "bin" / "bash.exe"
+        assert git_bash.is_file(), f"git bash nije nađen: {git_bash}"
+        return str(git_bash)
+    found = shutil.which("bash")
+    assert found, "bash nije na PATH-u"
+    return found
+
+
+def _run_pre_push(tmp_path: Path, refs: str) -> str:
+    """The real .githooks/pre-push in a throwaway repo whose gate.sh only prints its arguments."""
+    import os
+    import shutil
+
+    repo = tmp_path / "repo"
+    (repo / "scripts").mkdir(parents=True)
+    (repo / "scripts" / "gate.sh").write_text('echo "GATE_ARGS=[$*]"\n', encoding="utf-8")
+    shutil.copy(_REPO / ".githooks" / "pre-push", repo / "pre-push")
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    env = dict(os.environ, CLOUD_IOT_RELEASE="1")
+    r = subprocess.run([_bash(), "pre-push", "origin", "url"], cwd=repo, input=refs,
+                       capture_output=True, text=True, env=env, timeout=60)
+    assert r.returncode == 0, r.stdout + r.stderr
+    line = [ln for ln in r.stdout.splitlines() if ln.startswith("GATE_ARGS=")]
+    assert len(line) == 1, r.stdout
+    return line[0]
+
+
+_SHA = "0" * 40
+
+
+def test_tc_erp_gate_01_push_to_main_still_runs_the_full_gate(tmp_path):
+    """Odluka 2026-10-16: grane faza → brzi gate + CI; main se NE mijenja — puni gate lokalno."""
+    assert _run_pre_push(tmp_path, f"refs/heads/main {_SHA} refs/heads/main {_SHA}\n") == "GATE_ARGS=[]"
+
+
+def test_tc_erp_gate_01_main_anywhere_in_a_multi_ref_push_means_full(tmp_path):
+    refs = (f"refs/heads/main {_SHA} refs/heads/main {_SHA}\n"
+            f"refs/heads/faza/x {_SHA} refs/heads/faza/x {_SHA}\n")   # main not last
+    assert _run_pre_push(tmp_path, refs) == "GATE_ARGS=[]"
+
+
+def test_tc_erp_gate_01_branch_push_runs_the_fast_gate(tmp_path):
+    refs = f"refs/heads/faza/6-d23-d27 {_SHA} refs/heads/faza/6-d23-d27 {_SHA}\n"
+    assert _run_pre_push(tmp_path, refs) == "GATE_ARGS=[--fast]"
+
+
+def test_tc_erp_gate_01_ci_runs_the_full_gate_on_every_push():
+    """Grana je gotova tek kad je CI zelen — CI zato mora vrtjeti PUNI gate, na svakoj grani."""
+    text = (_REPO / ".github" / "workflows" / "gate.yml").read_text(encoding="utf-8")
+    runs = re.findall(r"bash scripts/gate\.sh[^\n]*", text)
+    assert runs == ["bash scripts/gate.sh"], runs
+    on = text.split("on:", 1)[1].split("jobs:", 1)[0]
+    assert "push:" in on and "branches" not in on, "CI mora raditi na push SVAKE grane"
+
+
 def test_tc_erp_gate_01_ci_runs_the_same_script():
     wf = _REPO / ".github" / "workflows" / "gate.yml"
     assert wf.is_file(), "CI workflow ne postoji"

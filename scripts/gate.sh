@@ -6,6 +6,15 @@
 #                                  growth (7 simulated days, retention proven)
 #    bash scripts/gate.sh --fast   pre-commit: lint, pytest, bandit
 #
+#  Who runs which (your decision 2026-10-16, after three full-gate pushes were
+#  killed for low memory):
+#    pre-commit              --fast
+#    pre-push to main        full, locally - and CI must be green too
+#    pre-push to any branch  --fast; the full gate runs in CI on every push, and
+#                            a branch counts as done only when CI is green
+#    CI (.github/workflows)  full, always (7 growth days, real PostgreSQL)
+#  test_foundations.py runs the hook itself and asserts main still gets the full gate.
+#
 #  Rule: a missing tool, a missing venv, missing node_modules, a skipped test,
 #  or a server that does not come up is a FAILURE. Never a skip, never exit 0.
 #  The previous tests/run_tests.sh fell back to system Python, pip-installed

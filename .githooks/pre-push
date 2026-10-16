@@ -1,21 +1,25 @@
 #!/usr/bin/env bash
-# ERP-IOT pre-push — FULL gate on every branch, including frontend build and
-# real boot (spec §9). Versioned in .githooks/; enabled by:
+# ERP-IOT pre-push (spec §9 TC-ERP-GATE-01). Versioned in .githooks/; enabled by:
 #   git config core.hooksPath .githooks
 #
-# The previous hook skipped the gate entirely for feature branches. A branch is
-# where broken code lives longest, so it now runs everywhere.
+#   push to main      FULL gate locally (frontend, boot, browser, growth) + green CI
+#   any other branch  fast gate locally (lint, pytest, bandit); the full gate runs
+#                     in CI, and the branch counts as done only when CI is green
+#
+# Why (your decision 2026-10-16): the full gate was killed for low memory on three
+# phase-branch pushes while other work ran on the same machine. CI runs the same
+# full script on every push, on real PostgreSQL. main is unchanged.
 #
 # Pushing to main additionally asks for confirmation (CLOUD_IOT_RELEASE=1 for
 # non-interactive use), as before.
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 
-TARGET_BRANCH=""
+TO_MAIN=0
 while IFS=' ' read -r _local_ref _local_sha remote_ref _remote_sha; do
-    TARGET_BRANCH="${remote_ref#refs/heads/}"
+    [ "${remote_ref#refs/heads/}" = "main" ] && TO_MAIN=1
 done
 
-if [ "$TARGET_BRANCH" = "main" ] && [ "${CLOUD_IOT_RELEASE:-}" != "1" ]; then
+if [ "$TO_MAIN" = "1" ] && [ "${CLOUD_IOT_RELEASE:-}" != "1" ]; then
     if read -r -p "Pushing to MAIN. Type 'release' to confirm: " CONFIRM < /dev/tty 2>/dev/null; then
         [ "$CONFIRM" = "release" ] || { echo "Push to main cancelled."; exit 1; }
     else
@@ -24,4 +28,8 @@ if [ "$TARGET_BRANCH" = "main" ] && [ "${CLOUD_IOT_RELEASE:-}" != "1" ]; then
     fi
 fi
 
-exec bash "$REPO_ROOT/scripts/gate.sh"
+if [ "$TO_MAIN" = "1" ]; then
+    exec bash "$REPO_ROOT/scripts/gate.sh"
+fi
+echo "pre-push: branch push - fast gate here, full gate in CI (done only when CI is green)"
+exec bash "$REPO_ROOT/scripts/gate.sh" --fast
