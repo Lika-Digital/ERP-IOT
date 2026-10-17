@@ -99,3 +99,24 @@ def test_listeners_public_port_or_postgres_fails(tmp_path):
         r = _run_slusaci(tmp_path / str(i), ["0.0.0.0:22", bad])
         assert r.returncode == 1, (bad, r.stdout)
         assert "SLUŠAČI: GREŠKA" in r.stdout, bad
+
+
+# ── deploy/08_blok_a.sh (koraci 8–10): skripta traži točno ono što kod piše ─────────────
+
+def test_block_a_waits_for_the_texts_the_code_really_writes():
+    blok = (DEPLOY / "08_blok_a.sh").read_text(encoding="utf-8")
+    root = DEPLOY.parent / "backend"
+    # P3: start na bazi ispod head mora pasti s ovom porukom (app/database.py)
+    assert "P3_MSG='run `alembic upgrade head`'" in blok
+    assert "— run `alembic upgrade head`" in (root / "app" / "database.py").read_text(encoding="utf-8")
+    # jedan prolaz agenta: logger "erp-agent", poruka "pass ..." (app/agent/__main__.py)
+    agent = (root / "app" / "agent" / "__main__.py").read_text(encoding="utf-8")
+    assert "'erp-agent: pass '" in blok
+    assert 'getLogger("erp-agent")' in agent and 'log.info("pass %s"' in agent
+    assert '%(name)s: %(message)s' in agent
+    # head u runbooku = head u kodu
+    head = re.search(r"^HEAD_REV=(\d+)", blok, re.M).group(1)
+    versions = sorted(p.name for p in (root / "alembic" / "versions").glob("[0-9]*.py"))
+    assert versions[-1].startswith(head + "_")
+    # P3 (downgrade) samo na bazi bez korisnika
+    assert re.search(r'if \[ "\$users" != 0 \]', blok)

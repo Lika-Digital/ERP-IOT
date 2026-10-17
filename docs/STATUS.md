@@ -1,19 +1,22 @@
 # ERP-IOT · stanje za sutra
 
-Zadnje ažuriranje: 2026-10-17 (nakon koraka 6; korak 7 pripremljen). Prioritet: **5b VPS**, korak po korak, prema `erp_spec.md` §10.15.
+Zadnje ažuriranje: 2026-10-17 (nakon koraka 7; blok A pripremljen). Prioritet: **5b VPS**, korak po korak, prema `erp_spec.md` §10.15.
 
 ## Gdje smo
 
 | Grana | Stanje | Što je na njoj |
 |---|---|---|
 | `main` | `b00ff59`, spec v25 | faza 6 zatvorena na 6b; na VPS-u u `/opt/erp-iot` |
-| `faza/5b-vps` | pushana | spec **v25.2**, `deploy/01`–`07`, `slusaci.sh`, uklonjen `usage.history`, §2.3 = 17 |
-| `spec/v3-moduli` | pushana | spec **v30** (v3 prijedlog, D32), odgovori mobilnoj v1 i v2, pitanja ormaru o kameri |
+| `faza/5b-vps` | pushana | spec **v25.2**, `deploy/01`–`07`, `08_blok_a.sh`, `slusaci.sh`, uklonjen `usage.history`, §2.3 = 17 |
+| `spec/v3-moduli` | pushana | spec **v31** (v3 prijedlog, D32, D32.1), odgovori mobilnoj v1 i v2, pitanja ormaru o kameri |
 
 ## 5b VPS — koraci
 
 Redoslijed (v25.1, tvoja odluka): **1, 2, 5–12, 14–17 → ormar → 5d čitanje → 3, 4 → 17 → 5c.**
 Nakon svakog koraka `slusaci.sh` (javno samo `:22`).
+**Veći koraci (tvoja odluka 2026-10-17):** preostalo ide u tri bloka — svaki je jedna skripta s
+ugrađenim provjerama, staje na prvoj grešci, ponovljiva, na kraju `slusaci.sh` i povratak. Ja
+pokažem blok, ti ga pregledaš, vlasnik pokreće.
 
 | # | Korak | Stanje |
 |---|---|---|
@@ -21,20 +24,20 @@ Nakon svakog koraka `slusaci.sh` (javno samo `:22`).
 | 2 | UTC, NTP, swap 1 GB, sigurnosna ažuriranja, DNS | ✔ 2026-10-16 |
 | 5 | PostgreSQL 16: samo socket, peer, `erp` / `erp_agent`, `erp_iot`, bez TEMPORARY | ✔ 2026-10-17 |
 | 6 | korisnici `erp` i `erp-agent`, `/opt/erp-iot` = `main` `b00ff59`, venv iz locka (57/57, `pip check` čist) | ✔ 2026-10-17, potvrđeno |
-| **7** | **sljedeći:** `07_tajne.sh` — `JWT_SECRET` i `ERP_ENCRYPTION_KEY` generirani na stroju, šifrirani sa `systemd-creds` (`/etc/erp-iot/*.cred`, root 0700/0600), `erp-iot.env` s Tailscale IP-om; provjera da ih `erp` dobiva samo preko systemd-a | **čeka tvoj OK za pokretanje** |
-| 8 | `alembic upgrade head` → 015, `alembic check`, probe sheme, AGT-01 | — |
-| 9 | `erp-iot.service` na `127.0.0.1:8000`; P3 namjerno (`downgrade -1` → start pada → `upgrade head`) | — |
-| 10 | agent D21 (`erp-agent.service`, bez mreže) | — |
-| 11 | `dist` iz CI artefakta `main`a, `sha256` jednak CI-ju | — |
-| 12 | nginx samo na Tailscale IP `:80` (ukloniti zadani site na `0.0.0.0:80`), O43 | — |
-| 14 | prvi admin (`erp-setup-admin`), 2FA | — |
-| 15–16 | backup `pg_dump` + `age`, probna obnova | — |
+| 7 | `07_tajne.sh` — tajne generirane na stroju, `systemd-creds` (bez TPM-a: ključ stroja; upozorenje „not on encrypted media" očekivano) | ✔ 2026-10-17 |
+| **A = 8, 9, 10** | **`08_blok_a.sh`:** `alembic upgrade head` → 015 kao `erp`, `alembic check`, 59 proba, AGT-01/02 (kao `postgres`); `erp-iot.service` uz P3 namjerno (samo dok nema korisnika), `/api/health`, provjera `~@resources`; `erp-agent.service` bez mreže, jedan prolaz | **pripremljen, čeka tvoj pregled** |
+| B = 11, 12 | `dist` s `main`a bez ručnog preuzimanja (sha256), nginx samo na Tailscale IP `:80`, O43 | ovisi o privatnom repou (dolje) |
+| C = 14, 15, 16 | prvi admin (`--base-url http://100.110.191.12`), backup `pg_dump \| age` (7 dana, tvoj javni ključ), probna obnova | — |
 | 17 | `verify_system.sh` | — |
 | 3, 4 | vatrozid (`03_vatrozid.sh`, **necommitan**, javno `:22` dopušten) i Tailscale ACL | **na kraju**, prije 5c |
 
 Uloge: ti pokrećeš skriptu i šalješ ispis, ja provjeravam. Ja se na VPS ne spajam.
 
 ## Čeka tvoju odluku
+
+- **Repo je javan** (VPS ga je klonirao bez prijave). Prijedlog: privatni repo + deploy ključ samo
+  za čitanje na VPS-u, prije bloka B (blok A ne dohvaća ništa s GitHuba). Utječe na blok B: release
+  asset privatnog repoa deploy ključ ne otvara.
 
 - **Trojke v3** u `spec/v3-moduli`: T-1…T-22 (odgovor mobilnoj v1) i T-23…T-30 (v2), §14 i §10.16.
 - **§1.5–§1.24**: dvadeset otvorenih pitanja v3.
