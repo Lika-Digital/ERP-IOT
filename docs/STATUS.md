@@ -25,8 +25,9 @@ pokažem blok, ti ga pregledaš, vlasnik pokreće.
 | 5 | PostgreSQL 16: samo socket, peer, `erp` / `erp_agent`, `erp_iot`, bez TEMPORARY | ✔ 2026-10-17 |
 | 6 | korisnici `erp` i `erp-agent`, `/opt/erp-iot` = `main` `b00ff59`, venv iz locka (57/57, `pip check` čist) | ✔ 2026-10-17, potvrđeno |
 | 7 | `07_tajne.sh` — tajne generirane na stroju, `systemd-creds` (bez TPM-a: ključ stroja; upozorenje „not on encrypted media" očekivano) | ✔ 2026-10-17 |
-| **A = 8, 9, 10** | **`08_blok_a.sh`:** `alembic upgrade head` → 015 kao `erp`, `alembic check`, 59 proba, AGT-01/02 (kao `postgres`); `erp-iot.service` uz P3 namjerno (samo dok nema korisnika), `/api/health`, provjera `~@resources`; `erp-agent.service` bez mreže, jedan prolaz | **pripremljen, čeka tvoj pregled** |
-| B = 11, 12 | `dist` s `main`a bez ručnog preuzimanja (sha256), nginx samo na Tailscale IP `:80`, O43 | ovisi o privatnom repou (dolje) |
+| **A = 8, 9, 10** | **`08_blok_a.sh`:** `alembic upgrade head` → 015 kao `erp`, `alembic check`, 59 proba, AGT-01/02 (kao `postgres`); `erp-iot.service` uz P3 namjerno (samo dok nema korisnika), `/api/health`, provjera `~@resources`; `erp-agent.service` bez mreže, jedan prolaz | **pregledan, popravljen (`reset-failed`, ERR trap) — spreman za pokretanje** |
+| **A→B** | **`kljucevi_repo.sh`:** dva deploy ključa samo za čitanje (lika, root), ispis samo javnih → ti na GitHubu: Deploy keys bez write, repo → Private → `kljucevi_repo.sh prebaci` | odmah nakon bloka A |
+| B = 11, 12 | `dist` s `main`a bez ručnog preuzimanja (sha256), nginx samo na Tailscale IP `:80`, O43 | `dist` na zasebnoj grani + `sha256`, isti deploy ključ, bez tokena (tvoja odluka) |
 | C = 14, 15, 16 | prvi admin (`--base-url http://100.110.191.12`), backup `pg_dump \| age` (7 dana, tvoj javni ključ), probna obnova | — |
 | 17 | `verify_system.sh` | — |
 | 3, 4 | vatrozid (`03_vatrozid.sh`, **necommitan**, javno `:22` dopušten) i Tailscale ACL | **na kraju**, prije 5c |
@@ -35,9 +36,12 @@ Uloge: ti pokrećeš skriptu i šalješ ispis, ja provjeravam. Ja se na VPS ne s
 
 ## Čeka tvoju odluku
 
-- **Repo je javan** (VPS ga je klonirao bez prijave). Prijedlog: privatni repo + deploy ključ samo
-  za čitanje na VPS-u, prije bloka B (blok A ne dohvaća ništa s GitHuba). Utječe na blok B: release
-  asset privatnog repoa deploy ključ ne otvara.
+- **Javni repo → privatan (prihvaćeno 2026-10-17).** Pregled cijele povijesti (107 commita, svi
+  bili javni): nema privatnih ključeva, tokena ni produkcijskih tajni, nema osobnih podataka. Jedina
+  stvarna vjerodajnica: lozinka lokalnog razvojnog Postgresa iz starog `alembic.ini` (citirana i u
+  specu, O16) — **potvrdi da je promijenjena svugdje gdje je korištena.** Ostalo je infrastruktura
+  niske težine (javni IP VPS-a na `spec/v3-moduli`, tailnet IP-ovi, korisnik `cloud-iot` na ormaru,
+  NFC UID-ovi pilota).
 
 - **Trojke v3** u `spec/v3-moduli`: T-1…T-22 (odgovor mobilnoj v1) i T-23…T-30 (v2), §14 i §10.16.
 - **§1.5–§1.24**: dvadeset otvorenih pitanja v3.

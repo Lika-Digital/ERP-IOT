@@ -124,3 +124,23 @@ def test_block_a_waits_for_the_texts_the_code_really_writes():
     # pada u P3 start-limit se poništi prije starta na head
     assert "set -Eeuo pipefail" in blok and "trap 'stani" in blok
     assert blok.index("reset-failed erp-iot") < blok.index("sudo systemctl restart erp-iot")
+
+
+# ── deploy/kljucevi_repo.sh: privatni repo, deploy ključevi samo za čitanje ─────────────
+
+def test_deploy_keys_print_only_public_halves_and_pin_github():
+    s = (DEPLOY / "kljucevi_repo.sh").read_text(encoding="utf-8")
+    # svaki ispis ključa (cat/sed) ide na .pub; privatni dio nikad ne izlazi
+    for line in s.splitlines():
+        if re.search(r"\b(cat|sed)\b.*\$(L|R)_KEY", line):
+            assert "_KEY.pub" in line, line
+    # GitHubov ključ poslužitelja: objavljeni ed25519 otisak, strogo
+    assert "GH_FP='SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU'" in s
+    assert "StrictHostKeyChecking=yes" in s and "IdentitiesOnly=yes" in s
+    # ključ koji smije pisati je greška
+    assert "push --dry-run" in s and "SMIJE pisati" in s
+    # korak 6 klonira /opt/erp-iot istim root ključem
+    six = (DEPLOY / "06_aplikacija.sh").read_text(encoding="utf-8")
+    assert "REPO=git@github.com:Lika-Digital/ERP-IOT.git" in six
+    assert "-i /root/.ssh/erp_iot_deploy -o IdentitiesOnly=yes " \
+           "-o UserKnownHostsFile=/root/.ssh/known_hosts_github" in six

@@ -16,7 +16,9 @@ set -euo pipefail
 sec() { printf '\n== %s ==\n' "$1"; }
 HERE=$(cd "$(dirname "$0")" && pwd)
 cd /   # sudo -u erp / erp-agent ne mogu u ~lika
-REPO=https://github.com/Lika-Digital/ERP-IOT.git
+# privatni repo (2026-10-17): root čita preko svog deploy ključa (deploy/kljucevi_repo.sh)
+REPO=git@github.com:Lika-Digital/ERP-IOT.git
+R_SSH="ssh -i /root/.ssh/erp_iot_deploy -o IdentitiesOnly=yes -o UserKnownHostsFile=/root/.ssh/known_hosts_github -o StrictHostKeyChecking=yes"
 APP=/opt/erp-iot
 VENV=$APP/backend/.venv
 sudo -v
@@ -54,12 +56,13 @@ if [ -d "$APP/.git" ]; then
     sudo git -C "$APP" checkout -q --detach origin/main
     echo "  osvježeno"
 else
-    sudo git clone -q --branch main "$REPO" "$APP"
+    sudo git -c core.sshCommand="$R_SSH" clone -q --branch main "$REPO" "$APP"
+    sudo git -C "$APP" config core.sshCommand "$R_SSH"
     echo "  klonirano"
 fi
 sudo chown -R root:root "$APP"
 sudo chmod -R go-w "$APP"
-want=$(git -C ~/erp-iot ls-remote -q "$REPO" refs/heads/main | cut -f1)
+want=$(git -C ~/erp-iot ls-remote -q origin refs/heads/main | cut -f1)
 have=$(sudo git -C "$APP" rev-parse HEAD)
 echo "  main na GitHubu: $want"
 echo "  u $APP:          $have  $(sudo git -C "$APP" log -1 --format='%s' | cut -c1-70)"
