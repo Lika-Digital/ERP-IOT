@@ -1,6 +1,7 @@
 # ERP-IOT — dnevnik odluka
 
-**Verzija 2.7 · 2026-10-16** — zamjenjuje v2.6.
+**Verzija 2.8 · 2026-10-17** — zamjenjuje v2.7.
+v2.8 dodaje **D32** (live prikaz veza, 2026-10-16) i **D32.1** (live bez maski i zamagljivanja; maske samo gdje se snima).
 v2.7 dodaje **D21.1** (agent javlja prolaz), **D30** (faza 1: slike ostaju na ormaru; četiri funkcije procjene kroz ERP) i ishod **revizije ormara** (tko popušta). v2.6 dodaje **D23–D27** (glavni dashboard; moduli Electricity & Water, Safety & Security i Occupancy; konfiguracija veza i usporedba plovila) i **D28** (demo marina: 2 prava ormara, ostalo simulirano) i proširuje fazu 6; **D24 vraća energetskog agenta** (ispravak D22). v2.5 dodaje **D21** (sigurnosni agent samo čita; mijenja slojeve 3 i 4 u D13 i D14) i **D22** (provjera slike s ormara; zamjenjuje energetskog agenta, koji se briše iz plana), i novi redoslijed faze 5 (5a–5e; faza 4.5 se briše, prvo spajanje na Krk je s VPS-a). v2.4 dodaje **D20** (korisnici, prijava i tajne). v2.3 ispravlja mrežna pravila u **D13** (ormar → ERP samo webhook; bez statične IP). v2.2 dodaje **D19** (ventili i utičnice prema Smart Modeu). v2.1 je dodao **D18** (mapiranje na obje strane); prvi isporučeni zip sadržavao je stariju v2 bez njega.
 Ormar (Cloud_IOT) je druga strana ugovora; ovdje se bilježe odluke koje se tiču ERP-a i ono što ERP traži od ormara.
 
@@ -455,6 +456,23 @@ Odluka 2026-10-16.
 - ERP ne zove nijedan kamerni endpoint (snapshot, frame_ext, stream, stream_ext). Test koji to provjerava.
 **Faza 2:** nije odlučena — bit će ono što testiranje faze 1 pokaže. Načini ERP i BOTH iz D27 i eskalacija sa slikom iz D22 ostaju samo kandidati i ne kodiraju se.
 Specifikacija §6.12; zahtjevi prema ormaru R27–R30 (§7.2).
+
+## D32 · Live prikaz veza (kamera) — izmjena D30
+Odluka 2026-10-16.
+- Ikona kamere na 2D karti i u aplikaciji kupca otvara živi prijenos. Ništa se ne snima ni ne sprema. D30 ostaje za analizu (referentne slike, match, zauzeće, sektor).
+- Put: ERP je jedini potrošač slike s ormara (`camera.live_*`, token `api_client`, samo preko Tailscalea); svaki segment povlači jednom, drži ga samo u memoriji i dijeli svim gledateljima. Aplikacija i preglednik nikad ne vide adresu ormara ni kamere. HLS, kašnjenje 8–12 s; niže kašnjenje samo uz novu odluku.
+- Prava (spec §1.25): osoblje (Owner, Manager, Glavni mornar, Recepcija) sve vezove svoje marine do 10 min; Admin samo u admin modeu s razlogom; kupac kameru ormara svog veza uz važeći ugovor i dok na vezu nije tuđe plovilo (NIJE KRIVO; prazan vez i NEPOZNATO dopušteni), 3 min; član organizacije uz pravo nositelja. Jedna kamera po ormaru, bez izreza — kupcu se kaže da slika pokazuje sve vezove ormara.
+- Dnevnik svakog gledanja 12 mjeseci, bez slike; kvota prometa po marini (zadano 40 GB/mj); kupci tek s CRM ugovorom (M2).
+Specifikacija §14.8; zahtjev prema ormaru R35 (§7.2).
+
+## D32.1 · Live bez maski i zamagljivanja
+Odluka 2026-10-17. Ispravlja D32, spec §1.25/§1.26, §1.31, §14.8 i odgovor ormara o maskama.
+- Live prikaz se izvodi **bez maski privatnosti i bez zamagljivanja**. Ljudi su obaviješteni oznakom videonadzora (D15); live se nigdje ne sprema.
+- Maske i zamagljivanje vrijede **samo gdje se snimka sprema** (snimke guarda na ormaru — D15: zamagljivanje, 6 mjeseci). ERP i mobilna ne spremaju ništa.
+- Maske **nisu uvjet** ni za osoblje ni za kupce. `privacy_mask` je samo informacija; Admin smije postaviti masku ako marina želi (R37 ostaje kao opcija).
+- **DPIA nije uvjet** za uključenje u sustavu (odgovornost marine).
+- Ostaje: kupac gleda kameru ormara svog veza (važeći ugovor, nije tuđe plovilo), osoblje po ulozi, audit svakog gledanja, ograničeno trajanje, bez snimanja, rečenica da kamera pokazuje sve vezove.
+- **Osoblje gleda čim ormar uključi bidirectional za live rute**; kupci nakon CRM ugovora (M2).
 
 ## Revizija ormara (2026-10-16) — tko popušta
 Ormar je u reviziji ERP-a našao devet razlika; potvrđene uz file:line u specifikaciji §2.6.

@@ -3,7 +3,7 @@
 Što se gradi, u kojem redoslijedu, i svaka odluka izrečena tako da ispravak
 košta jedan redak, a ne razgovor.
 
-    Verzija 30 — zamjenjuje v29 od 2026-10-16
+    Verzija 31 — zamjenjuje v30 od 2026-10-17
     Datum 2026-10-16
     Status faze 1–4 ZAVRŠENE i PRIHVAĆENE (§10.1–§10.4); korak 5a (D20), faza 8 (D21) i
            UI · Lika brand PRIHVAĆENI, na `main` (§10.7–§10.9); **faza 6 ZATVORENA na 6b**
@@ -23,6 +23,19 @@ v2.3 ispravak mreže u **D13**, v2.4 **D20**, v2.5 **D21**, **D22** i redoslijed
 **Sve u ovom dokumentu je ODLUČENO, osim §14 i §10.16 (prijedlog v3, v26–v28) i otvorenih pitanja u §1.**
 D32 (live prikaz), njegov put slike (§14.8.2) i prava gledanja (§1.25, §1.29–§1.31) su tvoja odluka.
 Tri pitanja iz v15 odlučena su 2026-10-15.
+
+### Što se promijenilo u verziji 31
+
+Tvoja odluka **D32.1** (2026-10-17, `odluke.md` v2.8, koji sada ima i D32).
+
+| | |
+|---|---|
+| **D32.1** | live **bez maski i zamagljivanja**; maske i zamagljivanje samo gdje se snimka sprema (guard na ormaru, D15); `privacy_mask` je samo informacija; **DPIA nije uvjet** u sustavu |
+| **§1.25 / §1.26** | uvjet „maska (R37) i DPIA, uključenje po kameri" za kupce **ukinut** |
+| **§1.31** | osoblje gleda **čim ormar uključi bidirectional za live rute**; kupci s M2 (nepromijenjeno) |
+| **§14.8.1, §14.8.3, §14.8.4, §14.8.5** | usklađeni; ključ `customer_not_enabled` povučen |
+| **§7.2 R37** | opcija, ne uvjet; R38 ostaje bez uvjeta |
+| **§10.16 L1 / L2** | L1 ne čeka maske; L2 nakon M2, bez R37 i DPIA |
 
 ### Što se promijenilo u verziji 30
 
@@ -727,6 +740,8 @@ samo §1.5–§1.9 i §1.24**; ostala se mogu odlučiti prije faze u kojoj su (s
 > **Odlučeno** · Prijedlog niže vrijedi, uz dvije dopune: (1) **Admin gleda samo u admin modeu, s
 > razlogom**; (2) **„plovilo na vezu" = signal plovila NIJE KRIVO** — prazan vez je dopušten, tuđe
 > plovilo na kupčevu vezu nije. Tekst ispod ostaje radi razloga; gdje kaže PRAVO, vrijedi NIJE KRIVO.
+> (4) *(v31, D32.1)* Live je **bez maski i zamagljivanja**; maske i DPIA nisu uvjet ni za osoblje
+> ni za kupce (maske i zamagljivanje vrijede samo gdje se snimka sprema — guard na ormaru, D15).
 > (3) *(v30)* Signal **NEPOZNATO** (nema reference, ormar offline, `last_analyzed` stariji od
 > 30 min) **ne priječi** gledanje: nepoznato nije krivo. Kupcu se tada ne govori ništa o plovilu.
 
@@ -736,8 +751,10 @@ samo §1.5–§1.9 i §1.24**; ostala se mogu odlučiti prije faze u kojoj su (s
 - **Kupac** gleda **kameru ormara koji služi njegov vez**, samo uz važeći ugovor za taj vez **i** dok
   je njegovo plovilo na **njegovu** vezu. Gledanje traje 3 min, zatim ponovni klik. Aktivna sesija nije uvjet.
 - **Članovi organizacije** gledaju kao nositelj, ako ih nositelj ovlasti.
-- **Kupčevo gledanje je isključeno** dok ormar ne isporuči masku (R37) i dok marina ne napravi
-  DPIA. Izreza po vezu nema (točka 5), pa DPIA mora obuhvatiti i to da kupac vidi susjedne vezove. Marina ga uključuje po kameri. Osoblje gleda od prvog dana.
+- ~~**Kupčevo gledanje je isključeno** dok ormar ne isporuči masku (R37) i dok marina ne napravi
+  DPIA. Marina ga uključuje po kameri. Osoblje gleda od prvog dana.~~ — **ukinuto D32.1
+  (2026-10-17):** maske i DPIA nisu uvjet; osoblje gleda čim ormar uključi bidirectional za live
+  rute, kupci s M2 (§1.31).
 
 **Tvoja dopuna (točka 5, 2026-10-16):** slika pokazuje **sve vezove ovog ormara**. Postoji jedna
 kamera po ormaru i nema izreza. Zato se pravo kupca formulira kao **„kupac s važećim ugovorom za
@@ -758,8 +775,8 @@ ne izgleda kao slika samo njegova veza (§14.8.5).
 > - **Plovilo na vezu kao uvjet** zatvara slučajeve kad kupac nema razloga gledati: prazan vez
 >   i tuđe plovilo na njegovu vezu. Susjedne vezove svog ormara vidi uvijek (točka 5), i to mu
 >   rečenica kaže prije nego slika krene.
-> - **Uključenje po kameri nakon DPIA i maske** stavlja odluku tamo gdje je odgovornost: marina je
->   voditelj obrade (D15).
+> - ~~**Uključenje po kameri nakon DPIA i maske**~~ — ukinuto D32.1: DPIA je odgovornost marine kao
+>   voditelja obrade (D15), ne uvjet u sustavu.
 > - **Bez uvjeta sesije**, jer kupac najviše gleda kad je odsutan.
 > - **3 min za kupca** drži promet i trajanje izloženosti malima. Osoblju ograničenje ormara od
 >   10 min ne smeta.
@@ -770,14 +787,15 @@ ne izgleda kao slika samo njegova veza (§14.8.5).
 > odluka, ne moja.
 
 §1.26 (zamagljivanje), §1.27 (plovilo nije na vezu) i §1.28 (kamera gleda više vezova) iz v27
-**spojeni su u §1.25**. Zamagljivanje u stvarnom vremenu (R38) nije uvjet: kupca drže maska (R37),
-rečenica i DPIA. Izreza po vezu nema, jer postoji jedna kamera po ormaru (točka 5).
+**spojeni su u §1.25**. **D32.1 (v31):** live je bez maski i bez zamagljivanja (R37 i R38 su
+opcije, ne uvjeti); kupca drže pravo iz ugovora, rečenica o svim vezovima ormara, oznaka
+videonadzora (D15) i audit. Izreza po vezu nema, jer postoji jedna kamera po ormaru (točka 5).
 
 | # | Pitanje | Preporuka | Treba za |
 |---|---|---|---|
 | **1.29** ✔ *odlučeno: da — dvije prijave* | Kako se kupac prijavljuje u aplikaciji? ERP danas nema nikakvu prijavu kupca, a slika ide „s ERP-ovom autentikacijom" | **kupčev račun u ERP-u**, odvojen od osoblja (zasebna tablica, poziv iz ugovora, lozinka + drugi faktor). Članovi organizacije dobivaju vlastiti račun kad ih nositelj ovlasti. Tako dnevnik zna **koja osoba** je gledala, ne samo koja aplikacija | L2 |
 | **1.30** ✔ *odlučeno: da* | Promet VPS-a i SIM-a ormara (§14.8.6) | **kvota po marini** (zadano 40 GB/mj, postavka); Owner vidi potrošnju i procjenu za SIM prije uključivanja; streaming na zaseban čvor kad video prijeđe 50 % prometa VPS-a | L1 |
-| **1.31** ✔ *odlučeno: da* | Što je „važeći ugovor za vez" prije CRM-a? Danas veze kupac → vez nema: ugovori za vez ne postoje (M2), a vlasnika u pravoj marini P-5 ne dopušta | **kupci ne gledaju prije M2.** Osoblje gleda od L1 | L2 |
+| **1.31** ✔ *odlučeno: da* | Što je „važeći ugovor za vez" prije CRM-a? Danas veze kupac → vez nema: ugovori za vez ne postoje (M2), a vlasnika u pravoj marini P-5 ne dopušta | **kupci ne gledaju prije M2.** Osoblje gleda **čim ormar uključi bidirectional za live rute** (D32.1; maske nisu uvjet) | L2 |
 
 ## §2 Ugovor s ormarom
 
@@ -3104,7 +3122,7 @@ na dan čitanja i služi prioritizaciji — **ugovorna provjera je TC-ERP-LIVE-0
 | **R33** *(v26, D31)* | **`event_id` jedinstven po ormaru i redni broj (`seq`) koji raste** u svakom događaju (webhook, MQTT, odgođeni zapisi R32) | proširuje R22 | **ne** | red čekanja (§14.7) preskače duplikat po `event_id`; `seq` otkriva rupu i pokreće pull |
 | **R34** *(v26, D31, kad ormar dobije MQTT prema van)* | **MQTT klijent prema ERP-ovom brokeru:** TLS, korisnik i lozinka **po ormaru** (ili certifikat), objavljuje samo pod `marina/<marina>/cabinet/<display_id>/…`, QoS 1, poruke u obliku R22. Ormar ne prima naredbe preko MQTT-a od ERP-a | prijedlog v3 (ulaz §9.3, korak 2) | **ne** | korak 2 iz §14.7.3; do tada pull |
 | **R35** *(v28, D32)* | **Ugovor `camera.live_*`** — `camera.live_start`, `camera.live_keepalive`, `camera.live_stop`, `camera.live_status` na `/api/ext/*`, token `api_client`; lista i segmenti traže isti token. **ERP treba potvrdu ovih osam stvari:** (1) putanje, metode, tijela; monitor ili bidirectional; traži li išta Smart Mode ON · (2) `live_start` vraća **relativnu** putanju liste; je li ponovni `start` na kameri koja radi idempotentan · (3) **stabilni ključevi stanja** u `live_status` (npr. `starting`, `live`, `stopped_idle`, `stopped_limit`, `camera_unreachable`, `not_enabled`) · (4) smije li se nakon granice od 10 min odmah ponovno pokrenuti; koliko kamera po ormaru smije raditi istodobno · (5) trajanje segmenta, dužina liste, kodek, rezolucija, bitrate · (6) potvrda da je **jedna kamera po ormaru** i da slika pokazuje sve njegove vezove (točka 5) · (7) jesu li maske primijenjene prije nego slika dođe do ERP-a (R37) · (8) oblik grešaka 409/429/503 kao na ostalim ext rutama | na `Cloud_IOT` `origin/main` `5ec542e` (2026-10-16) **ne postoji**; katalog odbija sve kamerne rute (`api_catalog.py`, `PHASE1_NO_IMAGES_TO_ERP = True`) | **ne** | D32 u cijelosti (§14.8) |
-| **R37** *(v27, D32)* | **Maske privatnosti po kameri**, primijenjene **prije** slanja; ormar javlja da je maska postavljena (npr. u `live_status`) | nema u katalogu | **ne** | uključenje za kupce (§1.25) |
+| **R37** *(v27, D32; v31 D32.1: **opcija, ne uvjet**)* | Maske privatnosti po kameri, ako ih marina želi (postavlja Admin); ormar javlja stanje u `live_status.privacy_mask` — **samo informacija** | nema u katalogu | **ne** | ništa — live ne čeka maske (D32.1) |
 | **R38** *(v27, D32; više nije uvjet)* | Zamagljivanje osoba u stvarnom vremenu, ako je izvedivo, uz izmjeren CPU NUC-a | — | **ne** | ništa (§1.25) |
 | ~~R39~~ *(v27 → povučen u v28)* | ~~Kamera → vezovi, izrez po vezu~~ — **jedna kamera po ormaru, bez rezanja** (tvoja točka 5, 2026-10-16); vezovi kamere = vezovi ormara, koje ERP već zna | — | — | ništa |
 | **R6** | *(bespredmetno dok Krk ne dobije zastavicu)* operaterski put bez `nfc_tag_id` | `a709cf8:…/config.py:194`; **`nfc_cross_check_required` ne postoji na Krku** | **ne postoji** | ništa — §1.1 je odlučen kao (a), pa R6 nije potreban |
@@ -3723,8 +3741,8 @@ prioritet. Faze 7–10 ostaju kako su; M2 i faza 7 dijele `customers` i katalog,
 | **M5** | **Finance II i eRačun** (§14.5.4–5): eRačun prema posredniku (adapter + simulator posrednika), ulazni računi, izvještavanje o naplati, arhiva; upravljačka knjiga, uvoz plaća, poslovni plan i projekcija | **račun prošao kroz testnu okolinu posrednika** i vratio status; projekcija do 31.12. iz plana i ugovora | 5–6 tjedana (ovisi o posredniku) |
 | **M6** | **Dodatne usluge** (§14.3.5): sobe s cjenikom A/B/C i boravišnom pristojbom (§1.18), najam plovila, parking, ugostiteljstvo kao stavka, provedba prava pristupa u Safety & Security (D25, uz 6d) | soba od rezervacije do računa; pravo pristupa iz ugovora vidljivo u S&S | 4 tjedna |
 
-| **L1** | **D32 za osoblje** (§14.8): `camera.live_*` u klijentu, brojač gledatelja i keepalive, međuspremnik segmenata i prepisivanje liste, token gledanja, ikona na karti, rečenice §14.8.5, `camera_views`, kvota, sintetički HLS u simulatoru, test D30 sužen. **Nakon §10.15 i 5c, kad ormar isporuči R35** — neovisno o M-fazama | na **pravom ormaru**: 3 gledatelja = **jedan dohvat po segmentu** (izmjereno na ormaru i na ERP-u), `live_stop` ≤ 15 s nakon zadnjeg gledatelja, ništa na disku, svako gledanje u dnevniku | 2 tjedna |
-| **L2** | **D32 za kupce** (§1.25, §1.29, §1.31): kupčeva prijava, pravo iz ugovora, plovilo na vezu, 3 min, članovi organizacije, uključenje po kameri s DPIA | kupac vidi samo svoj vez; svaka odbijenica ima rečenicu; nijedna adresa ormara u odgovorima aplikaciji (test) | 2 tjedna, **nakon M2** i R37 |
+| **L1** | **D32 za osoblje** (§14.8): `camera.live_*` u klijentu, brojač gledatelja i keepalive, međuspremnik segmenata i prepisivanje liste, token gledanja, ikona na karti, rečenice §14.8.5, `camera_views`, kvota, sintetički HLS u simulatoru, test D30 sužen. **Gradi se nakon §10.15; osoblje gleda čim ormar isporuči R35 i uključi bidirectional za live rute** (D32.1, bez maski) — neovisno o M-fazama | na **pravom ormaru**: 3 gledatelja = **jedan dohvat po segmentu** (izmjereno na ormaru i na ERP-u), `live_stop` ≤ 15 s nakon zadnjeg gledatelja, ništa na disku, svako gledanje u dnevniku | 2 tjedna |
+| **L2** | **D32 za kupce** (§1.25, §1.29, §1.31): kupčeva prijava, pravo iz ugovora, plovilo na vezu (NIJE KRIVO), 3 min, članovi organizacije; **bez maske i DPIA uvjeta** (D32.1) | kupac vidi samo svoj vez; svaka odbijenica ima rečenicu; nijedna adresa ormara u odgovorima aplikaciji (test) | 2 tjedna, **nakon M2** |
 
 **Procjena** je u radnim tjednima uz današnji ritam: Code gradi, ti pregledavaš svaku fazu. Nije
 mjerena. Koraci 6.0–6b izvedeni su u dva dana (2026-10-15 i 16) uz isti ritam, ali M-faze imaju više novog
@@ -5495,7 +5513,8 @@ Ulaz §10 i tvoje odluke od 2026-10-16. **Odlučeno je, i ne mijenja se:**
 - **D30 ostaje za analizu**: referentne slike, match, zauzeće i sektor;
 - **put slike**, kašnjenje i jedan stream po kameri (§14.8.2).
 
-**Prava gledanja** su tvoj prijedlog, ocijenjen u **§1.25**. Otvoreno ostaje §1.29–§1.31.
+**Prava gledanja** su odlučena u **§1.25** i §1.29–§1.31. **D32.1 (2026-10-17):** live je bez maski i
+zamagljivanja; maske i DPIA nisu uvjet.
 
 #### §14.8.1 · Što se mijenja u postojećim odlukama
 
@@ -5504,7 +5523,7 @@ Ulaz §10 i tvoje odluke od 2026-10-16. **Odlučeno je, i ne mijenja se:**
 | D30 (§6.12), `tests/test_d30.py` (četiri testa) | ERP ne zove nijedan kamerni endpoint | test se **sužava na analizu i slike**. ERP i dalje ne zove `snapshot`, `frame_ext`, `stream` ni `stream_ext`. Jedini dopušteni kamerni pozivi su `camera.live_*`, i samo iz modula D32. Mijenja se jednim pregledanim commitom, kao ormarov `PHASE1_NO_IMAGES_TO_ERP` |
 | §8.2, „Video kamere nikad ne prolazi kroz ERP" | odlučeno, zbog prometa | **ukida se za D32**. Kvota prometa (§14.8.6) zato je dio izvedbe, ne opcija |
 | §2.2 i §2.3 | `camera.frame_ext` i `camera.stream_ext` uklonjeni (v21) | ostaju uklonjeni. Ulaze **`camera.live_start`, `camera.live_keepalive`, `camera.live_stop`, `camera.live_status`** (§7.2 R35) |
-| D15 (videonadzor) | ERP prima događaje, ne stream (§6.8) | živi stream je videonadzor: oznaka, svrha, maske, DPIA za kupce, bez snimanja (§14.8.4) |
+| D15 (videonadzor) | ERP prima događaje, ne stream (§6.8) | živi stream je videonadzor: oznaka i svrha, bez snimanja (§14.8.4). **D32.1:** maske i zamagljivanje samo gdje se snimka sprema (guard na ormaru); za live nisu uvjet, DPIA je odgovornost marine |
 | `mobilna_zahtjevi_iz_ERP.md` M16 | „media relay na VPS-u" | **ne vrijedi:** relej je sam ERP (§14.8.2). Aplikacija ne dobiva nikakav vanjski link kamere |
 
 #### §14.8.2 · Put slike (odlučeno)
@@ -5543,15 +5562,15 @@ kamera ─▶ ORMAR (:80, /api/ext/*, token api_client) ─── Tailscale ─�
 
 | Tko | Što | Koliko |
 |---|---|---|
-| **Owner, Manager, Glavni mornar, Recepcija** | svi vezovi svoje marine, **od prvog dana** | do 10 min (granica ormara), zatim ponovni klik |
+| **Owner, Manager, Glavni mornar, Recepcija** | svi vezovi svoje marine, **čim ormar uključi bidirectional za live rute** (D32.1) | do 10 min (granica ormara), zatim ponovni klik |
 | Admin | svi vezovi marine, samo u **admin modeu** s razlogom (§14.1.4) | kao osoblje |
 | ostale uloge | — | — |
 | **Kupac** | **kameru ormara koji služi njegov vez** (slika pokazuje sve vezove tog ormara), uz **važeći ugovor za svoj vez** i **dok na njegovu vezu nije tuđe plovilo** (signal plovila NIJE KRIVO; prazan vez i NEPOZNATO dopušteni, §1.25). Aktivna sesija nije uvjet | **3 min**, zatim ponovni klik |
 | član organizacije kupca | kao nositelj, **ako ga nositelj ovlasti** (`customer_members.can_access`, §14.3.1) | kao kupac |
 
-**Kupčevo gledanje je ISKLJUČENO** dok ormar ne isporuči masku (R37) i dok marina ne napravi DPIA.
-DPIA obuhvaća i to da kupac vidi susjedne vezove svog ormara, jer izreza nema. **Marina ga uključuje po kameri**, a uključenje bilježi autora, vrijeme i
-oznaku DPIA dokumenta. Osoblje gleda od prvog dana.
+**D32.1 (v31):** kupac gleda **bez maske, bez DPIA uvjeta i bez uključenja po kameri** — čim ima
+CRM ugovor (M2) i marina ima modul kamere. Uvjeti su samo oni iz tablice. Ranije pravilo
+„isključeno do maske (R37) i DPIA, uključenje po kameri" je ukinuto.
 
 #### §14.8.4 · Dnevnik gledanja i GDPR
 
@@ -5565,9 +5584,10 @@ started_at, ended_at, end_reason, bytes_out)`, s RLS-om (§14.1).
 GDPR (D15):
 - **oznaka videonadzora** u marini;
 - **svrha i pravna osnova** upisane u ERP prije prvog uključenja (postavka s auditom);
-- **maske** prije nego slika dođe do ERP-a (R37);
+- **maske nisu uvjet** (D32.1): `privacy_mask` iz `live_status` je samo informacija; Admin smije
+  postaviti masku ako marina želi (R37 kao opcija);
 - **bez snimanja**: test provjerava da međuspremnik nikad ne piše na disk;
-- **DPIA** prije kupaca.
+- **DPIA** je odgovornost marine kao voditelja obrade, **nije uvjet u sustavu** (D32.1).
 
 #### §14.8.5 · Kad slike nema — uvijek rečenica
 
@@ -5582,7 +5602,7 @@ Ključ dolazi s ormara (`live_status`) ili iz ERP-ove provjere. Rečenica se ra�
 | `limit_cabinet_10min` | „The 10-minute limit was reached — tap to watch again." |
 | `limit_customer_3min` | „Viewing ends after 3 minutes — tap to watch again." |
 | `not_enabled` | „Live view is not enabled on this pedestal." |
-| `customer_not_enabled` | „Live view for guests is not enabled for this berth yet." |
+| ~~`customer_not_enabled`~~ | *povučeno v31 (D32.1): nema uključenja po kameri za kupce* |
 | `no_right` | „You can watch this berth while your contract for it is valid." |
 | `other_vessel` | „Another vessel is at your berth — live view is not available." |
 | `quota` | „This month's live-view limit for the marina has been reached." |
