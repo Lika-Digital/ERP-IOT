@@ -16,7 +16,7 @@
 #
 #  Pokretanje (kao lika):  bash ~/erp-iot/deploy/08_blok_a.sh 2>&1 | tee ~/08_blok_a.txt
 # ─────────────────────────────────────────────────────────────────────────────
-set -euo pipefail
+set -Eeuo pipefail
 
 sec() { printf '\n== %s ==\n' "$1"; }
 NA_014=0
@@ -27,6 +27,8 @@ stani() {
     fi
     exit 1
 }
+# i greška izvan pokreni/stani (set -e) javi se istim putem, s uputom za vraćanje
+trap 'stani "neočekivana greška (redak $LINENO)"' ERR
 uvuci() { sed 's/^/    /'; }
 pokreni() {   # pokreni <opis> <naredba...> — ispis uvučen; greška = STANI
     local opis=$1 out; shift
@@ -52,7 +54,7 @@ for f in jwt_secret.cred erp_encryption_key.cred erp-iot.env; do
 done
 systemctl is-active -q postgresql || stani "postgresql ne radi"
 echo "  tajne i erp-iot.env postoje; postgresql radi"
-echo "  $APP: $(sudo git -C "$APP" rev-parse --short HEAD)  $(sudo git -C "$APP" log -1 --format=%s | cut -c1-60)"
+echo "  $APP: $(sudo git -C "$APP" rev-parse --short HEAD)  $(sudo git -C "$APP" log -1 --format=%s | cut -c1-60 || true)"
 code_head=$("${RUN[@]}" alembic heads 2>/dev/null | awk '{print $1}' || true)
 echo "  head migracija u kodu: $code_head"
 [ "$code_head" = "$HEAD_REV" ] || stani "kod traži $code_head, runbook $HEAD_REV"
@@ -122,9 +124,9 @@ else
     sudo systemctl stop erp-iot 2>/dev/null || true
     NA_014=1
     pokreni "alembic downgrade -1" "${RUN[@]}" alembic downgrade -1
-    echo "  baza: $("${RUN[@]}" alembic current 2>/dev/null | tail -1)"
+    echo "  baza: $("${RUN[@]}" alembic current 2>/dev/null | tail -1 || true)"
     t0=$(date +%s)
-    sudo systemctl start erp-iot
+    sudo systemctl start erp-iot || true
     nadjeno=""
     for _ in $(seq 30); do
         nadjeno=$(sudo journalctl -u erp-iot --since "@$t0" -o cat --no-pager | grep -F "$P3_MSG" | head -1 || true)
@@ -147,6 +149,8 @@ fi
 
 sec "9 · start na head i /api/health s 127.0.0.1"
 sudo systemctl enable -q erp-iot
+# P3 je namjerno rušio servis; bez ovoga ga start-limit može blokirati
+sudo systemctl reset-failed erp-iot 2>/dev/null || true
 if [ "$api_novi" = 1 ] || ! systemctl is-active -q erp-iot; then
     sudo systemctl restart erp-iot
 fi
@@ -168,7 +172,7 @@ pid1=$(systemctl show -p MainPID --value erp-iot)
 restarts=$(systemctl show -p NRestarts --value erp-iot)
 sys_kill=$(sudo journalctl -u erp-iot --since "@$t1" -o cat --no-pager | grep -E 'status=31/SYS|Bad system call' || true)
 sys_kern=$(sudo journalctl -k --since "@$t1" -o cat --no-pager | grep -iE 'seccomp|type=1326' | grep -F 'comm="python' || true)
-echo "  MainPID $pid0 → $pid1, NRestarts=$restarts, stanje $(systemctl is-active erp-iot)"
+echo "  MainPID $pid0 → $pid1, NRestarts=$restarts, stanje $(systemctl is-active erp-iot || true)"
 if [ "$pid0" != "$pid1" ] || ! systemctl is-active -q erp-iot || [ -n "$sys_kill$sys_kern" ]; then
     printf '%s\n%s\n' "$sys_kill" "$sys_kern" | uvuci
     sudo journalctl -u erp-iot -n 30 -o cat --no-pager | uvuci
@@ -178,7 +182,7 @@ if [ "$pid0" != "$pid1" ] || ! systemctl is-active -q erp-iot || [ -n "$sys_kill
     stani "proces je pao ili zamijenjen dok radi pod ~@resources"
 fi
 echo "  nijedan zabranjeni poziv; proces isti, radi; baza dostupna"
-echo "  $(sudo systemd-analyze security erp-iot --no-pager | tail -1)"
+echo "  $(sudo systemd-analyze security erp-iot --no-pager 2>&1 | tail -1 || true)"
 
 # ── 10 ─────────────────────────────────────────────────────────────────────
 sec "10 · erp-agent.service (D21: samo čita, piše samo alarm, bez mreže)"

@@ -120,3 +120,7 @@ def test_block_a_waits_for_the_texts_the_code_really_writes():
     assert versions[-1].startswith(head + "_")
     # P3 (downgrade) samo na bazi bez korisnika
     assert re.search(r'if \[ "\$users" != 0 \]', blok)
+    # greška izvan pokreni() javi se sa STANI (i uputom za vraćanje s 014); poslije namjernog
+    # pada u P3 start-limit se poništi prije starta na head
+    assert "set -Eeuo pipefail" in blok and "trap 'stani" in blok
+    assert blok.index("reset-failed erp-iot") < blok.index("sudo systemctl restart erp-iot")
