@@ -23,8 +23,11 @@ def test_the_backend_listens_on_loopback_only():
 
 def test_secrets_come_from_systemd_credentials_never_from_the_file():
     u = _unit()
-    assert "LoadCredential=jwt_secret:/etc/erp-iot/jwt_secret" in u
-    assert "LoadCredential=erp_encryption_key:/etc/erp-iot/erp_encryption_key" in u
+    # encrypted at rest with systemd-creds (5b step 7); a plain LoadCredential= would
+    # read a cleartext file
+    assert "LoadCredentialEncrypted=jwt_secret:/etc/erp-iot/jwt_secret.cred" in u
+    assert "LoadCredentialEncrypted=erp_encryption_key:/etc/erp-iot/erp_encryption_key.cred" in u
+    assert not re.search(r"^LoadCredential=", u, re.M)
     for line in u.splitlines():
         if line.startswith(("Environment=", "EnvironmentFile=")):
             assert not re.search(r"JWT_SECRET|ERP_ENCRYPTION_KEY|PASSWORD", line), line
@@ -45,9 +48,10 @@ def test_it_runs_as_erp_not_root():
 
 def test_the_manual_runner_hands_over_the_same_secrets_as_the_unit():
     run = (DEPLOY / "erp-run").read_text(encoding="utf-8")
-    for cred in ("jwt_secret:/etc/erp-iot/jwt_secret",
-                 "erp_encryption_key:/etc/erp-iot/erp_encryption_key"):
-        assert f"LoadCredential={cred}" in run
+    for cred in ("jwt_secret:/etc/erp-iot/jwt_secret.cred",
+                 "erp_encryption_key:/etc/erp-iot/erp_encryption_key.cred"):
+        assert f"LoadCredentialEncrypted={cred}" in run
+    assert "-p LoadCredential=" not in run
     assert "-p User=erp" in run and 'id -u)" -eq 0' in run
 
 

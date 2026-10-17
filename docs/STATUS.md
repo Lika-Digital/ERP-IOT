@@ -1,13 +1,13 @@
 # ERP-IOT · stanje za sutra
 
-Zadnje ažuriranje: 2026-10-17. Prioritet: **5b VPS**, korak po korak, prema `erp_spec.md` §10.15.
+Zadnje ažuriranje: 2026-10-17 (nakon koraka 6; korak 7 pripremljen). Prioritet: **5b VPS**, korak po korak, prema `erp_spec.md` §10.15.
 
 ## Gdje smo
 
 | Grana | Stanje | Što je na njoj |
 |---|---|---|
 | `main` | `b00ff59`, spec v25 | faza 6 zatvorena na 6b; na VPS-u u `/opt/erp-iot` |
-| `faza/5b-vps` | pushana | spec **v25.2**, `deploy/01`–`06`, `slusaci.sh`, uklonjen `usage.history` |
+| `faza/5b-vps` | pushana | spec **v25.2**, `deploy/01`–`07`, `slusaci.sh`, uklonjen `usage.history`, §2.3 = 17 |
 | `spec/v3-moduli` | pushana | spec **v30** (v3 prijedlog, D32), odgovori mobilnoj v1 i v2, pitanja ormaru o kameri |
 
 ## 5b VPS — koraci
@@ -20,8 +20,8 @@ Nakon svakog koraka `slusaci.sh` (javno samo `:22`).
 | 1 | snimka stanja | ✔ 2026-10-16 |
 | 2 | UTC, NTP, swap 1 GB, sigurnosna ažuriranja, DNS | ✔ 2026-10-16 |
 | 5 | PostgreSQL 16: samo socket, peer, `erp` / `erp_agent`, `erp_iot`, bez TEMPORARY | ✔ 2026-10-17 |
-| 6 | korisnici `erp` i `erp-agent`, `/opt/erp-iot` = `main` `b00ff59`, venv iz locka (57/57, `pip check` čist) | ✔ 2026-10-17 |
-| **7** | **sljedeći:** `JWT_SECRET` i `ERP_ENCRYPTION_KEY` generirani na stroju u `/etc/erp-iot/` (root, 0600), `erp-iot.env` | skripta se piše |
+| 6 | korisnici `erp` i `erp-agent`, `/opt/erp-iot` = `main` `b00ff59`, venv iz locka (57/57, `pip check` čist) | ✔ 2026-10-17, potvrđeno |
+| **7** | **sljedeći:** `07_tajne.sh` — `JWT_SECRET` i `ERP_ENCRYPTION_KEY` generirani na stroju, šifrirani sa `systemd-creds` (`/etc/erp-iot/*.cred`, root 0700/0600), `erp-iot.env` s Tailscale IP-om; provjera da ih `erp` dobiva samo preko systemd-a | **čeka tvoj OK za pokretanje** |
 | 8 | `alembic upgrade head` → 015, `alembic check`, probe sheme, AGT-01 | — |
 | 9 | `erp-iot.service` na `127.0.0.1:8000`; P3 namjerno (`downgrade -1` → start pada → `upgrade head`) | — |
 | 10 | agent D21 (`erp-agent.service`, bez mreže) | — |
@@ -38,9 +38,9 @@ Uloge: ti pokrećeš skriptu i šalješ ispis, ja provjeravam. Ja se na VPS ne s
 
 - **Trojke v3** u `spec/v3-moduli`: T-1…T-22 (odgovor mobilnoj v1) i T-23…T-30 (v2), §14 i §10.16.
 - **§1.5–§1.24**: dvadeset otvorenih pitanja v3.
-- **§2.3 na `faza/5b-vps`** još ima stari popis Monitor (22 ključa: 17 + pet „kasnije"; `usage.history` je maknut).
-  Na `spec/v3-moduli` je ispravljen na 17 + „kasnije, uz obrazloženje". §10.15 točka 5 na
-  objema granama ima ispravnih 17. Uskladiti i ovdje?
+- **Novi ulaz A–G** (D33 glavni dashboard, Environmental, termo kamera, simulator kao zasebna
+  aplikacija, čuvar opterećenja, tri vrste alarma, Admin Config, zahtjevi kupaca i zaposlenika):
+  moj komentar je poslan, spec se piše tek nakon tvog odobrenja.
 
 ## Čeka druge
 

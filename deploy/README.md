@@ -15,6 +15,7 @@ Repo na VPS-u (javni, samo za čitanje):
 | 2 | `02_osnova.sh` — UTC, NTP, swap 1 GB (swappiness 10), sigurnosna ažuriranja; DNS samo provjerava | da; ponovljivo, povratak ispiše na kraju |
 | 5 | `05_postgres.sh` — PostgreSQL 16 samo na socketu, pg_hba samo peer, uloge `erp` i `erp_agent`, baza `erp_iot`, bez TEMPORARY za PUBLIC | da; ponovljivo, povratak ispiše na kraju |
 | 6 | `06_aplikacija.sh` — korisnici `erp` i `erp-agent` (bez prijave), provjera peer prijave, `/opt/erp-iot` = `main` (vlasnik root), venv iz `requirements.lock` | da; ponovljivo, povratak ispiše na kraju |
+| 7 | `07_tajne.sh` — `JWT_SECRET` i `ERP_ENCRYPTION_KEY` generirani na stroju, šifrirani sa `systemd-creds` u `/etc/erp-iot/*.cred`; `erp-iot.env` (Tailscale IP); nikad ne prepisuje postojeću tajnu | da; povratak samo prije upisa podataka |
 | — | `slusaci.sh` — `ss -ltn` po pravilu v25.1 (javno samo :22); svaki korak ga zove na kraju | ne, samo čita |
 
 **Redoslijed (spec v25.1, §10.15):** 1, 2, 5–12, 14–17 → test čitanja s pravim ormarom →

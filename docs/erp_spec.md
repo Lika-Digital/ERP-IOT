@@ -25,7 +25,9 @@ Tvoje odluke 2026-10-17 (nakon koraka 6 u 5b).
 
 | | |
 |---|---|
+| **§2.3 · Monitor = 17** | usklađeno sa `spec/v3-moduli` v30 (nalaz ormara): točno 17 ključeva prvog testa; `berths.occupancy_ext`, `breakers.pedestal_history_ext`, `breakers.marina_alarms_ext`, `load.marina_alarms_ext`, `load.socket_history_ext` u tablici „kasnije, uz obrazloženje" |
 | **§2.2 / §2.3 · `usage.history` uklonjen** | ormar je zatvorio `usage.*` (nosi identifikatore kupaca, D6.2); maknut iz ugovora u kodu (`contract.py`), simulatora i tablice; test pada ako se `usage.*` vrati. Usklađivanje po `erp_ref` i vremenu završetka (R14) |
+| **§8.3 · `systemd-creds`** | tajne se na VPS-u drže **šifrirane** (`systemd-creds encrypt`, ključ stroja; TPM2 ako postoji), unit i `erp-run` ih čitaju s `LoadCredentialEncrypted=`; korak 7 (`deploy/07_tajne.sh`) postojeću tajnu nikad ne prepisuje |
 | **§10.15 · produkcijski lock** | alati za razvoj (pytest, ruff, bandit) zasad ostaju u `requirements.lock` i na VPS-u; **odvojeni produkcijski lock je mala stavka PRIJE 5c** |
 
 ### Što se promijenilo u verziji 25.1
@@ -718,16 +720,25 @@ tvrdi suprotno (NALAZ 2.1). `controls.deny` prima `{reason?}` ≤500.
 Operater ormara mora uključiti točno ovo, s točno ovim modom. **Ništa više** — svaki uključeni
 write endpoint je površina.
 
-**Monitor (read):**
-`pedestals.health`, `pedestals.list`, `pedestals.status_ext`, `water.status_ext`,
-`berths.list`, `berths.occupancy_ext`, `sessions.active`, `sessions.pending`,
-`alarms.active`, `analytics.daily`, `analytics.summary`,
-`sockets.config_list`, `valves.config_list`,
-`load.pedestal_get_ext`, `load.socket_get_ext`, `load.socket_history_ext`,
-`load.pedestal_alarms_ext`, `load.marina_alarms_ext`,
-`breakers.pedestal_list_ext`, `breakers.socket_get_ext`, `breakers.pedestal_history_ext`,
-`breakers.marina_alarms_ext` *(v25.2: `usage.history` uklonjen, ormar ga je zatvorio)*
+**Monitor (read) — točno 17, isti popis kao prvi test čitanja (§10.15 točka 5)** *(v25.2)*:
+`pedestals.health`, `pedestals.list`, `pedestals.status_ext`, `berths.list`,
+`sessions.active`, `sessions.pending`, `alarms.active`,
+`load.pedestal_get_ext`, `load.socket_get_ext`, `load.pedestal_alarms_ext`,
+`breakers.pedestal_list_ext`, `breakers.socket_get_ext`, `water.status_ext`,
+`sockets.config_list`, `valves.config_list`, `analytics.daily`, `analytics.summary`
 *(v21, D30: `camera.frame_ext` i `camera.stream_ext` se za ERP **ne uključuju**.)*
+
+**Kasnije, uz obrazloženje** *(v25.2; u prvom testu **isključeno** — ERP na 403 prikaže
+`not_enabled` i prestane zvati, TC-ERP-SIM-08)*:
+
+| ključ | treba li ERP-u | zašto | kada |
+|---|---|---|---|
+| `berths.occupancy_ext` | **možda** | `berths.list` već nosi stanje veza i `last_analyzed` (signal plovila, §3); `occupancy_ext` je rezerva (samo `occupied`). Zatrebat će samo ako živi odgovor `berths.list` ne nosi sve što analiza daje | najranije **6c / R27** (analiza na zahtjev); uključuje se tek ako 5d pokaže da `berths.list` ne dostaje |
+| `breakers.pedestal_history_ext` | **da** | snimke `breakers.*` i `alarms.active` ne vide okidanje koje se dogodilo i nestalo dok ERP nije čitao; povijest je **nadoknada nakon prekida (D7)** | nakon 5d, **prije prvog upravljačkog testa** (§10.15 točka 7) |
+| `breakers.marina_alarms_ext` | **ne za sada** | isti alarmi kao po ormaru, jednim pozivom za cijelu marinu ormara; ERP čita po ormaru | kad broj poziva po ormaru postane problem (mjerenje), ne prije |
+| `load.marina_alarms_ext` | **ne za sada** | isto, za alarme opterećenja; `load.pedestal_alarms_ext` je u 17 | kao gore |
+| `load.socket_history_ext` | **ne** | naplata ide iz sesija (registar na početku i kraju), ne iz krivulje opterećenja; energetski agent obrisan (v10) | tek s energetskim agentom (faza 10), ako ikad |
+| ~~`usage.history`~~ | **ne** | **uklonjeno** — ormar ga je zatvorio (identifikatori kupaca, D6.2) | — |
 
 **Bidirectional (write):**
 `controls.socket_cmd`, `controls.water_cmd`, `controls.allow`, `controls.deny`,
@@ -3129,7 +3140,8 @@ ne mijenja ništa u fazi 5. Agent D21 (faza 8) radi u kodu bez modela i stane u 
 ### §8.3 · Tajne
 
 **Nikad u repou.** `.env.example` s **praznim** vrijednostima; produkcijske tajne iz
-`systemd` credentials (`LoadCredential=`), ne iz datoteke uz aplikaciju (§7.1).
+`systemd` credentials, **šifrirane sa `systemd-creds`** (`LoadCredentialEncrypted=`, v25.2), ne iz
+datoteke uz aplikaciju (§7.1).
 Jedinstvene **po ormaru**: servisni račun, `X-API-Key`, webhook secret.
 
 > **Odlučeno · D20** · **Ljudske lozinke postoje samo za prijavu u UI.** Sve ostalo je
