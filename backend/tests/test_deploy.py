@@ -144,3 +144,38 @@ def test_deploy_keys_print_only_public_halves_and_pin_github():
     assert "REPO=git@github.com:Lika-Digital/ERP-IOT.git" in six
     assert "-i /root/.ssh/erp_iot_deploy -o IdentitiesOnly=yes " \
            "-o UserKnownHostsFile=/root/.ssh/known_hosts_github" in six
+
+
+# ── blok B: nginx samo na Tailscale IP-u, dist s grane dist (koraci 11, 12) ─────────────
+
+def test_nginx_listens_only_on_the_tailscale_address_and_hides_the_webhook():
+    conf = (DEPLOY / "nginx-erp-iot.conf").read_text(encoding="utf-8")
+    listens = re.findall(r"^\s*listen\s+([^;]+);", conf, re.M)
+    assert listens == ["@TS_IP@:80"]                      # ni 0.0.0.0, ni [::], ni :8081
+    assert re.search(r"location \^~ /api/webhooks/ \{\s*return 404;", conf)
+    # O43: ograničenje po IP-u baš na rutama prijave
+    assert "limit_req_zone $binary_remote_addr zone=erp_prijava" in conf
+    assert re.search(r"location ~ \^/api/auth/\(login\|mfa/verify\|setup\|setup/check\)\$ \{\s*"
+                     r"limit_req zone=erp_prijava", conf)
+    # adresa klijenta se postavlja (uvicorn joj vjeruje s 127.0.0.1), nikad nadovezuje
+    assert "$proxy_add_x_forwarded_for" not in conf
+    assert conf.count("proxy_set_header X-Forwarded-For $remote_addr;") == 3
+    assert set(re.findall(r"proxy_pass\s+([^;]+);", conf)) == {"http://127.0.0.1:8000"}
+    dropin = (DEPLOY / "nginx-tailscale.conf").read_text(encoding="utf-8")
+    assert "After=tailscaled.service" in dropin and 'inet @TS_IP@/' in dropin
+
+
+def test_dist_is_published_by_one_writing_job_and_checked_before_unpacking():
+    gate = (DEPLOY.parent / ".github" / "workflows" / "gate.yml").read_text(encoding="utf-8")
+    head, publish = gate.split("\n  publish-dist:\n")
+    assert "contents: write" not in head                  # gate (npm, testovi) ne piše
+    assert "contents: write" in publish and "needs: gate" in publish
+    assert "npm" not in publish
+    assert "frontend_tree=$(git rev-parse HEAD:frontend)" in head
+    b = (DEPLOY / "11_blok_b.sh").read_text(encoding="utf-8")
+    assert "rev-parse HEAD:frontend" in b and "sha256sum -c" in b
+    assert b.index("sha256sum -c") < b.index("tar -xzf")
+    assert b.index("u taru je link ili uređaj") < b.index("tar -xzf")
+    # apt ne smije pokrenuti zadani site na 0.0.0.0:80
+    assert b.index("policy-rc.d") < b.index("apt-get install -y -qq nginx")
+    assert "rm -f /etc/nginx/sites-enabled/default" in b

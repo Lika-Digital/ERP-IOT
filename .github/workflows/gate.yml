@@ -54,11 +54,67 @@ jobs:
         run: |
           tar --sort=name --mtime='2026-01-01 00:00Z' --owner=0 --group=0 --numeric-owner               -C frontend -cf - dist | gzip -n > erp-iot-dist.tar.gz
           sha256sum erp-iot-dist.tar.gz | tee erp-iot-dist.tar.gz.sha256
+          # what it was built from; the VPS takes the bundle whose frontend tree equals
+          # the frontend of the code it runs (git rev-parse HEAD:frontend)
+          {
+            echo "commit=$GITHUB_SHA"
+            echo "ref=$GITHUB_REF"
+            echo "frontend_tree=$(git rev-parse HEAD:frontend)"
+            echo "run=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          } | tee SOURCE
       - uses: actions/upload-artifact@v4
         with:
           name: erp-iot-dist-${{ github.sha }}
           path: |
             erp-iot-dist.tar.gz
             erp-iot-dist.tar.gz.sha256
+            SOURCE
           retention-days: 90
           if-no-files-found: error
+
+  # 5b step 11 (decision 2026-10-17): the repo is private and the VPS reads it only with
+  # a read-only deploy key — no token. So the bundle the gate built goes to the branch
+  # `dist`, into <frontend tree>/, and the VPS fetches it over git. Only this job may
+  # write, and it runs no npm and no project code. A tree once published never changes.
+  publish-dist:
+    needs: gate
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/faza/5b-vps')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    concurrency:
+      group: publish-dist
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: erp-iot-dist-${{ github.sha }}
+          path: ${{ runner.temp }}/bundle
+      - name: Commit the bundle to the dist branch
+        env:
+          BUNDLE: ${{ runner.temp }}/bundle
+          WT: ${{ runner.temp }}/dist-wt
+        run: |
+          set -euo pipefail
+          (cd "$BUNDLE" && sha256sum -c erp-iot-dist.tar.gz.sha256)
+          tree=$(git rev-parse HEAD:frontend)
+          grep -qx "frontend_tree=$tree" "$BUNDLE/SOURCE"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git fetch -q origin dist; then
+            git worktree add -q "$WT" FETCH_HEAD
+            git -C "$WT" checkout -q -B dist
+          else
+            git worktree add -q --orphan -b dist "$WT"
+          fi
+          if [ -e "$WT/$tree" ]; then
+            echo "dist for frontend tree $tree already published — unchanged"; exit 0
+          fi
+          mkdir "$WT/$tree"
+          cp "$BUNDLE/erp-iot-dist.tar.gz" "$BUNDLE/erp-iot-dist.tar.gz.sha256" "$BUNDLE/SOURCE" "$WT/$tree/"
+          git -C "$WT" add "$tree"
+          git -C "$WT" commit -q -m "dist: frontend $tree from ${GITHUB_SHA::7} ($GITHUB_REF_NAME)"
+          # a push with GITHUB_TOKEN starts no workflow, so `dist` is never gated itself
+          git -C "$WT" push -q origin dist
+          echo "published $tree"

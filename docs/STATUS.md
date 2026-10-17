@@ -26,8 +26,8 @@ pokažem blok, ti ga pregledaš, vlasnik pokreće.
 | 6 | korisnici `erp` i `erp-agent`, `/opt/erp-iot` = `main` `b00ff59`, venv iz locka (57/57, `pip check` čist) | ✔ 2026-10-17, potvrđeno |
 | 7 | `07_tajne.sh` — tajne generirane na stroju, `systemd-creds` (bez TPM-a: ključ stroja; upozorenje „not on encrypted media" očekivano) | ✔ 2026-10-17 |
 | **A = 8, 9, 10** | **`08_blok_a.sh`:** `alembic upgrade head` → 015 kao `erp`, `alembic check`, 59 proba, AGT-01/02 (kao `postgres`); `erp-iot.service` uz P3 namjerno (samo dok nema korisnika), `/api/health`, provjera `~@resources`; `erp-agent.service` bez mreže, jedan prolaz | **pregledan, popravljen (`reset-failed`, ERR trap) — spreman za pokretanje** |
-| **A→B** | **`kljucevi_repo.sh`:** dva deploy ključa samo za čitanje (lika, root), ispis samo javnih → ti na GitHubu: Deploy keys bez write, repo → Private → `kljucevi_repo.sh prebaci` | odmah nakon bloka A |
-| B = 11, 12 | `dist` s `main`a bez ručnog preuzimanja (sha256), nginx samo na Tailscale IP `:80`, O43 | `dist` na zasebnoj grani + `sha256`, isti deploy ključ, bez tokena (tvoja odluka) |
+| **A→B** | **`kljucevi_repo.sh`:** dva deploy ključa samo za čitanje (lika, root), ispis samo javnih → ti na GitHubu: Deploy keys bez write, repo → Private → `kljucevi_repo.sh prebaci` | ključevi napravljeni; GitHub dio radiš ručno u pregledniku, pa `prebaci` |
+| **B = 11, 12** | **`11_blok_b.sh`:** `dist` s grane `dist` (CI posao `publish-dist` nakon gatea; VPS uzima build čije je stablo `frontend/` = kod u `/opt/erp-iot`), `sha256` i sadržaj tara prije raspakiravanja; nginx samo na `100.110.191.12:80`, statika + `/api` + `/ws`, webhook 404, O43 (10/min, burst 5); zadani site se nikad ne pokrene | **pripremljen, čeka tvoj pregled**; prvo CI na `faza/5b-vps` mora objaviti `dist` |
 | C = 14, 15, 16 | prvi admin (`--base-url http://100.110.191.12`), backup `pg_dump \| age` (7 dana, tvoj javni ključ), probna obnova | — |
 | 17 | `verify_system.sh` | — |
 | 3, 4 | vatrozid (`03_vatrozid.sh`, **necommitan**, javno `:22` dopušten) i Tailscale ACL | **na kraju**, prije 5c |
@@ -50,6 +50,10 @@ Uloge: ti pokrećeš skriptu i šalješ ispis, ja provjeravam. Ja se na VPS ne s
   moj komentar je poslan, spec se piše tek nakon tvog odobrenja.
 
 ## Čeka druge
+
+- **Ormar (novo 2026-10-17):** webhook potpisan HMAC-om (`X-Webhook-Signature`, zasebna tajna po
+  ormaru) umjesto `X-API-Key` — spec i kod slijede (trojke prvo); zaštita od ponavljanja čeka
+  njihov odgovor o `timestamp`/`event_id`. Ključ za stanje rezervacije: naziv i oblik čekamo.
 
 - **Ormar:** odgovori na osam pitanja o `camera.live_*` (`docs/inputs/pitanja_ormaru_kamera_v1.md`
   na `spec/v3-moduli`); `api_client` račun i 17 ključeva za prvi test (§10.15 točka 5).

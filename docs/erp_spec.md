@@ -28,6 +28,9 @@ Tvoje odluke 2026-10-17 (nakon koraka 6 u 5b).
 | **§2.3 · Monitor = 17** | usklađeno sa `spec/v3-moduli` v30 (nalaz ormara): točno 17 ključeva prvog testa; `berths.occupancy_ext`, `breakers.pedestal_history_ext`, `breakers.marina_alarms_ext`, `load.marina_alarms_ext`, `load.socket_history_ext` u tablici „kasnije, uz obrazloženje" |
 | **§2.2 / §2.3 · `usage.history` uklonjen** | ormar je zatvorio `usage.*` (nosi identifikatore kupaca, D6.2); maknut iz ugovora u kodu (`contract.py`), simulatora i tablice; test pada ako se `usage.*` vrati. Usklađivanje po `erp_ref` i vremenu završetka (R14) |
 | **§8.3 · `systemd-creds`** | tajne se na VPS-u drže **šifrirane** (`systemd-creds encrypt`, ključ stroja; TPM2 ako postoji), unit i `erp-run` ih čitaju s `LoadCredentialEncrypted=`; korak 7 (`deploy/07_tajne.sh`) postojeću tajnu nikad ne prepisuje |
+| **§10.15 · tri bloka** | preostali koraci 5b u tri skripte koje staju na prvoj grešci: **A** = 8–10 (`deploy/08_blok_a.sh`), **B** = 11–12 (`deploy/11_blok_b.sh`), **C** = 14–16 |
+| **Privatni repo** | repo je bio javan; prelazi na privatni, VPS čita s dva **deploy ključa samo za čitanje** (`lika` → `~/erp-iot`, `root` → `/opt/erp-iot`; `deploy/kljucevi_repo.sh`). Pregled povijesti: bez tajni i osobnih podataka |
+| **§8.2 · `dist` na grani `dist`** | CI nakon gatea objavi tarball, `sha256` i `SOURCE` u `dist/<stablo frontend/>/` (posao `publish-dist`, jedini s pravom pisanja, bez npm-a); VPS ga dohvati deploy ključem, **bez tokena**, i uzme build čije je stablo `frontend/` jednako kodu u `/opt/erp-iot` |
 | **§10.15 · produkcijski lock** | alati za razvoj (pytest, ruff, bandit) zasad ostaju u `requirements.lock` i na VPS-u; **odvojeni produkcijski lock je mala stavka PRIJE 5c** |
 
 ### Što se promijenilo u verziji 25.1
@@ -3075,6 +3078,8 @@ Tailscale (**prema ormarima**, D12) · **bez Node-a** — frontend dolazi kao go
 
 > **Odlučeno (v8, mijenja v7)** · Frontend se **gradi u CI-ju**; na VPS ide gotov `dist/`
 > (artefakt CI runa koji je prošao gate). Na VPS-u nema Node-a ni `node_modules`.
+> *(v25.2)* Repo je privatan, pa isti tarball CI objavi i na granu `dist` (`<stablo frontend/>/`),
+> odakle ga VPS dohvati deploy ključem samo za čitanje, bez tokena.
 >
 > **Zašto** · Tvoja pretpostavka, i bolja od moje: CI već gradi `dist/` iz `package-lock.json`,
 > a **isti taj bundle** prolazi provjeru u pravom pregledniku (BOOT-01b). Build na VPS-u bio bi
@@ -3569,7 +3574,7 @@ ja se na VPS ne spajam), **ti-ormar**, **chat ormara**, **ja** (repo).
 | 8 | `alembic upgrade head` → **015**; `alembic check`; probe sheme; AGT-01 | `015 (head)`, 59 proba, 9/9 |
 | 9 | `erp-iot.service` na `127.0.0.1:8000`, kolektor uključen; **P3 namjerno**: `downgrade -1` → start pada s porukom → `upgrade head` | journal, `curl /api/health` |
 | 10 | agent D21 (`erp-agent`, bez mreže) | `systemctl show`, jedan prolaz |
-| 11 | `dist` iz CI artefakta `main`a | `sha256` jednak CI-ju |
+| 11 | `dist` s grane `dist` (CI ga objavi nakon gatea, v25.2), deploy ključem; stablo `frontend/` = kod u `/opt/erp-iot` | `sha256` jednak CI-ju; tar samo `dist/`, bez linkova |
 | 12 | nginx samo na Tailscale IP `:80`; ograničenje prijave (O43); **bez :8081** | UI s PC-a preko Tailscalea; javno zatvoreno |
 | 13 | ~~CrowdSec~~ → **5c** (P-7) | — |
 | 14 | prvi admin (`erp-setup-admin --base-url http://<Tailscale IP VPS-a>`), 2FA | prijava s 2FA |

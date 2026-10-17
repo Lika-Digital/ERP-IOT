@@ -23,6 +23,7 @@ i `kljucevi_repo.sh` (prikuca GitHubov ključ, napravi ključ za root).
 | 7 | `07_tajne.sh` — `JWT_SECRET` i `ERP_ENCRYPTION_KEY` generirani na stroju, šifrirani sa `systemd-creds` u `/etc/erp-iot/*.cred`; `erp-iot.env` (Tailscale IP); nikad ne prepisuje postojeću tajnu | da; povratak samo prije upisa podataka |
 | 8–10 | `08_blok_a.sh` — **blok A**: `alembic upgrade head` (015) kao `erp`, `alembic check`, probe sheme, AGT-01/02; `erp-iot.service` uz P3 namjerno (samo dok nema korisnika) i `/api/health`; provjera `~@resources`; `erp-agent.service` bez mreže, jedan prolaz | da; staje na prvoj grešci, ponovljiv, povratak ispiše na kraju |
 | A→B | `kljucevi_repo.sh` — dva deploy ključa samo za čitanje (lika, root), GitHubov ključ prikucan na objavljeni otisak, ispis samo javnih; `prebaci`: oba klona na ssh, provjera da je repo privatan i da push biva odbijen | da; ponovljivo, povratak ispiše na kraju |
+| 11–12 | `11_blok_b.sh` — **blok B**: `dist` s grane `dist` (deploy ključ, `sha256`, stablo `frontend/` = kod u `/opt/erp-iot`), nginx samo na Tailscale IP `:80` (statika, `/api`, `/ws`; webhook 404; O43), zadani site se nikad ne pokrene | da; staje na prvoj grešci, ponovljiv, povratak ispiše na kraju |
 | — | `slusaci.sh` — `ss -ltn` po pravilu v25.1 (javno samo :22); svaki korak ga zove na kraju | ne, samo čita |
 
 **Redoslijed (spec v25.1, §10.15):** 1, 2, 5–12, 14–17 → test čitanja s pravim ormarom →
@@ -36,4 +37,6 @@ Datoteke koje koraci instaliraju (ne instalira ih repo):
 | `erp-iot.service` | 9 | backend, uvicorn na `127.0.0.1:8000`, tajne iz systemd credentials, baza `erp_iot` preko socketa |
 | `erp-run` | 8, 14 | `sudo deploy/erp-run <naredba>` — jedna naredba kao aplikacija (korisnik `erp`, iste tajne), npr. `alembic upgrade head` |
 | `erp-agent.service` | 10 | agent D21, bez mreže |
+| `nginx-erp-iot.conf` | 12 | site, `@TS_IP@` → Tailscale IP VPS-a |
+| `nginx-tailscale.conf` | 12 | drop-in za `nginx.service`: čeka da `tailscale0` dobije adresu |
 | `erp-sim.service` | — | demo simulator; **ne instalira se u prvom testu** (v25, P-4) |
